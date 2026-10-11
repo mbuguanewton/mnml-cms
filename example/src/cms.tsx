@@ -1,6 +1,6 @@
 import 'server-only';
 import { FileTextIcon, SettingsIcon } from 'lucide-react';
-import { createCms, neonDatabase, vercelBlobMedia } from '@newtou/mnml-cms/next';
+import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next';
 import config from '../cms.config';
 
 export const cms = createCms(config, {

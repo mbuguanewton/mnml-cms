@@ -1,4 +1,4 @@
-import { collection, config, fields, singleton } from '@newtou/mnml-cms';
+import { collection, config, fields, singleton } from '@n3wtou/mnml-cms';
 
 export default config({
   settings: singleton({

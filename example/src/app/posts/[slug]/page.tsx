@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { RichText } from '@newtou/mnml-cms/rich-text';
+import { RichText } from '@n3wtou/mnml-cms/rich-text';
 import { cms } from '@/cms';
 
 export const dynamic = 'force-dynamic';

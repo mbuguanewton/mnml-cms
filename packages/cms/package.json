@@ -1,5 +1,5 @@
 {
-  "name": "@newtou/mnml-cms",
+  "name": "@n3wtou/mnml-cms",
   "version": "0.1.0",
   "description": "A small schema-driven CMS for Next.js: config file, embedded admin, Postgres storage.",
   "keywords": [
@@ -15,7 +15,7 @@
   "author": "Newton",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/newtou/mnml-cms.git",
+    "url": "git+https://github.com/mbuguanewton/mnml-cms.git",
     "directory": "packages/cms"
   },
   "type": "module",

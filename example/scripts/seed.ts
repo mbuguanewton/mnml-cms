@@ -1,7 +1,7 @@
 // Inserts a settings row and one post. Existing rows are left alone.
 //   pnpm db:seed
 import { existsSync } from 'node:fs';
-import { entries, neonDatabase } from '@newtou/mnml-cms/db';
+import { entries, neonDatabase } from '@n3wtou/mnml-cms/db';
 
 if (existsSync('.env.local')) process.loadEnvFile('.env.local');
 

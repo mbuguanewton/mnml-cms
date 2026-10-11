@@ -1,4 +1,4 @@
-# @newtou/mnml-cms
+# @n3wtou/mnml-cms
 
 A small schema-driven CMS you embed in a Next.js (App Router, v16+) site: one config file defines the
 content, the admin UI is mounted at a route in your app, and content is stored in your own Postgres
@@ -7,7 +7,7 @@ content, the admin UI is mounted at a route in your app, and content is stored i
 ## Quick start (5 minutes)
 
 ```sh
-pnpm add @newtou/mnml-cms drizzle-orm   # needs Next 16+, React 19+, Tailwind v4
+pnpm add @n3wtou/mnml-cms drizzle-orm   # needs Next 16+, React 19+, Tailwind v4
 ```
 
 Then follow **Set up** below (config, `src/cms.tsx`, two routes, proxy, CSS, table) and set:
@@ -36,7 +36,7 @@ ships compiled ESM with types.
 **1. Content model** (`cms.config.ts`; plain data, safe to import anywhere):
 
 ```ts
-import { collection, config, fields, singleton } from '@newtou/mnml-cms';
+import { collection, config, fields, singleton } from '@n3wtou/mnml-cms';
 
 export default config({
   settings: singleton({ label: 'Settings', preview: '/', fields: { name: fields.text('Name', { required: true }) } }),
@@ -61,7 +61,7 @@ Field types: `text`, `textarea`, `date`, `url`, `image`, `richtext`, `tags`, `ar
 **2. Wiring** (`src/cms.ts`, server only):
 
 ```ts
-import { createCms, neonDatabase, vercelBlobMedia } from '@newtou/mnml-cms/next';
+import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next';
 import config from '../cms.config';
 
 export const cms = createCms(config, {
@@ -83,28 +83,28 @@ import { cms } from '@/cms';
 export const { GET, POST } = cms.handlers;
 
 // proxy.ts
-import { adminProxy } from '@newtou/mnml-cms/proxy';
+import { adminProxy } from '@n3wtou/mnml-cms/proxy';
 export const proxy = adminProxy({ secret: process.env.ADMIN_SESSION_SECRET });
 export const config = { matcher: ['/admin', '/admin/:path*'] };
 ```
 
-**4. Styles** (your global CSS, Tailwind v4): `@import "@newtou/mnml-cms/styles.css";`
+**4. Styles** (your global CSS, Tailwind v4): `@import "@n3wtou/mnml-cms/styles.css";`
 Restyle the admin by overriding the `--cms-*` variables (see `styles.css`).
 
 **5. Database table:** point drizzle-kit at the package's schema and push it:
 
 ```ts
 // drizzle.config.ts
-export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@newtou/mnml-cms/dist/server/db.js', dbCredentials: { url: process.env.DATABASE_URL! } });
+export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3wtou/mnml-cms/dist/server/db.js', dbCredentials: { url: process.env.DATABASE_URL! } });
 ```
 
-then `drizzle-kit push`. (`@newtou/mnml-cms/schema` exports the same table for scripts.)
+then `drizzle-kit push`. (`@n3wtou/mnml-cms/schema` exports the same table for scripts.)
 
 ## Use the content
 
 ```tsx
 import { cms } from '@/cms';
-import { RichText } from '@newtou/mnml-cms/rich-text';
+import { RichText } from '@n3wtou/mnml-cms/rich-text';
 
 const settings = await cms.getSingleton('settings');
 const posts = await cms.listEntries('posts'); // [{ slug, entry }], fully typed
@@ -131,7 +131,7 @@ to change that.
 | `adminPath`, `apiPath` | Default `/admin` and `/api/cms`; must match where the files live. |
 | `brand` | Sidebar title: a string or (async) function. |
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }`. |
-| `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build them with `@newtou/mnml-cms/admin` (`AdminHeader`, `Button`, `cardClass`…). |
+| `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build them with `@n3wtou/mnml-cms/admin` (`AdminHeader`, `Button`, `cardClass`…). |
 | `revalidate` | Called after each save/delete. |
 | `onChange` | Runs after the response on each save/delete (via `after()`), e.g. to update a search index. |
 
@@ -158,13 +158,13 @@ the two methods.
 
 | Import | Contents |
 | --- | --- |
-| `@newtou/mnml-cms` | Schema builders, validation, types (framework-free) |
-| `@newtou/mnml-cms/next` | `createCms`, `neonDatabase`, `vercelBlobMedia` |
-| `@newtou/mnml-cms/proxy` | `adminProxy` (kept separate so the proxy stays small) |
-| `@newtou/mnml-cms/rich-text` | `RichText` server renderer |
-| `@newtou/mnml-cms/admin` | UI pieces for extra admin pages |
-| `@newtou/mnml-cms/db` | Drizzle table for scripts (drizzle-kit reads the built file, see above) |
-| `@newtou/mnml-cms/styles.css` | Admin styles and `--cms-*` variables |
+| `@n3wtou/mnml-cms` | Schema builders, validation, types (framework-free) |
+| `@n3wtou/mnml-cms/next` | `createCms`, `neonDatabase`, `vercelBlobMedia` |
+| `@n3wtou/mnml-cms/proxy` | `adminProxy` (kept separate so the proxy stays small) |
+| `@n3wtou/mnml-cms/rich-text` | `RichText` server renderer |
+| `@n3wtou/mnml-cms/admin` | UI pieces for extra admin pages |
+| `@n3wtou/mnml-cms/db` | Drizzle table for scripts (drizzle-kit reads the built file, see above) |
+| `@n3wtou/mnml-cms/styles.css` | Admin styles and `--cms-*` variables |
 
 ## Not yet
 

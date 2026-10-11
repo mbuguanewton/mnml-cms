@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@10.10.0",
   "scripts": {
-    "build": "pnpm --filter @newtou/mnml-cms build",
+    "build": "pnpm --filter @n3wtou/mnml-cms build",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "changeset": "changeset",

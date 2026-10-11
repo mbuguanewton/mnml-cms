@@ -1,6 +1,6 @@
 /*
  * Styles for the CMS admin and preview banner. Import once from the app's global CSS
- * (Tailwind v4):  @import "@newtou/mnml-cms/styles.css";
+ * (Tailwind v4):  @import "@n3wtou/mnml-cms/styles.css";
  *
  * Every colour is a --cms-* variable, so a site can restyle the admin by overriding them.
  */
