@@ -1,0 +1,19 @@
+{
+  "name": "mnml-cms-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.10.0",
+  "scripts": {
+    "build": "pnpm --filter @newtou/mnml-cms build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "changeset": "changeset",
+    "version-packages": "changeset version"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.0",
+    "@next/eslint-plugin-next": "^16.4.0",
+    "eslint": "^9",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "typescript-eslint": "^8"
+  }
+}

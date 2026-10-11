@@ -1,0 +1,30 @@
+{
+  "name": "example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "db:push": "drizzle-kit push",
+    "db:seed": "tsx scripts/seed.ts"
+  },
+  "dependencies": {
+    "@newtou/mnml-cms": "workspace:*",
+    "drizzle-orm": "^0.45.4",
+    "lucide-react": "^1.48.0",
+    "next": "16.3.6",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.0",
+    "tailwindcss": "^4",
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}

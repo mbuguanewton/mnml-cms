@@ -1,0 +1,30 @@
+import { cva, type VariantProps } from 'class-variance-authority';
+import type { ComponentProps } from 'react';
+
+// The admin's own button, styled with the cms-* tokens so it doesn't depend on the host's components.
+export const buttonVariants = cva(
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[6px] border border-transparent text-sm font-medium transition-colors outline-none select-none focus-visible:ring-2 focus-visible:ring-cms-primary/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  {
+    variants: {
+      variant: {
+        default: 'bg-cms-primary text-cms-on-primary hover:bg-cms-primary/85',
+        secondary: 'bg-cms-accent text-cms-on-accent hover:bg-cms-accent/80',
+        outline: 'border-cms-line bg-cms-bg text-cms-text hover:bg-cms-surface',
+        ghost: 'text-cms-text hover:bg-cms-surface',
+        danger: 'text-cms-danger hover:bg-cms-danger/10',
+      },
+      size: {
+        default: 'h-8 px-3',
+        sm: 'h-7 px-2.5 text-[0.8rem] [&_svg:not([class*=size-])]:size-3.5',
+        icon: 'size-8',
+        'icon-sm': 'size-7',
+        'icon-xs': 'size-6 [&_svg:not([class*=size-])]:size-3',
+      },
+    },
+    defaultVariants: { variant: 'default', size: 'default' },
+  },
+);
+
+export function Button({ className, variant, size, type = 'button', ...props }: ComponentProps<'button'> & VariantProps<typeof buttonVariants>) {
+  return <button type={type} className={buttonVariants({ variant, size, className })} {...props} />;
+}

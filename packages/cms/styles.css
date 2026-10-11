@@ -1,0 +1,111 @@
+/*
+ * Styles for the CMS admin and preview banner. Import once from the app's global CSS
+ * (Tailwind v4):  @import "@newtou/mnml-cms/styles.css";
+ *
+ * Every colour is a --cms-* variable, so a site can restyle the admin by overriding them.
+ */
+@source "./dist";
+
+@theme inline {
+  --color-cms-bg: var(--cms-bg);
+  --color-cms-panel: var(--cms-panel);
+  --color-cms-surface: var(--cms-surface);
+  --color-cms-text: var(--cms-text);
+  --color-cms-text-soft: var(--cms-text-soft);
+  --color-cms-text-mute: var(--cms-text-mute);
+  --color-cms-line: var(--cms-line);
+  --color-cms-primary: var(--cms-primary);
+  --color-cms-on-primary: var(--cms-on-primary);
+  --color-cms-accent: var(--cms-accent);
+  --color-cms-on-accent: var(--cms-on-accent);
+  --color-cms-warn: var(--cms-warn);
+  --color-cms-on-warn: var(--cms-on-warn);
+  --color-cms-danger: var(--cms-danger);
+  --font-cms-brand: var(--cms-font-brand);
+}
+
+/* Neutral defaults. :where() keeps their specificity at zero so a site's own values always win. */
+:where(:root) {
+  --cms-bg: #ffffff;
+  --cms-panel: #f6f6f7;
+  --cms-surface: #ececee;
+  --cms-text: #18181b;
+  --cms-text-soft: #3f3f46;
+  --cms-text-mute: #71717a;
+  --cms-line: #e4e4e7;
+  --cms-primary: #18181b;
+  --cms-on-primary: #ffffff;
+  --cms-accent: #e4e4e7;
+  --cms-on-accent: #18181b;
+  --cms-warn: #fde68a;
+  --cms-on-warn: #422006;
+  --cms-danger: #dc2626;
+  --cms-font-brand: inherit;
+}
+:where(.dark) {
+  --cms-bg: #0f0f10;
+  --cms-panel: #18181b;
+  --cms-surface: #27272a;
+  --cms-text: #fafafa;
+  --cms-text-soft: #d4d4d8;
+  --cms-text-mute: #a1a1aa;
+  --cms-line: #3f3f46;
+  --cms-primary: #fafafa;
+  --cms-on-primary: #18181b;
+  --cms-accent: #3f3f46;
+  --cms-on-accent: #fafafa;
+  --cms-warn: #713f12;
+  --cms-on-warn: #fef3c7;
+  --cms-danger: #f87171;
+}
+
+@layer components {
+  /* Hover state layer for list items and nav links. */
+  .cms-state:hover {
+    background-color: color-mix(in srgb, currentColor 8%, transparent);
+  }
+
+  /* Typography inside the rich-text editor. */
+  .cms-prose > * + * {
+    margin-top: 0.75rem;
+  }
+  .cms-prose h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .cms-prose h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .cms-prose ul {
+    list-style: disc;
+    padding-left: 1.5rem;
+  }
+  .cms-prose ol {
+    list-style: decimal;
+    padding-left: 1.5rem;
+  }
+  .cms-prose a {
+    color: var(--cms-primary);
+    text-decoration: underline;
+  }
+  .cms-prose blockquote {
+    border-left: 3px solid var(--cms-line);
+    padding-left: 1rem;
+    color: var(--cms-text-soft);
+  }
+  .cms-prose code {
+    font-family: ui-monospace, monospace;
+    font-size: 0.875em;
+    background: var(--cms-surface);
+    border-radius: 0.25rem;
+    padding: 0.1em 0.3em;
+  }
+  .cms-prose img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+  }
+}

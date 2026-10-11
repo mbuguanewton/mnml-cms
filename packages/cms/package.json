@@ -1,0 +1,106 @@
+{
+  "name": "@newtou/mnml-cms",
+  "version": "0.1.0",
+  "description": "A small schema-driven CMS for Next.js: config file, embedded admin, Postgres storage.",
+  "keywords": [
+    "cms",
+    "nextjs",
+    "next",
+    "headless-cms",
+    "postgres",
+    "drizzle",
+    "tiptap"
+  ],
+  "license": "MIT",
+  "author": "Newton",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/newtou/mnml-cms.git",
+    "directory": "packages/cms"
+  },
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./next": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
+    },
+    "./proxy": {
+      "types": "./dist/server/proxy.d.ts",
+      "default": "./dist/server/proxy.js"
+    },
+    "./db": {
+      "types": "./dist/server/db.d.ts",
+      "default": "./dist/server/db.js"
+    },
+    "./schema": {
+      "types": "./dist/server/db.d.ts",
+      "default": "./dist/server/db.js"
+    },
+    "./admin": {
+      "types": "./dist/admin/index.d.ts",
+      "default": "./dist/admin/index.js"
+    },
+    "./rich-text": {
+      "types": "./dist/rich-text-render.d.ts",
+      "default": "./dist/rich-text-render.js"
+    },
+    "./styles.css": {
+      "style": "./styles.css",
+      "default": "./styles.css"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "styles.css",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/copy-css.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
+    "@tiptap/core": "^3.31.4",
+    "@tiptap/extension-image": "^3.31.4",
+    "@tiptap/pm": "^3.31.4",
+    "@tiptap/react": "^3.31.4",
+    "@tiptap/starter-kit": "^3.31.4",
+    "@tiptap/static-renderer": "^3.31.4",
+    "@vercel/blob": "^2.8.1",
+    "class-variance-authority": "^0.7.1",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.5",
+    "lucide-react": "^1.48.0"
+  },
+  "peerDependencies": {
+    "drizzle-orm": ">=0.40.0",
+    "next": ">=16.0.0",
+    "react": ">=19.0.0",
+    "react-dom": ">=19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "next": "16.3.6",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "typescript": "^5",
+    "@types/node": "^20",
+    "drizzle-orm": "^0.45.4"
+  }
+}
