@@ -1,9 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { createContext, use, useRef, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
-import { withDefaults, type ArrayField, type Field } from '../define.js';
+import { withDefaults, type ArrayField, type Field, type GroupField, type ImageValue } from '../define.js';
 import { Button } from './button.js';
 import { useAdmin } from './context.js';
 import { RichTextEditor } from './rich-text-editor.js';
@@ -14,9 +14,17 @@ export type Errors = Record<string, string>;
 
 type Props = { field: Field; value: unknown; onChange: (v: unknown) => void; path: string; errors: Errors };
 
+/** Entries that `reference` fields can point at, by collection key. Provided by the entry form. */
+export type RefOptions = Record<string, { slug: string; label: string }[]>;
+const RefOptionsContext = createContext<RefOptions>({});
+export const RefOptionsProvider = RefOptionsContext;
+
 export function FieldRenderer({ field, value, onChange, path, errors }: Props) {
   const error = errors[path];
   const id = `f-${path}`;
+  if (field.type === 'group') {
+    return <GroupInput field={field} value={(value as Record<string, unknown>) ?? {}} onChange={onChange} path={path} errors={errors} />;
+  }
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className={labelClass}>
@@ -62,7 +70,38 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
         />
       );
     case 'image':
-      return <ImageInput id={id} value={value as string | null} onChange={onChange} />;
+      return <ImageInput id={id} value={value as ImageValue | null} onChange={onChange} />;
+    case 'boolean':
+      return <input id={id} type="checkbox" className="size-4 self-start accent-cms-primary" checked={value === true} onChange={(e) => onChange(e.target.checked)} />;
+    case 'number':
+      return (
+        <input
+          id={id}
+          type="number"
+          min={field.min}
+          max={field.max}
+          step={field.step}
+          className={`${inputClass} w-auto`}
+          aria-invalid={invalid}
+          value={(value as number | null) ?? ''}
+          onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
+        />
+      );
+    case 'select':
+      return (
+        <select id={id} className={`${inputClass} w-auto`} aria-invalid={invalid} value={(value as string | null) ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+          <option value="">—</option>
+          {field.options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      );
+    case 'reference':
+      return <ReferenceInput id={id} collection={field.collection} value={value as string | null} onChange={onChange} invalid={invalid} />;
+    case 'group':
+      return null; // rendered by FieldRenderer as a section
     case 'richtext':
       return <RichTextEditor value={value as JSONContent} onChange={onChange} invalid={invalid} />;
     case 'tags':
@@ -72,7 +111,36 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
   }
 }
 
-function ImageInput({ id, value, onChange }: { id: string; value: string | null; onChange: (v: string | null) => void }) {
+function GroupInput({ field, value, onChange, path, errors }: { field: GroupField; value: Record<string, unknown>; onChange: (v: unknown) => void; path: string; errors: Errors }) {
+  return (
+    <fieldset className="flex min-w-0 flex-col gap-4 rounded-[8px] border border-cms-line px-4 pb-4 pt-3">
+      <legend className="px-1 text-sm font-semibold">{field.label}</legend>
+      {field.help && <p className="-mt-1 text-cms-text-mute">{field.help}</p>}
+      {Object.entries(field.fields).map(([k, f]) => (
+        <FieldRenderer key={k} field={f} value={value[k]} onChange={(v) => onChange({ ...value, [k]: v })} path={`${path}.${k}`} errors={errors} />
+      ))}
+    </fieldset>
+  );
+}
+
+function ReferenceInput({ id, collection, value, onChange, invalid }: { id: string; collection: string; value: string | null; onChange: (v: unknown) => void; invalid: boolean }) {
+  const options = use(RefOptionsContext)[collection] ?? [];
+  // Keep a current value that is no longer offered (e.g. since unpublished) visible instead of silently dropping it.
+  const missing = value && !options.some((o) => o.slug === value);
+  return (
+    <select id={id} className={`${inputClass} w-auto`} aria-invalid={invalid} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+      <option value="">—</option>
+      {missing && <option value={value}>{value} (unavailable)</option>}
+      {options.map((o) => (
+        <option key={o.slug} value={o.slug}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | null; onChange: (v: ImageValue | null) => void }) {
   const { apiPath } = useAdmin();
   const file = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -82,7 +150,7 @@ function ImageInput({ id, value, onChange }: { id: string; value: string | null;
     setBusy(true);
     setError(null);
     try {
-      onChange(await uploadImage(apiPath, f));
+      onChange({ url: await uploadImage(apiPath, f), alt: '' });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -91,38 +159,50 @@ function ImageInput({ id, value, onChange }: { id: string; value: string | null;
   };
 
   return (
-    <div className="flex items-center gap-3">
-      {value ? (
-        // Plain <img>: previews may be any uploaded URL, no need for next/image here.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={value} alt="" className="size-16 rounded-[6px] border border-cms-line object-cover" />
-      ) : (
-        <div className="flex size-16 items-center justify-center rounded-[6px] border border-dashed border-cms-line text-xs text-cms-text-mute">None</div>
-      )}
-      <div className="flex flex-col items-start gap-2">
-        <div className="flex gap-2">
-          <Button id={id} type="button" variant="outline" size="sm" disabled={busy} onClick={() => file.current?.click()}>
-            <UploadIcon /> {busy ? 'Uploading…' : value ? 'Replace' : 'Upload'}
-          </Button>
-          {value && (
-            <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
-              Remove
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        {value ? (
+          // Plain <img>: previews may be any uploaded URL, no need for next/image here.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value.url} alt="" className="size-16 rounded-[6px] border border-cms-line object-cover" />
+        ) : (
+          <div className="flex size-16 items-center justify-center rounded-[6px] border border-dashed border-cms-line text-xs text-cms-text-mute">None</div>
+        )}
+        <div className="flex flex-col items-start gap-2">
+          <div className="flex gap-2">
+            <Button id={id} type="button" variant="outline" size="sm" disabled={busy} onClick={() => file.current?.click()}>
+              <UploadIcon /> {busy ? 'Uploading…' : value ? 'Replace' : 'Upload'}
             </Button>
-          )}
+            {value && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
+                Remove
+              </Button>
+            )}
+          </div>
         </div>
-        {error && <p className="text-xs text-cms-danger">{error}</p>}
+        <input
+          ref={file}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f) upload(f);
+          }}
+        />
       </div>
-      <input
-        ref={file}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-        hidden
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          e.target.value = '';
-          if (f) upload(f);
-        }}
-      />
+      {error && <p className="break-words text-cms-danger">{error}</p>}
+      {value && (
+        <input
+          aria-label="Alt text"
+          placeholder="Alt text: describe the image (leave empty only if decorative)"
+          maxLength={300}
+          className={inputClass}
+          value={value.alt}
+          onChange={(e) => onChange({ ...value, alt: e.target.value })}
+        />
+      )}
     </div>
   );
 }

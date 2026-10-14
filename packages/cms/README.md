@@ -1,35 +1,21 @@
 # @n3wtou/mnml-cms
 
-A small schema-driven CMS you embed in a Next.js (App Router, v16+) site: one config file defines the
-content, the admin UI is mounted at a route in your app, and content is stored in your own Postgres
-(one JSON table, no migrations when the model changes).
+A small schema-driven CMS you embed in a Next.js site (App Router, v16+). One config file defines the
+content, the admin is mounted at a route in your app, and entries are stored in your own Postgres in one
+JSON table, so changing the content model never needs a migration.
 
-## Quick start (5 minutes)
+Needs Next 16+, React 19+ and Tailwind v4. A complete app is in [`example/`](../../example).
 
 ```sh
-pnpm add @n3wtou/mnml-cms drizzle-orm   # needs Next 16+, React 19+, Tailwind v4
+pnpm add @n3wtou/mnml-cms drizzle-orm
 ```
-
-Then follow **Set up** below (config, `src/cms.tsx`, two routes, proxy, CSS, table) and set:
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Postgres connection string (Neon by default) |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token, only for image uploads |
+| `DATABASE_URL` | Postgres connection string |
 | `ADMIN_PASSWORD` | The single admin password |
 | `ADMIN_SESSION_SECRET` | Signs the session cookie; 32+ random characters |
-
-A complete working app is in [`example/`](../../example). No `transpilePackages` is needed: the package
-ships compiled ESM with types.
-
-## Not yet
-
-- No CLI or `init` command; setup is manual.
-- Tailwind v4 is required for the admin styles.
-- Single-password auth only.
-- Postgres only (any Drizzle Postgres database; Neon over HTTP is the bundled default).
-- Neon and Vercel Blob adapters are bundled as dependencies even if you use neither.
-- Untested outside the site it was extracted from until it is published.
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token, only for image uploads (see [Image storage](#image-storage)) |
 
 ## Set up
 
@@ -48,15 +34,11 @@ export default config({
     fields: {
       title: fields.text('Title', { required: true }),
       date: fields.date('Date'),
-      tags: fields.tags('Tags'),
-      authors: fields.array('Authors', { name: fields.text('Name') }, { itemLabel: 'name' }),
       content: fields.richtext('Content'),
     },
   }),
 });
 ```
-
-Field types: `text`, `textarea`, `date`, `url`, `image`, `richtext`, `tags`, `array`. Options: `{ required, help }`.
 
 **2. Wiring** (`src/cms.ts`, server only):
 
@@ -67,11 +49,11 @@ import config from '../cms.config';
 export const cms = createCms(config, {
   database: neonDatabase(process.env.DATABASE_URL), // or any Drizzle Postgres database
   auth: { password: process.env.ADMIN_PASSWORD, secret: process.env.ADMIN_SESSION_SECRET },
-  media: vercelBlobMedia(), // optional: where uploaded images go (a private store is fine)
+  media: vercelBlobMedia(), // optional: where uploaded images go
 });
 ```
 
-**3. Mount it** (three small files):
+**3. Mount it:**
 
 ```ts
 // app/admin/[[...path]]/page.tsx
@@ -88,8 +70,11 @@ export const proxy = adminProxy({ secret: process.env.ADMIN_SESSION_SECRET });
 export const config = { matcher: ['/admin', '/admin/:path*'] };
 ```
 
-**4. Styles** (your global CSS, Tailwind v4): `@import "@n3wtou/mnml-cms/styles.css";`
-Restyle the admin by overriding the `--cms-*` variables (see `styles.css`).
+Keep the admin out of your site's header and footer by putting those in a route group layout, e.g.
+`app/(site)/layout.tsx`.
+
+**4. Styles** (your global CSS): `@import "@n3wtou/mnml-cms/styles.css";`. Restyle the admin by overriding
+the `--cms-*` variables (see `styles.css`).
 
 **5. Database table:** point drizzle-kit at the package's schema and push it:
 
@@ -98,75 +83,249 @@ Restyle the admin by overriding the `--cms-*` variables (see `styles.css`).
 export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3wtou/mnml-cms/dist/server/db.js', dbCredentials: { url: process.env.DATABASE_URL! } });
 ```
 
-then `drizzle-kit push`. (`@n3wtou/mnml-cms/schema` exports the same table for scripts.)
+Then run `drizzle-kit push`. `@n3wtou/mnml-cms/schema` exports the same table for scripts.
 
-## Use the content
+## Fields
+
+Options for every field: `{ required, help }`.
+
+| Field | Value |
+| --- | --- |
+| `text`, `textarea` | `string` |
+| `date` (`YYYY-MM-DD`), `url` | `string \| null` |
+| `number(label, { min, max, step })` | `number \| null` |
+| `boolean` | `boolean` (default `false`) |
+| `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null` |
+| `reference(label, 'authors')` | slug of a published entry in that collection, `string \| null`; resolve with `cms.getEntry` |
+| `image` | `{ url, alt } \| null` |
+| `richtext` | Tiptap JSON; render with `<RichText>` |
+| `tags` | `string[]` |
+| `array(label, fields, { itemLabel })` | a repeatable list of `fields` |
+| `group(label, fields)` | a nested object shown as one section: `page.hero.headline` |
+| `seo(label?)` | a `group` of `title`, `description` and `image` |
+
+Entries with groups get tabs above the form: **All fields**, **General** (fields outside any group) and one
+tab per group. Use one singleton per page with groups as sections, or a collection when editors add pages.
+
+### Derived values
+
+A singleton or collection can compute extra values from its own fields. They run on every read, are never
+stored, are typed from the function's return type, and work in `orderBy` and `filter`. The admin shows them
+read-only in the form; wrap a function in `derive()` to choose where (`after` a field, default the end) and
+its `label`.
+
+```ts
+import { collection, derive, readingTime } from '@n3wtou/mnml-cms';
+
+posts: collection({
+  // …
+  derived: {
+    readingTime: derive((post) => readingTime(post.content), { after: 'content' }),
+    wordy: (post) => post.title.length > 60, // a plain function works too
+  },
+}),
+```
+
+They are pure functions of one entry and can't share a name with a field. `plainText(doc)` and
+`readingTime(doc)` help with rich text.
+
+### SEO
+
+`seoMetadata(entry.seo, fallback)` returns Next.js `Metadata`; empty values fall back to `fallback`.
+
+```ts
+export const generateMetadata = async () => seoMetadata((await cms.getSingleton('home'))?.seo, { title: 'Home' });
+```
+
+## Reading content
 
 ```tsx
 import { cms } from '@/cms';
 import { RichText } from '@n3wtou/mnml-cms/rich-text';
 
 const settings = await cms.getSingleton('settings');
-const posts = await cms.listEntries('posts'); // [{ slug, entry }], fully typed
+const posts = await cms.listEntries('posts'); // [{ slug, entry, status }], fully typed
+const latest = await cms.listEntries('posts', { orderBy: 'date', order: 'desc', limit: 3 });
 const post = await cms.getEntry('posts', slug);
 export const generateStaticParams = async () => (await cms.listSlugs('posts')).map((slug) => ({ slug }));
 
 <RichText content={post.content} className="prose" />
 ```
 
-For live preview, render `<cms.PreviewBanner />` in the site layout. It only appears for editors
-previewing, and pages stay static for everyone else.
+`listEntries` options: `orderBy` (a field, a derived value, `'slug'`, `'createdAt'` or `'updatedAt'`; default `'slug'`,
+empty values last), `order` (`'asc'` | `'desc'`), `filter(entry)`, `limit`, `offset`.
 
-Saving revalidates the whole site by default (`revalidatePath('/', 'layout')`); pass `revalidate`
-to change that.
+Render `<cms.PreviewBanner />` in the site layout for live preview. It only appears for editors previewing,
+and pages stay static for everyone else. Saving revalidates the whole site by default
+(`revalidatePath('/', 'layout')`); pass `revalidate` to change that.
+
+## Drafts and publishing
+
+Collection entries are drafts or published, shown in the admin as a dot: green (published), grey (draft), or
+orange over green (published, with saved changes that aren't live yet).
+
+- **Save draft** keeps the edits off the site. On a published entry they are stored as pending changes and the
+  live version stays as it was.
+- **Publish** makes the form the live version.
+- **Unpublish** (in the "⋮" menu) takes a published entry off the site; its content becomes a draft.
+
+The public readers (`listEntries`, `getEntry`, `listSlugs`) only return published entries, so a draft is a 404
+on your site; editors still see it in live preview. Singletons are always live.
 
 ## Options
 
 | Option | Purpose |
 | --- | --- |
 | `database` | A Drizzle Postgres database, or a function returning one (called on first use). |
-| `table` | Table name (default `entries`). |
-| `auth` | `{ password, secret }` for the built-in single-password login. |
-| `media` | Storage for uploaded images, e.g. `vercelBlobMedia()`. See below. |
+| `table` | Table name (default `entries`), with `database`. |
+| `storage` | Instead of `database`: your own `EntryStorage` (see [Other ORMs](#other-orms)). |
+| `auth` | `{ password, secret }` for the built-in single-password login, or an `AuthAdapter` (see [Authentication](#authentication)). |
+| `media` | Storage for uploaded images (see [Image storage](#image-storage)). |
 | `adminPath`, `apiPath` | Default `/admin` and `/api/cms`; must match where the files live. |
 | `brand` | Sidebar title: a string or (async) function. |
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }`. |
-| `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build them with `@n3wtou/mnml-cms/admin` (`AdminHeader`, `Button`, `cardClass`…). |
-| `revalidate` | Called after each save/delete. |
-| `onChange` | Runs after the response on each save/delete (via `after()`), e.g. to update a search index. |
+| `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`, built with `@n3wtou/mnml-cms/admin`. |
+| `revalidate` | Called after each save or delete. |
+| `onChange` | Runs after the response on each save or delete (via `after()`), e.g. to update a search index. |
 
-`cms.isAdmin()` checks the session in your own routes.
+`cms.isAdmin()` checks the session (built-in or your adapter) in your own routes.
+
+Custom admin pages can open the admin's own dialogs from client components: `const { confirm, alert } = useAdmin()`
+(from `@n3wtou/mnml-cms/admin`), e.g. `await confirm({ title: 'Delete?', description: '…', confirmLabel: 'Delete', danger: true })`
+resolves to `true` or `false`.
+
+## Authentication
+
+**Built-in login** (`auth: { password, secret }`): one shared password.
+- A client IP is locked out for 15 minutes after 5 failed sign-ins (counted in the entries table, so it works on serverless).
+- Sessions last 24 hours from the last visit; the proxy renews the cookie while you're active.
+- Changing `ADMIN_PASSWORD` or `ADMIN_SESSION_SECRET` signs everyone out, and the sidebar's **Sign out everywhere** does the same on demand.
+
+**Your own login** (Auth.js, Better Auth, Clerk…): pass an adapter instead. Give it either a `login` UI or a
+`loginUrl`.
+
+```tsx
+export const cms = createCms(config, {
+  // …
+  auth: {
+    isAdmin: async () => (await auth.api.getSession({ headers: await headers() }))?.user.role === 'admin',
+    login: <SignInWithSso />, // shown in the admin's login card at /admin/login
+    // loginUrl: '/sign-in',  // or send signed-out visitors to a page of your own
+    signOut: async () => { await auth.api.signOut({ headers: await headers() }); }, // optional
+  },
+});
+```
+
+`login` can be a server or client component; build it with `Button`, `inputClass` and friends from
+`@n3wtou/mnml-cms/admin` to match the admin. The admin page and every API route call `isAdmin()`. Leave out
+`adminProxy` in this case: it only understands the built-in session cookie.
 
 ## Image storage
 
-Uploaded images are stored through a `MediaStorage` adapter and served by the CMS at
-`<apiPath>/media/<key>`, so the store itself can be private and any backend works. Responses are
-cached for a year (keys are unique), so the storage is read about once per image.
+Uploads go through a `MediaStorage` adapter and are served at `<apiPath>/media/<key>`, so the store itself can
+be private. Responses are cached for a year.
 
 ```ts
 type MediaStorage = {
   put(file: File, name: string): Promise<string>; // store, return a unique key
   get(key: string): Promise<{ body: ReadableStream<Uint8Array>; contentType?: string; size?: number } | null>;
+  list?(): Promise<{ key: string; size?: number; uploadedAt?: Date }[]>; // optional: powers the Media screen
+  delete?(key: string): Promise<void>; // optional: enables Delete on the Media screen
 };
 ```
 
-`vercelBlobMedia({ prefix = 'cms/', access = 'private', token })` is included. It only serves keys
-under `prefix`, so other files in the same store stay private. For S3, R2 or anything else, implement
-the two methods.
+When the storage has `list`, the admin gets a **Media** screen: every stored file with its size and date, the
+entries that use it (image fields and images in rich text, including unpublished changes), an "Unused" flag
+and a Delete button. Deleting warns first if the file is still in use. Both bundled adapters support it.
+
+- `vercelBlobMedia({ prefix = 'cms/', access = 'private', token })` only serves keys under `prefix`.
+- `localMedia({ dir = '.cms-uploads' })` writes to disk. It is the default in `next dev` when you pass no
+  `media`. Don't use it on serverless hosting; add the folder to `.gitignore`.
+- For S3, R2 or anything else, implement the two methods.
+
+## Other ORMs
+
+Pass `storage` instead of `database` to use something other than Drizzle. It is five plain queries; the CMS
+handles caching, sorting and drafts.
+
+```ts
+type EntryStorage = {
+  readRow(collection: string, slug: string): Promise<{ data: unknown; status: string } | undefined>;
+  readRows(collection: string): Promise<{ slug: string; data: unknown; status: string; createdAt: Date; updatedAt: Date }[]>;
+  upsert(collection: string, slug: string, data: unknown, status: string): Promise<void>; // set updatedAt = now
+  insertIfAbsent(collection: string, slug: string, data: unknown, status: string): Promise<boolean>; // false if the slug exists
+  remove(collection: string, slug: string): Promise<void>;
+};
+```
+
+Create the table yourself (keep these names):
+
+```sql
+create table entries (
+  id serial primary key,
+  collection text not null,
+  slug text not null,
+  data jsonb not null,
+  status text not null default 'published',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint entries_collection_slug unique (collection, slug)
+);
+```
+
+Prisma:
+
+```prisma
+model Entry {
+  id         Int      @id @default(autoincrement())
+  collection String
+  slug       String
+  data       Json
+  status     String   @default("published")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([collection, slug], name: "entries_collection_slug")
+  @@map("entries")
+}
+```
+
+```ts
+const at = (collection: string, slug: string) => ({ entries_collection_slug: { collection, slug } });
+
+const storage: EntryStorage = {
+  async readRow(collection, slug) {
+    return (await prisma.entry.findUnique({ where: at(collection, slug), select: { data: true, status: true } })) ?? undefined;
+  },
+  readRows: (collection) =>
+    prisma.entry.findMany({ where: { collection }, select: { slug: true, data: true, status: true, createdAt: true, updatedAt: true } }),
+  async upsert(collection, slug, data, status) {
+    await prisma.entry.upsert({
+      where: at(collection, slug),
+      create: { collection, slug, data: data as object, status },
+      update: { data: data as object, status },
+    });
+  },
+  async insertIfAbsent(collection, slug, data, status) {
+    const { count } = await prisma.entry.createMany({ data: [{ collection, slug, data: data as object, status }], skipDuplicates: true });
+    return count > 0;
+  },
+  async remove(collection, slug) {
+    await prisma.entry.deleteMany({ where: { collection, slug } });
+  },
+};
+```
+
+`drizzle-orm` is still a peer dependency, so install it even when you pass `storage`.
 
 ## Entry points
 
 | Import | Contents |
 | --- | --- |
-| `@n3wtou/mnml-cms` | Schema builders, validation, types (framework-free) |
-| `@n3wtou/mnml-cms/next` | `createCms`, `neonDatabase`, `vercelBlobMedia` |
-| `@n3wtou/mnml-cms/proxy` | `adminProxy` (kept separate so the proxy stays small) |
+| `@n3wtou/mnml-cms` | Schema builders, validation, types, `seoMetadata` (framework-free) |
+| `@n3wtou/mnml-cms/next` | `createCms`, `neonDatabase`, `drizzleStorage`, `vercelBlobMedia`, `localMedia` |
+| `@n3wtou/mnml-cms/proxy` | `adminProxy` |
 | `@n3wtou/mnml-cms/rich-text` | `RichText` server renderer |
 | `@n3wtou/mnml-cms/admin` | UI pieces for extra admin pages |
-| `@n3wtou/mnml-cms/db` | Drizzle table for scripts (drizzle-kit reads the built file, see above) |
+| `@n3wtou/mnml-cms/db` | Drizzle table for scripts and drizzle-kit |
 | `@n3wtou/mnml-cms/styles.css` | Admin styles and `--cms-*` variables |
-
-## Not yet
-
-Pre-built CSS for sites without Tailwind v4, a CLI (`init`, `db push`, `seed`), a build step for
-publishing to npm, and auth adapters for existing login systems.

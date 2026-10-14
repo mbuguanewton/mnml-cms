@@ -12,6 +12,7 @@ export const buttonVariants = cva(
         outline: 'border-cms-line bg-cms-bg text-cms-text hover:bg-cms-surface',
         ghost: 'text-cms-text hover:bg-cms-surface',
         danger: 'text-cms-danger hover:bg-cms-danger/10',
+        destructive: 'bg-cms-danger text-white hover:bg-cms-danger/90',
       },
       size: {
         default: 'h-8 px-3',

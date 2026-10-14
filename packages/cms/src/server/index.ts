@@ -7,9 +7,12 @@ import { createHandlers } from './handlers.js';
 import { createPreviewBanner } from './preview-banner.js';
 
 export type { AdminPageDef, Change, CmsOptions } from './context.js';
-export type { ReadOptions } from './store.js';
+export type { AuthAdapter, PasswordAuth } from './auth.js';
+export type { ListOptions, ReadOptions } from './store.js';
 export { neonDatabase, type Database } from './db.js';
-export { vercelBlobMedia, type MediaStorage } from './media.js';
+export type { EntryStorage, StoredRow } from './storage.js';
+export { drizzleStorage } from './storage.js';
+export { localMedia, vercelBlobMedia, type MediaFile, type MediaStorage } from './media.js';
 
 /**
  * Set up the CMS for a Next.js app.

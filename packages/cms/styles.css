@@ -21,42 +21,50 @@
   --color-cms-warn: var(--cms-warn);
   --color-cms-on-warn: var(--cms-on-warn);
   --color-cms-danger: var(--cms-danger);
+  --color-cms-success: var(--cms-success);
+  --color-cms-pending: var(--cms-pending);
   --font-cms-brand: var(--cms-font-brand);
 }
 
-/* Neutral defaults. :where() keeps their specificity at zero so a site's own values always win. */
+/* Warm paper-and-ink defaults. :where() keeps their specificity at zero so a site's own values always win. */
 :where(:root) {
-  --cms-bg: #ffffff;
-  --cms-panel: #f6f6f7;
-  --cms-surface: #ececee;
-  --cms-text: #18181b;
-  --cms-text-soft: #3f3f46;
-  --cms-text-mute: #71717a;
-  --cms-line: #e4e4e7;
-  --cms-primary: #18181b;
-  --cms-on-primary: #ffffff;
-  --cms-accent: #e4e4e7;
-  --cms-on-accent: #18181b;
+  --cms-bg: #faf8f4;
+  --cms-panel: #f3efe7;
+  --cms-surface: #ebe5d9;
+  --cms-text: #1c1917;
+  --cms-text-soft: #57534e;
+  --cms-text-mute: #78716c;
+  --cms-line: #e7e2d9;
+  --cms-primary: #1c1917;
+  --cms-on-primary: #faf8f4;
+  --cms-accent: #efe3d3;
+  --cms-on-accent: #1c1917;
+  --cms-link: #b4451f;
   --cms-warn: #fde68a;
   --cms-on-warn: #422006;
-  --cms-danger: #dc2626;
-  --cms-font-brand: inherit;
+  --cms-danger: #b91c1c;
+  --cms-success: #16a34a;
+  --cms-pending: #f59e0b;
+  --cms-font-brand: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
 }
 :where(.dark) {
-  --cms-bg: #0f0f10;
-  --cms-panel: #18181b;
-  --cms-surface: #27272a;
-  --cms-text: #fafafa;
-  --cms-text-soft: #d4d4d8;
-  --cms-text-mute: #a1a1aa;
-  --cms-line: #3f3f46;
-  --cms-primary: #fafafa;
-  --cms-on-primary: #18181b;
-  --cms-accent: #3f3f46;
-  --cms-on-accent: #fafafa;
+  --cms-bg: #171412;
+  --cms-panel: #1f1b18;
+  --cms-surface: #2a2521;
+  --cms-text: #faf8f4;
+  --cms-text-soft: #d6d0c6;
+  --cms-text-mute: #a8a29e;
+  --cms-line: #3a342e;
+  --cms-primary: #faf8f4;
+  --cms-on-primary: #1c1917;
+  --cms-accent: #3a322a;
+  --cms-on-accent: #faf8f4;
+  --cms-link: #e8805a;
   --cms-warn: #713f12;
   --cms-on-warn: #fef3c7;
   --cms-danger: #f87171;
+  --cms-success: #4ade80;
+  --cms-pending: #fbbf24;
 }
 
 @layer components {
@@ -65,7 +73,12 @@
     background-color: color-mix(in srgb, currentColor 8%, transparent);
   }
 
-  /* Typography inside the rich-text editor. */
+  /* Typography inside the rich-text editor: serif body, like a published article. */
+  .cms-prose {
+    font-family: var(--cms-font-brand);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+  }
   .cms-prose > * + * {
     margin-top: 0.75rem;
   }
@@ -88,12 +101,14 @@
     padding-left: 1.5rem;
   }
   .cms-prose a {
-    color: var(--cms-primary);
+    color: var(--cms-link, var(--cms-primary));
     text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .cms-prose blockquote {
-    border-left: 3px solid var(--cms-line);
+    border-left: 3px solid var(--cms-link, var(--cms-line));
     padding-left: 1rem;
+    font-style: italic;
     color: var(--cms-text-soft);
   }
   .cms-prose code {

@@ -26,7 +26,7 @@ export function RichTextEditor({ value, onChange, invalid }: { value: JSONConten
     content: value,
     // Render on the client only, otherwise SSR and hydration disagree.
     immediatelyRender: false,
-    editorProps: { attributes: { class: 'cms-prose min-h-48 px-3 py-2.5 text-base focus:outline-none' } },
+    editorProps: { attributes: { class: 'cms-prose min-h-48 px-3 py-2.5 focus:outline-none' } },
     onUpdate: ({ editor }) => onChange(editor.getJSON()),
   });
 
@@ -39,7 +39,7 @@ export function RichTextEditor({ value, onChange, invalid }: { value: JSONConten
 }
 
 function Toolbar({ editor }: { editor: Editor }) {
-  const { apiPath } = useAdmin();
+  const { apiPath, alert } = useAdmin();
   const s = useEditorState({
     editor,
     selector: ({ editor }) => ({
@@ -52,6 +52,8 @@ function Toolbar({ editor }: { editor: Editor }) {
       quote: editor.isActive('blockquote'),
       code: editor.isActive('code'),
       link: editor.isActive('link'),
+      // Alt text of the selected image, or null when no image is selected.
+      imageAlt: editor.isActive('image') ? ((editor.getAttributes('image').alt as string | null) ?? '') : null,
       undo: editor.can().undo(),
       redo: editor.can().redo(),
     }),
@@ -71,7 +73,7 @@ function Toolbar({ editor }: { editor: Editor }) {
       const src = await uploadImage(apiPath, f);
       chain().setImage({ src, alt: '' }).run();
     } catch (e) {
-      alert((e as Error).message);
+      await alert({ title: 'Upload failed', description: (e as Error).message });
     }
   };
 
@@ -119,6 +121,17 @@ function Toolbar({ editor }: { editor: Editor }) {
           }}
         />
       </label>
+      {s.imageAlt !== null && (
+        <input
+          aria-label="Image alt text"
+          placeholder="Alt text: describe the selected image (leave empty only if decorative)"
+          maxLength={300}
+          className="ml-1 min-w-48 flex-1 rounded-[6px] border border-cms-line bg-cms-bg px-2 text-xs focus:border-cms-primary focus:outline-none"
+          value={s.imageAlt}
+          // No focus() here: it would pull the cursor out of this input on every keystroke.
+          onChange={(e) => editor.chain().updateAttributes('image', { alt: e.target.value }).run()}
+        />
+      )}
     </div>
   );
 }
