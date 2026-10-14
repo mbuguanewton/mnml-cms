@@ -1,4 +1,4 @@
-import { collection, config, derive, fields, readingTime, singleton } from '@n3wtou/mnml-cms';
+import { block, collection, config, derive, fields, readingTime, singleton } from '@n3wtou/mnml-cms';
 
 export default config({
   settings: singleton({
@@ -29,11 +29,32 @@ export default config({
         headline: fields.text('Headline'),
         intro: fields.textarea('Intro'),
         ctaLabel: fields.text('Button label'),
-        ctaUrl: fields.url('Button link', { help: 'A full URL. Leave empty to link to all posts.' }),
+        ctaUrl: fields.url('Button link', { help: 'A full URL. Leave empty to link to all posts.', showIf: { ctaLabel: { empty: false } } }),
         image: fields.image('Image', { help: 'Optional. Wide images work best.' }),
       }),
       featuredPost: fields.reference('Featured post', 'posts', { help: 'Shown large under the hero.' }),
       postCount: fields.number('Latest posts to show', { min: 1, max: 12, step: 1 }),
+      seo: fields.seo(),
+    },
+  }),
+  pages: collection({
+    label: 'Pages',
+    titleField: 'title',
+    basePath: '',
+    preview: true,
+    fields: {
+      title: fields.text('Title', { required: true }),
+      // Each section is one of these blocks, with only its own fields.
+      sections: fields.blocks(
+        'Sections',
+        {
+          hero: block('Hero', { eyebrow: fields.text('Eyebrow'), title: fields.text('Title'), intro: fields.textarea('Intro') }),
+          text: block('Text', { content: fields.richtext('Content') }),
+          latestPosts: block('Latest posts', { title: fields.text('Title'), count: fields.number('How many', { min: 1, max: 12, step: 1 }) }),
+          divider: block('Divider', {}),
+        },
+        { itemLabel: 'title' },
+      ),
       seo: fields.seo(),
     },
   }),

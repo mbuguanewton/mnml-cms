@@ -3,7 +3,7 @@
 import { createContext, use, useRef, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
-import { withDefaults, type ArrayField, type Field, type GroupField, type ImageValue } from '../define.js';
+import { isVisible, withDefaults, type ArrayField, type BlocksField, type Field, type GroupField, type ImageValue } from '../define.js';
 import { Button } from './button.js';
 import { useAdmin } from './context.js';
 import { RichTextEditor } from './rich-text-editor.js';
@@ -13,13 +13,16 @@ import { inputClass, labelClass } from './styles.js';
 export type Errors = Record<string, string>;
 
 type Props = { field: Field; value: unknown; onChange: (v: unknown) => void; path: string; errors: Errors };
+/** `siblings` are the values of the fields next to this one, which its `showIf` is checked against. */
+type RenderProps = Props & { siblings: unknown };
 
 /** Entries that `reference` fields can point at, by collection key. Provided by the entry form. */
 export type RefOptions = Record<string, { slug: string; label: string }[]>;
 const RefOptionsContext = createContext<RefOptions>({});
 export const RefOptionsProvider = RefOptionsContext;
 
-export function FieldRenderer({ field, value, onChange, path, errors }: Props) {
+export function FieldRenderer({ field, value, onChange, path, errors, siblings }: RenderProps) {
+  if (!isVisible(field, siblings)) return null;
   const error = errors[path];
   const id = `f-${path}`;
   if (field.type === 'group') {
@@ -108,6 +111,8 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
       return <TagsInput id={id} value={(value as string[]) ?? []} onChange={onChange} />;
     case 'array':
       return <ArrayInput field={field} value={(value as Record<string, unknown>[]) ?? []} onChange={onChange} path={path} errors={errors} />;
+    case 'blocks':
+      return <BlocksInput field={field} value={(value as Block[]) ?? []} onChange={onChange} path={path} errors={errors} />;
   }
 }
 
@@ -117,7 +122,7 @@ function GroupInput({ field, value, onChange, path, errors }: { field: GroupFiel
       <legend className="px-1 text-sm font-semibold">{field.label}</legend>
       {field.help && <p className="-mt-1 text-mnml-text-mute">{field.help}</p>}
       {Object.entries(field.fields).map(([k, f]) => (
-        <FieldRenderer key={k} field={f} value={value[k]} onChange={(v) => onChange({ ...value, [k]: v })} path={`${path}.${k}`} errors={errors} />
+        <FieldRenderer key={k} field={f} value={value[k]} onChange={(v) => onChange({ ...value, [k]: v })} path={`${path}.${k}`} errors={errors} siblings={value} />
       ))}
     </fieldset>
   );
@@ -244,6 +249,25 @@ function TagsInput({ id, value, onChange }: { id: string; value: string[]; onCha
   );
 }
 
+/** Open row, edit, reorder and remove for a list of items, shared by `array` and `blocks`. */
+function useListEditing<T>(value: T[], onChange: (v: unknown) => void) {
+  const [open, setOpen] = useState<number | null>(null);
+  const update = (i: number, item: T) => onChange(value.map((v, j) => (j === i ? item : v)));
+  const move = (i: number, d: number) => {
+    const next = [...value];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    onChange(next);
+    if (open === i) setOpen(i + d);
+    else if (open === i + d) setOpen(i);
+  };
+  const remove = (i: number) => {
+    onChange(value.filter((_, j) => j !== i));
+    if (open === i) setOpen(null);
+    else if (open !== null && open > i) setOpen(open - 1);
+  };
+  return { open, setOpen, update, move, remove };
+}
+
 // Keystatic-style list: one row per item, expanded inline one at a time.
 function ArrayInput({
   field,
@@ -258,20 +282,7 @@ function ArrayInput({
   path: string;
   errors: Errors;
 }) {
-  const [open, setOpen] = useState<number | null>(null);
-  const update = (i: number, item: Record<string, unknown>) => onChange(value.map((v, j) => (j === i ? item : v)));
-  const move = (i: number, d: number) => {
-    const next = [...value];
-    [next[i], next[i + d]] = [next[i + d], next[i]];
-    onChange(next);
-    if (open === i) setOpen(i + d);
-    else if (open === i + d) setOpen(i);
-  };
-  const remove = (i: number) => {
-    onChange(value.filter((_, j) => j !== i));
-    if (open === i) setOpen(null);
-    else if (open !== null && open > i) setOpen(open - 1);
-  };
+  const { open, setOpen, update, move, remove } = useListEditing(value, onChange);
   const add = () => {
     onChange([...value, withDefaults(field.fields, {})]);
     setOpen(value.length);
@@ -310,7 +321,7 @@ function ArrayInput({
               {isOpen && (
                 <div className="flex flex-col gap-4 border-t border-mnml-line px-4 py-4 sm:pl-9">
                   {Object.entries(field.fields).map(([k, f]) => (
-                    <FieldRenderer key={k} field={f} value={item[k]} onChange={(v) => update(i, { ...item, [k]: v })} path={`${path}.${i}.${k}`} errors={errors} />
+                    <FieldRenderer key={k} field={f} value={item[k]} onChange={(v) => update(i, { ...item, [k]: v })} path={`${path}.${i}.${k}`} errors={errors} siblings={item} />
                   ))}
                 </div>
               )}
@@ -321,6 +332,68 @@ function ArrayInput({
       <Button type="button" variant="outline" size="sm" onClick={add}>
         <PlusIcon /> Add
       </Button>
+    </div>
+  );
+}
+
+type Block = { kind: string } & Record<string, unknown>;
+
+// Like ArrayInput, but each item is one of the field's blocks: "Add" picks which, and the row shows only that block's fields.
+function BlocksInput({ field, value, onChange, path, errors }: { field: BlocksField; value: Block[]; onChange: (v: unknown) => void; path: string; errors: Errors }) {
+  const { open, setOpen, update, move, remove } = useListEditing(value, onChange);
+  const add = (kind: string) => {
+    onChange([...value, { kind, ...withDefaults(field.blocks[kind].fields, {}) }]);
+    setOpen(value.length);
+  };
+
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <ul className="w-full divide-y divide-mnml-line overflow-hidden rounded-[8px] border border-mnml-line">
+        {value.length === 0 && <li className="px-3 py-2.5 text-mnml-text-mute">No items</li>}
+        {value.map((item, i) => {
+          const def = field.blocks[item.kind];
+          if (!def) return null;
+          const isOpen = open === i;
+          const hasError = Object.keys(errors).some((k) => k.startsWith(`${path}.${i}.`));
+          const title = field.itemLabel && field.itemLabel in def.fields ? String(item[field.itemLabel] ?? '') : '';
+          return (
+            <li key={i}>
+              <div className={`flex items-center gap-1 pr-1.5 ${isOpen ? 'bg-mnml-panel' : 'hover:bg-mnml-panel'}`}>
+                <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : i)} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left">
+                  <ChevronRightIcon className={`size-4 shrink-0 text-mnml-text-mute transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                  <span className="shrink-0 rounded-[4px] bg-mnml-surface px-1.5 py-0.5 text-xs text-mnml-text-mute">{def.label}</span>
+                  <span className="truncate">{title}</span>
+                  {hasError && <span className="shrink-0 text-xs text-mnml-danger">Needs attention</span>}
+                </button>
+                <Button type="button" variant="ghost" size="icon-xs" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
+                  <ArrowUpIcon />
+                </Button>
+                <Button type="button" variant="ghost" size="icon-xs" aria-label="Move down" disabled={i === value.length - 1} onClick={() => move(i, 1)}>
+                  <ArrowDownIcon />
+                </Button>
+                <Button type="button" variant="ghost" size="icon-xs" aria-label="Remove" onClick={() => remove(i)}>
+                  <Trash2Icon />
+                </Button>
+              </div>
+              {isOpen && (
+                <div className="flex flex-col gap-4 border-t border-mnml-line px-4 py-4 sm:pl-9">
+                  {Object.keys(def.fields).length === 0 && <p className="text-mnml-text-mute">Nothing to edit.</p>}
+                  {Object.entries(def.fields).map(([k, f]) => (
+                    <FieldRenderer key={k} field={f} value={item[k]} onChange={(v) => update(i, { ...item, [k]: v })} path={`${path}.${i}.${k}`} errors={errors} siblings={item} />
+                  ))}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <div className="flex flex-wrap gap-2">
+        {Object.entries(field.blocks).map(([kind, b]) => (
+          <Button key={kind} type="button" variant="outline" size="sm" onClick={() => add(kind)}>
+            <PlusIcon /> {b.label}
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }

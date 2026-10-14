@@ -4,7 +4,20 @@ import type { JSONContent } from '@tiptap/core';
 // The building blocks for a mnml.config.ts. One definition there drives the admin forms,
 // the validation below, and the TypeScript types the readers return.
 
-type Base = { label: string; required?: boolean; help?: string };
+type Scalar = string | number | boolean | null;
+/**
+ * What a sibling field's value must look like: a value (equals), a list (any of), `{ not }`,
+ * a comparison (`gt`, `gte`, `lt`, `lte`, numbers only) or `{ empty }` (no value, text or items).
+ */
+export type Condition =
+  | Scalar
+  | readonly Scalar[]
+  | { not: Scalar | readonly Scalar[] }
+  | { gt?: number; gte?: number; lt?: number; lte?: number; empty?: boolean };
+/** Show a field only while its sibling fields (same entry, group, item or block) match; every key must. */
+export type ShowIf = Record<string, Condition>;
+
+type Base = { label: string; required?: boolean; help?: string; showIf?: ShowIf };
 
 export type TextField = Base & { type: 'text' };
 export type TextareaField = Base & { type: 'textarea' };
@@ -25,6 +38,14 @@ export type ArrayField<F extends Fields = Fields> = Base & { type: 'array'; fiel
 /** Fields stored together under one key, shown as a section of the form: `page.hero.headline`. */
 export type GroupField<F extends Fields = Fields> = Base & { type: 'group'; fields: F };
 
+/** One kind of section inside a `blocks` field. Build it with `block()`. */
+export type Block<F extends Fields = Fields> = { label: string; fields: F };
+/**
+ * A list where each item is one of several kinds of block, each with its own fields. Items are stored
+ * as `{ kind: 'hero', …fields }`, so reading one narrows by `kind`. `itemLabel` names the field shown as a row's title.
+ */
+export type BlocksField<B extends Record<string, Block> = Record<string, Block>> = Base & { type: 'blocks'; blocks: B; itemLabel?: string };
+
 export type Field =
   | TextField
   | TextareaField
@@ -38,7 +59,8 @@ export type Field =
   | RichTextField
   | TagsField
   | ArrayField
-  | GroupField;
+  | GroupField
+  | BlocksField;
 // An interface (not a Record alias) so Field and Fields can reference each other.
 export interface Fields {
   [key: string]: Field;
@@ -67,11 +89,15 @@ type ValueOf<F> = F extends TextField | TextareaField
                   ? EntryOf<S>[]
                   : F extends GroupField<infer S>
                     ? EntryOf<S>
-                    : never;
+                    : F extends BlocksField<infer B>
+                      ? { [K in keyof B & string]: { kind: K } & EntryOf<B[K]['fields']> }[keyof B & string][]
+                      : never;
 
 export type EntryOf<F extends Fields> = { [K in keyof F]: ValueOf<F[K]> };
 
 type Opts = Omit<Base, 'label'>;
+
+export const block = <F extends Fields>(label: string, fields: F): Block<F> => ({ label, fields });
 
 export type SeoField = GroupField<{ title: TextField; description: TextareaField; image: ImageField }>;
 
@@ -100,6 +126,14 @@ export const fields = {
     },
     ...o,
   }),
+  /** A list of sections, each one of the `blocks` (made with `block()`), keyed by the `kind` stored with it. */
+  blocks: <const B extends Record<string, Block>>(label: string, blocks: B, o: Opts & { itemLabel?: string } = {}): BlocksField<B> => {
+    if (Object.keys(blocks).length === 0) throw new Error(`"${label}": blocks needs at least one block.`);
+    for (const [k, b] of Object.entries(blocks)) {
+      if ('kind' in b.fields) throw new Error(`"${label}": block "${k}" has a field named "kind", which is reserved.`);
+    }
+    return { type: 'blocks', label, blocks, ...o };
+  },
   array: <F extends Fields>(label: string, fields: F, o: Opts & { itemLabel?: NoInfer<keyof F & string> } = {}): ArrayField<F> => ({
     type: 'array',
     label,
@@ -149,14 +183,28 @@ function checkDerived(label: string, fields: Fields, derived: object | undefined
   }
 }
 
+// A showIf naming a field that isn't a sibling would silently never match, so fail when the config loads.
+function checkShowIf(label: string, fields: Fields) {
+  for (const [k, f] of Object.entries(fields)) {
+    for (const dep of Object.keys(f.showIf ?? {})) {
+      if (dep === k) throw new Error(`"${label}": field "${k}" cannot depend on itself in showIf.`);
+      if (!(dep in fields)) throw new Error(`"${label}": showIf on "${k}" refers to "${dep}", which is not a field next to it.`);
+    }
+    if (f.type === 'group' || f.type === 'array') checkShowIf(`${label} › ${k}`, f.fields);
+    else if (f.type === 'blocks') for (const [bk, b] of Object.entries(f.blocks)) checkShowIf(`${label} › ${k} › ${bk}`, b.fields);
+  }
+}
+
 export const singleton = <F extends Fields, D = NoDerived>(s: Omit<Singleton<F, D>, 'kind' | 'derived'> & DerivedInput<F, D>): Singleton<F, D> => {
   checkDerived(s.label, s.fields, s.derived);
+  checkShowIf(s.label, s.fields);
   return { kind: 'singleton', ...s };
 };
 export const collection = <F extends Fields, D = NoDerived>(
   c: Omit<Collection<F, D>, 'kind' | 'titleField' | 'derived'> & { titleField: NoInfer<keyof F & string> } & DerivedInput<F, D>,
 ): Collection<F, D> => {
   checkDerived(c.label, c.fields, c.derived);
+  checkShowIf(c.label, c.fields);
   return { kind: 'collection', ...c };
 };
 
@@ -204,6 +252,33 @@ export function previewPath(def: Singleton | Collection, slug?: string): string 
 
 export const emptyDoc: JSONContent = { type: 'doc', content: [{ type: 'paragraph' }] };
 
+const isEmptyValue = (v: unknown) => v == null || v === '' || (Array.isArray(v) && v.length === 0);
+
+function matches(value: unknown, c: Condition): boolean {
+  const v = value ?? null;
+  if (Array.isArray(c)) return c.includes(v as Scalar);
+  if (c !== null && typeof c === 'object') {
+    if ('not' in c) return !matches(value, c.not);
+    const r = c as { gt?: number; gte?: number; lt?: number; lte?: number; empty?: boolean };
+    if (r.empty !== undefined && isEmptyValue(value) !== r.empty) return false;
+    const n = typeof value === 'number' ? value : undefined;
+    return (
+      (r.gt === undefined || (n !== undefined && n > r.gt)) &&
+      (r.gte === undefined || (n !== undefined && n >= r.gte)) &&
+      (r.lt === undefined || (n !== undefined && n < r.lt)) &&
+      (r.lte === undefined || (n !== undefined && n <= r.lte))
+    );
+  }
+  return v === c;
+}
+
+/** Whether `f` is shown, given the values of the fields next to it. */
+export function isVisible(f: Field, siblings: unknown): boolean {
+  if (!f.showIf) return true;
+  const src = (siblings && typeof siblings === 'object' ? siblings : {}) as Record<string, unknown>;
+  return Object.entries(f.showIf).every(([k, c]) => matches(src[k], c));
+}
+
 export function emptyValue(f: Field): unknown {
   switch (f.type) {
     case 'text':
@@ -222,6 +297,7 @@ export function emptyValue(f: Field): unknown {
       return emptyDoc;
     case 'tags':
     case 'array':
+    case 'blocks':
       return [];
     case 'group':
       return withDefaults(f.fields, {});
@@ -231,6 +307,9 @@ export function emptyValue(f: Field): unknown {
 /** Stored images used to be a bare URL string; read those as `{ url, alt: '' }`. */
 const toImage = (v: unknown) => (typeof v === 'string' ? { url: v, alt: '' } : v);
 
+const isBlockOf = (f: BlocksField, v: unknown): v is { kind: string } =>
+  !!v && typeof v === 'object' && typeof (v as { kind?: unknown }).kind === 'string' && Object.hasOwn(f.blocks, (v as { kind: string }).kind);
+
 // Fill in fields missing from stored data (e.g. a field added after the entry was saved).
 export function withDefaults<F extends Fields>(fields: F, data: unknown): EntryOf<F> {
   const src = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
@@ -239,6 +318,8 @@ export function withDefaults<F extends Fields>(fields: F, data: unknown): EntryO
     const v = src[k];
     if (v === undefined) out[k] = emptyValue(f);
     else if (f.type === 'array' && Array.isArray(v)) out[k] = v.map((item) => withDefaults(f.fields, item));
+    // A block whose kind is no longer in the config is dropped.
+    else if (f.type === 'blocks' && Array.isArray(v)) out[k] = v.flatMap((item) => (isBlockOf(f, item) ? [{ kind: item.kind, ...withDefaults(f.blocks[item.kind].fields, item) }] : []));
     else if (f.type === 'group') out[k] = withDefaults(f.fields, v);
     else if (f.type === 'image') out[k] = toImage(v);
     else out[k] = v;
@@ -302,6 +383,11 @@ function fieldSchema(f: Field): z.ZodType {
       return z.array(objectSchema(f.fields));
     case 'group':
       return objectSchema(f.fields);
+    case 'blocks': {
+      const options = Object.entries(f.blocks).map(([kind, b]) => objectOf(b.fields, { kind: z.literal(kind) }));
+      const item = z.discriminatedUnion('kind', options as unknown as [(typeof options)[number], ...(typeof options)[number][]]);
+      return z.array(item);
+    }
   }
 }
 
@@ -311,12 +397,41 @@ export function referenceTargets(fields: Fields): string[] {
   for (const f of Object.values(fields)) {
     if (f.type === 'reference') out.add(f.collection);
     else if (f.type === 'group' || f.type === 'array') for (const t of referenceTargets(f.fields)) out.add(t);
+    else if (f.type === 'blocks') for (const b of Object.values(f.blocks)) for (const t of referenceTargets(b.fields)) out.add(t);
   }
   return [...out];
 }
 
+/**
+ * Fields with a `showIf` are validated against their siblings: checked only while shown. A hidden one
+ * keeps its stored value, unless that value is not valid for the field, which resets it.
+ */
+function objectOf(fields: Fields, extra: Record<string, z.core.$ZodType> = {}) {
+  const conditional = Object.entries(fields).filter(([, f]) => f.showIf);
+  const shape: Record<string, z.core.$ZodType> = { ...extra };
+  for (const [k, f] of Object.entries(fields)) shape[k] = f.showIf ? z.unknown() : fieldSchema(f);
+  const base = z.strictObject(shape);
+  if (conditional.length === 0) return base;
+  return base
+    .superRefine((data, ctx) => {
+      for (const [k, f] of conditional) {
+        if (!isVisible(f, data)) continue;
+        const r = fieldSchema(f).safeParse((data as Record<string, unknown>)[k]);
+        if (!r.success) for (const issue of r.error.issues) ctx.addIssue({ code: 'custom', message: issue.message, path: [k, ...issue.path] });
+      }
+    })
+    .transform((data) => {
+      const out = data as Record<string, unknown>;
+      for (const [k, f] of conditional) {
+        const r = fieldSchema(f).safeParse(out[k]);
+        out[k] = r.success ? r.data : emptyValue(f);
+      }
+      return out;
+    });
+}
+
 export function objectSchema(fields: Fields) {
-  return z.strictObject(Object.fromEntries(Object.entries(fields).map(([k, f]) => [k, fieldSchema(f)])));
+  return objectOf(fields);
 }
 
 export const slugSchema = z
