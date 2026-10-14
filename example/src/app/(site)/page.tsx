@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { seoMetadata } from "@n3wtou/mnml-cms";
-import { cms } from "@/cms";
+import { cms } from "@/mnml";
 import { Picture, PostCard } from "@/components/ui";
 
 // Reads the database on every request, so the build doesn't need DATABASE_URL.

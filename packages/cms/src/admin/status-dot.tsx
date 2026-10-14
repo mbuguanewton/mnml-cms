@@ -8,9 +8,9 @@ export const dotLabels: Record<DotState, string> = {
 
 // Green: live. Grey: draft. Orange over green: live, with saved changes that aren't published yet.
 // Inline styles on purpose: the dot must show even if the host's CSS hasn't picked up new classes yet.
-const GREY = 'var(--cms-text-mute, #78716c)';
-const ORANGE = 'var(--cms-pending, #f59e0b)';
-const GREEN = 'var(--cms-success, #16a34a)';
+const GREY = 'var(--mnml-text-mute, #78716c)';
+const ORANGE = 'var(--mnml-pending, #f59e0b)';
+const GREEN = 'var(--mnml-success, #16a34a)';
 const background: Record<DotState, string> = {
   published: GREEN,
   draft: GREY,

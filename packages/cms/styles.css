@@ -2,123 +2,133 @@
  * Styles for the CMS admin and preview banner. Import once from the app's global CSS
  * (Tailwind v4):  @import "@n3wtou/mnml-cms/styles.css";
  *
- * Every colour is a --cms-* variable, so a site can restyle the admin by overriding them.
+ * Every colour is a --mnml-* variable, so a site can restyle the admin by overriding them.
  */
 @source "./dist";
 
 @theme inline {
-  --color-cms-bg: var(--cms-bg);
-  --color-cms-panel: var(--cms-panel);
-  --color-cms-surface: var(--cms-surface);
-  --color-cms-text: var(--cms-text);
-  --color-cms-text-soft: var(--cms-text-soft);
-  --color-cms-text-mute: var(--cms-text-mute);
-  --color-cms-line: var(--cms-line);
-  --color-cms-primary: var(--cms-primary);
-  --color-cms-on-primary: var(--cms-on-primary);
-  --color-cms-accent: var(--cms-accent);
-  --color-cms-on-accent: var(--cms-on-accent);
-  --color-cms-warn: var(--cms-warn);
-  --color-cms-on-warn: var(--cms-on-warn);
-  --color-cms-danger: var(--cms-danger);
-  --color-cms-success: var(--cms-success);
-  --color-cms-pending: var(--cms-pending);
-  --font-cms-brand: var(--cms-font-brand);
+  --color-mnml-bg: var(--mnml-bg);
+  --color-mnml-panel: var(--mnml-panel);
+  --color-mnml-surface: var(--mnml-surface);
+  --color-mnml-text: var(--mnml-text);
+  --color-mnml-text-soft: var(--mnml-text-soft);
+  --color-mnml-text-mute: var(--mnml-text-mute);
+  --color-mnml-line: var(--mnml-line);
+  --color-mnml-primary: var(--mnml-primary);
+  --color-mnml-on-primary: var(--mnml-on-primary);
+  --color-mnml-accent: var(--mnml-accent);
+  --color-mnml-on-accent: var(--mnml-on-accent);
+  --color-mnml-warn: var(--mnml-warn);
+  --color-mnml-on-warn: var(--mnml-on-warn);
+  --color-mnml-danger: var(--mnml-danger);
+  --color-mnml-success: var(--mnml-success);
+  --color-mnml-pending: var(--mnml-pending);
+  --font-mnml-brand: var(--mnml-font-brand);
 }
 
 /* Warm paper-and-ink defaults. :where() keeps their specificity at zero so a site's own values always win. */
 :where(:root) {
-  --cms-bg: #faf8f4;
-  --cms-panel: #f3efe7;
-  --cms-surface: #ebe5d9;
-  --cms-text: #1c1917;
-  --cms-text-soft: #57534e;
-  --cms-text-mute: #78716c;
-  --cms-line: #e7e2d9;
-  --cms-primary: #1c1917;
-  --cms-on-primary: #faf8f4;
-  --cms-accent: #efe3d3;
-  --cms-on-accent: #1c1917;
-  --cms-link: #b4451f;
-  --cms-warn: #fde68a;
-  --cms-on-warn: #422006;
-  --cms-danger: #b91c1c;
-  --cms-success: #16a34a;
-  --cms-pending: #f59e0b;
-  --cms-font-brand: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --mnml-bg: #faf8f4;
+  --mnml-panel: #f3efe7;
+  --mnml-surface: #ebe5d9;
+  --mnml-text: #1c1917;
+  --mnml-text-soft: #57534e;
+  --mnml-text-mute: #78716c;
+  --mnml-line: #e7e2d9;
+  --mnml-primary: #1c1917;
+  --mnml-on-primary: #faf8f4;
+  --mnml-accent: #efe3d3;
+  --mnml-on-accent: #1c1917;
+  --mnml-link: #b4451f;
+  --mnml-warn: #fde68a;
+  --mnml-on-warn: #422006;
+  --mnml-danger: #b91c1c;
+  --mnml-success: #16a34a;
+  --mnml-pending: #f59e0b;
+  --mnml-font-brand: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
 }
 :where(.dark) {
-  --cms-bg: #171412;
-  --cms-panel: #1f1b18;
-  --cms-surface: #2a2521;
-  --cms-text: #faf8f4;
-  --cms-text-soft: #d6d0c6;
-  --cms-text-mute: #a8a29e;
-  --cms-line: #3a342e;
-  --cms-primary: #faf8f4;
-  --cms-on-primary: #1c1917;
-  --cms-accent: #3a322a;
-  --cms-on-accent: #faf8f4;
-  --cms-link: #e8805a;
-  --cms-warn: #713f12;
-  --cms-on-warn: #fef3c7;
-  --cms-danger: #f87171;
-  --cms-success: #4ade80;
-  --cms-pending: #fbbf24;
+  --mnml-bg: #171412;
+  --mnml-panel: #1f1b18;
+  --mnml-surface: #2a2521;
+  --mnml-text: #faf8f4;
+  --mnml-text-soft: #d6d0c6;
+  --mnml-text-mute: #a8a29e;
+  --mnml-line: #3a342e;
+  --mnml-primary: #faf8f4;
+  --mnml-on-primary: #1c1917;
+  --mnml-accent: #3a322a;
+  --mnml-on-accent: #faf8f4;
+  --mnml-link: #e8805a;
+  --mnml-warn: #713f12;
+  --mnml-on-warn: #fef3c7;
+  --mnml-danger: #f87171;
+  --mnml-success: #4ade80;
+  --mnml-pending: #fbbf24;
 }
 
 @layer components {
   /* Hover state layer for list items and nav links. */
-  .cms-state:hover {
+  .mnml-state:hover {
     background-color: color-mix(in srgb, currentColor 8%, transparent);
   }
 
   /* Typography inside the rich-text editor: serif body, like a published article. */
-  .cms-prose {
-    font-family: var(--cms-font-brand);
+  .mnml-prose {
+    font-family: var(--mnml-font-brand);
     font-size: 1.0625rem;
     line-height: 1.7;
   }
-  .cms-prose > * + * {
+  .mnml-prose > * + * {
     margin-top: 0.75rem;
   }
-  .cms-prose h2 {
+  .mnml-prose h1 {
+    font-size: 1.875rem;
+    font-weight: 700;
+    line-height: 1.15;
+  }
+  .mnml-prose h2 {
     font-size: 1.5rem;
     font-weight: 700;
     line-height: 1.2;
   }
-  .cms-prose h3 {
+  .mnml-prose h3 {
     font-size: 1.25rem;
     font-weight: 600;
     line-height: 1.25;
   }
-  .cms-prose ul {
+  .mnml-prose h4 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .mnml-prose ul {
     list-style: disc;
     padding-left: 1.5rem;
   }
-  .cms-prose ol {
+  .mnml-prose ol {
     list-style: decimal;
     padding-left: 1.5rem;
   }
-  .cms-prose a {
-    color: var(--cms-link, var(--cms-primary));
+  .mnml-prose a {
+    color: var(--mnml-link, var(--mnml-primary));
     text-decoration: underline;
     text-underline-offset: 3px;
   }
-  .cms-prose blockquote {
-    border-left: 3px solid var(--cms-link, var(--cms-line));
+  .mnml-prose blockquote {
+    border-left: 3px solid var(--mnml-link, var(--mnml-line));
     padding-left: 1rem;
     font-style: italic;
-    color: var(--cms-text-soft);
+    color: var(--mnml-text-soft);
   }
-  .cms-prose code {
+  .mnml-prose code {
     font-family: ui-monospace, monospace;
     font-size: 0.875em;
-    background: var(--cms-surface);
+    background: var(--mnml-surface);
     border-radius: 0.25rem;
     padding: 0.1em 0.3em;
   }
-  .cms-prose img {
+  .mnml-prose img {
     max-width: 100%;
     height: auto;
     border-radius: 0.5rem;

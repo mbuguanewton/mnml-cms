@@ -1,4 +1,4 @@
-import { cms } from '@/cms';
+import { cms } from '@/mnml';
 import { PostCard } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';

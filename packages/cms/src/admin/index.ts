@@ -4,3 +4,5 @@ export { useAdmin } from './context.js';
 export { AdminHeader, type Crumb } from './header.js';
 export { bodyClass, cardClass, inputClass, labelClass } from './styles.js';
 export type { ConfirmOptions } from './confirm.js';
+// The client half of the editor config (see `@n3wtou/mnml-cms/editor`).
+export { editorProvider } from './editor-context.js';

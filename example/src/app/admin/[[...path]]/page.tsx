@@ -1,3 +1,3 @@
-import { cms } from '@/cms';
+import { cms } from '@/mnml';
 
 export default cms.AdminPage;

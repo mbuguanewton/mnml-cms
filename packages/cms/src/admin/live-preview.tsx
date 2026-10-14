@@ -58,15 +58,15 @@ export function LivePreview({ input, onClose }: { input: EntryInput; onClose: ()
   };
 
   return (
-    <aside className="flex min-h-0 flex-1 flex-col border-l border-cms-line bg-cms-panel">
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-cms-line px-3">
-        <span className="min-w-0 flex-1 truncate [font-family:ui-monospace,monospace] text-xs text-cms-text-soft">{url ?? 'Preview'}</span>
-        {status.kind === 'loading' && <LoaderCircleIcon className="size-3.5 animate-spin text-cms-text-mute" aria-label="Updating" />}
+    <aside className="flex min-h-0 flex-1 flex-col border-l border-mnml-line bg-mnml-panel">
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-mnml-line px-3">
+        <span className="min-w-0 flex-1 truncate [font-family:ui-monospace,monospace] text-xs text-mnml-text-soft">{url ?? 'Preview'}</span>
+        {status.kind === 'loading' && <LoaderCircleIcon className="size-3.5 animate-spin text-mnml-text-mute" aria-label="Updating" />}
         <Button type="button" variant="ghost" size="icon-xs" aria-label="Reload" title="Reload" disabled={!url} onClick={() => frame.current?.contentWindow?.location.reload()}>
           <RotateCwIcon />
         </Button>
         {url && (
-          <a href={url} target="_blank" aria-label="Open in new tab" title="Open in new tab" className="cms-state flex size-6 items-center justify-center rounded-[6px] text-cms-text-soft">
+          <a href={url} target="_blank" aria-label="Open in new tab" title="Open in new tab" className="mnml-state flex size-6 items-center justify-center rounded-[6px] text-mnml-text-soft">
             <ExternalLinkIcon className="size-3.5" />
           </a>
         )}
@@ -75,15 +75,15 @@ export function LivePreview({ input, onClose }: { input: EntryInput; onClose: ()
         </Button>
       </div>
       {status.kind === 'paused' && (
-        <p role="status" className="border-b border-cms-line bg-cms-warn px-3 py-1.5 text-xs text-cms-on-warn">
+        <p role="status" className="border-b border-mnml-line bg-mnml-warn px-3 py-1.5 text-xs text-mnml-on-warn">
           Preview paused: {status.message}
         </p>
       )}
       <div className="relative min-h-0 flex-1">
         {url ? (
-          <iframe ref={frame} src={url} title="Live preview" onLoad={onLoad} className="absolute inset-0 size-full bg-cms-bg" />
+          <iframe ref={frame} src={url} title="Live preview" onLoad={onLoad} className="absolute inset-0 size-full bg-mnml-bg" />
         ) : (
-          <p className="p-6 text-center text-cms-text-mute">{status.kind === 'paused' ? 'Fill in the required fields to see the page.' : 'Loading preview…'}</p>
+          <p className="p-6 text-center text-mnml-text-mute">{status.kind === 'paused' ? 'Fill in the required fields to see the page.' : 'Loading preview…'}</p>
         )}
       </div>
     </aside>

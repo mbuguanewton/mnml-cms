@@ -5,7 +5,7 @@ import { DialogProvider, useDialogs } from './confirm.js';
 
 type AdminContextValue = { adminPath: string; apiPath: string };
 
-const AdminContext = createContext<AdminContextValue>({ adminPath: '/admin', apiPath: '/api/cms' });
+const AdminContext = createContext<AdminContextValue>({ adminPath: '/admin', apiPath: '/api/mnml' });
 
 export function AdminProvider({ value, children }: { value: AdminContextValue; children: React.ReactNode }) {
   return (

@@ -6,6 +6,6 @@ dist
 .env
 .env.local
 next-env.d.ts
-.cms-uploads
+.mnml-uploads
 TODO.md
 PUBLISH.md

@@ -65,7 +65,7 @@ const TYPES: Record<string, string> = { '.jpg': 'image/jpeg', '.png': 'image/png
  * Files on the local disk, for development without a storage account. The default when `media` is
  * left out in `next dev`. Not for serverless hosting: its disk is read-only or thrown away.
  */
-export function localMedia({ dir = '.cms-uploads' }: { dir?: string } = {}): MediaStorage {
+export function localMedia({ dir = '.mnml-uploads' }: { dir?: string } = {}): MediaStorage {
   const root = resolve(dir);
   return {
     async put(file, name) {

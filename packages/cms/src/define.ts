@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { JSONContent } from '@tiptap/core';
 
-// The building blocks for a cms.config.ts. One definition there drives the admin forms,
+// The building blocks for a mnml.config.ts. One definition there drives the admin forms,
 // the validation below, and the TypeScript types the readers return.
 
 type Base = { label: string; required?: boolean; help?: string };
@@ -162,7 +162,7 @@ export const collection = <F extends Fields, D = NoDerived>(
 
 export type CmsConfig = Record<string, Singleton | Collection>;
 
-/** Identity helper so cms.config.ts gets checked and keeps its exact types. */
+/** Identity helper so mnml.config.ts gets checked and keeps its exact types. */
 export const config = <C extends CmsConfig>(c: C) => c;
 
 export type SingletonKey<C extends CmsConfig> = { [K in keyof C]: C[K] extends { kind: 'singleton' } ? K : never }[keyof C] & string;

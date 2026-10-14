@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { cms } from '@/cms';
+import { cms } from '@/mnml';
 import { Picture, PostCard } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';

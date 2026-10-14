@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { seoMetadata } from '@n3wtou/mnml-cms';
 import { RichText } from '@n3wtou/mnml-cms/rich-text';
-import { cms } from '@/cms';
+import { cms } from '@/mnml';
+import { editor } from '@/mnml-editor';
 import { Category, Picture, formatDate } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -39,7 +40,7 @@ export default async function PostPage({ params }: Props) {
         </p>
       </header>
       {post.cover && <Picture image={post.cover} className="my-10 aspect-[16/9] w-full rounded-xl" />}
-      <RichText content={post.content} className="article mt-10" />
+      <RichText content={post.content} editor={editor} className="article mt-10" />
     </main>
   );
 }

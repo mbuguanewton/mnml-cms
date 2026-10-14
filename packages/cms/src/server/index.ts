@@ -20,7 +20,7 @@ export { localMedia, vercelBlobMedia, type MediaFile, type MediaStorage } from '
  *   export const cms = createCms(config, { database, auth, media });
  *
  *   app/admin/[[...path]]/page.tsx   export default cms.AdminPage;
- *   app/api/cms/[...route]/route.ts  export const { GET, POST } = cms.handlers;
+ *   app/api/mnml/[...route]/route.ts  export const { GET, POST } = cms.handlers;
  *   app/(site)/layout.tsx            <cms.PreviewBanner />
  *   pages                            await cms.getEntry('posts', slug)
  */

@@ -64,24 +64,24 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
       {children}
       <dialog
         ref={dialog}
-        aria-labelledby="cms-dialog-title"
+        aria-labelledby="mnml-dialog-title"
         onCancel={(e) => {
           e.preventDefault();
           close(false);
         }}
         // A click on the backdrop lands on the dialog element itself, not on its content.
         onClick={(e) => e.target === e.currentTarget && close(false)}
-        className="w-[min(26rem,calc(100vw-2rem))] rounded-[10px] border border-cms-line bg-cms-bg p-0 text-sm text-cms-text shadow-xl backdrop:bg-black/40 [font-family:ui-sans-serif,system-ui,sans-serif]"
+        className="w-[min(26rem,calc(100vw-2rem))] rounded-[10px] border border-mnml-line bg-mnml-bg p-0 text-sm text-mnml-text shadow-xl backdrop:bg-black/40 [font-family:ui-sans-serif,system-ui,sans-serif]"
         // Tailwind's reset removes the browser's auto margins, which is what centers a modal dialog.
         style={{ margin: 'auto' }}
       >
         {opts && (
           <div className="flex flex-col gap-4" style={{ padding: 20 }}>
             <div className="flex flex-col gap-1.5">
-              <h2 id="cms-dialog-title" className="text-base font-semibold [font-family:inherit]">
+              <h2 id="mnml-dialog-title" className="text-base font-semibold [font-family:inherit]">
                 {opts.title}
               </h2>
-              {opts.description && <div className="text-cms-text-soft">{opts.description}</div>}
+              {opts.description && <div className="text-mnml-text-soft">{opts.description}</div>}
             </div>
             <div className="flex justify-end gap-2">
               {opts.cancelLabel !== false && (

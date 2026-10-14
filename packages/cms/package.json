@@ -51,6 +51,10 @@
       "types": "./dist/rich-text-render.d.ts",
       "default": "./dist/rich-text-render.js"
     },
+    "./editor": {
+      "types": "./dist/editor-entry.d.ts",
+      "default": "./dist/editor-entry.js"
+    },
     "./styles.css": {
       "style": "./styles.css",
       "default": "./styles.css"

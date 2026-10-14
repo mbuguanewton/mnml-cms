@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { cms } from '@/cms';
+import { cms } from '@/mnml';
 
 export const dynamic = 'force-dynamic';
 
