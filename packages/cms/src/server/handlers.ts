@@ -4,19 +4,21 @@ import { cookies, draftMode } from 'next/headers';
 import { after } from 'next/server';
 import type { EntryInput, Invalid, PreviewResult, SaveResult } from '../api.js';
 import { objectSchema, previewPath, slugSchema } from '../define.js';
-import { checkPassword, isAdmin } from './auth.js';
+import { checkPassword, clearFailures, clientIp, isAdmin, lockedFor, recordFailure, sessionVersion, signOutEverywhere, type PasswordAuth } from './auth.js';
 import type { Change, Context } from './context.js';
-import { SESSION_COOKIE, SESSION_MAX_AGE } from './session.js';
+import { SESSION_COOKIE, sessionCookieOptions } from './session.js';
 import { PREVIEW_COOKIE, SINGLETON_SLUG } from './store.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
-//   POST: login · logout · save · delete · preview · preview/exit · upload
+//   POST: login · logout · logout-all · save · delete · preview · preview/exit · upload · media/delete
 //   GET:  media/<key> (uploaded images, public)
 
 
 // No SVG: it can carry scripts. Vercel caps function request bodies at 4.5 MB.
 const IMAGE_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+const MEDIA_KEY = /^[\w.\-/]+$/;
 
 const json = (data: unknown, status = 200) => Response.json(data, { status });
 const unauthorized = () => json({ ok: false, message: 'Unauthorized', errors: {} }, 401);
@@ -68,25 +70,35 @@ export function createHandlers(ctx: Context) {
 
   const routes: Record<string, (request: Request) => Promise<Response>> = {
     async login(request) {
+      if (ctx.authAdapter) return json({ error: 'Not found' }, 404);
+      const ip = clientIp(request);
+      const wait = await lockedFor(ctx.storage, ip);
+      if (wait > 0) return json({ ok: false, message: `Too many attempts. Try again in ${Math.ceil(wait / 60)} ${wait > 60 ? 'minutes' : 'minute'}.` }, 429);
       const { password } = await request.json().catch(() => ({}));
-      if (!checkPassword(ctx, String(password ?? ''))) {
+      if (!checkPassword((ctx.options.auth as PasswordAuth).password, String(password ?? ''))) {
+        await recordFailure(ctx.storage, ip);
         // Slow down guessing; there is only one shared password.
         await new Promise((r) => setTimeout(r, 1000));
         return json({ ok: false, message: 'Wrong password.' }, 401);
       }
-      (await cookies()).set(SESSION_COOKIE, await ctx.session.create(), {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: SESSION_MAX_AGE,
-      });
+      await clearFailures(ctx.storage, ip);
+      (await cookies()).set(SESSION_COOKIE, await ctx.session.create(await sessionVersion(ctx)), sessionCookieOptions());
       return json({ ok: true, redirect: adminPath });
     },
 
     async logout(request) {
+      if (ctx.authAdapter) await ctx.authAdapter.signOut?.();
+      else (await cookies()).delete(SESSION_COOKIE);
+      return Response.redirect(new URL(ctx.loginUrl, request.url), 303);
+    },
+
+    /** Built-in login only: invalidates every session, including this one. */
+    async 'logout-all'(request) {
+      if (ctx.authAdapter) return json({ error: 'Not found' }, 404);
+      if (!(await isAdmin(ctx))) return unauthorized();
+      await signOutEverywhere(ctx);
       (await cookies()).delete(SESSION_COOKIE);
-      return Response.redirect(new URL(`${adminPath}/login`, request.url), 303);
+      return Response.redirect(new URL(ctx.loginUrl, request.url), 303);
     },
 
     async save(request) {
@@ -94,19 +106,41 @@ export function createHandlers(ctx: Context) {
       const input = (await request.json()) as EntryInput;
       const v = validate(ctx, input);
       if (!v.ok) return json(v satisfies SaveResult);
-      const isNew = ctx.config[v.key].kind === 'collection' && input.mode === 'create';
+      const isCollection = ctx.config[v.key].kind === 'collection';
+      const action = input.action ?? 'publish';
+      if (action !== 'publish' && action !== 'draft' && action !== 'unpublish') {
+        return json({ ok: false, message: 'Unknown action.', errors: {} } satisfies SaveResult);
+      }
+      const isNew = isCollection && input.mode === 'create';
+      // Singletons are always live. A draft of an already published entry is kept beside it as pending changes.
+      const live = !isCollection || action === 'publish';
+      const pendingOnly = isCollection && action === 'draft' && !isNew && (await store.getStatus(v.key, v.slug)) === 'published';
+      const status = live ? 'published' : 'draft';
+
       if (isNew) {
-        if (!(await store.insert(v.key, v.slug, v.data))) {
+        if (!(await store.insert(v.key, v.slug, v.data, status))) {
           return json({ ok: false, message: 'That slug is already in use.', errors: { $slug: 'Already in use' } } satisfies SaveResult);
         }
+      } else if (pendingOnly) {
+        await store.savePending(v.key, v.slug, v.data);
       } else {
-        await store.upsert(v.key, v.slug, v.data);
+        await store.upsert(v.key, v.slug, v.data, status);
       }
+      if (!pendingOnly) await store.removePending(v.key, v.slug);
       await store.removeDraft(v.key, v.slug);
-      changed(ctx, { type: 'save', key: v.key, slug: v.slug });
+      // Pending changes aren't on the site, so there is nothing to revalidate.
+      if (!pendingOnly) changed(ctx, { type: 'save', key: v.key, slug: v.slug });
       return json({
         ok: true,
-        message: 'Saved. The site is updated.',
+        message: pendingOnly
+          ? 'Draft saved. The live site is unchanged.'
+          : action === 'unpublish'
+            ? 'Unpublished. It is no longer on the site.'
+            : action === 'draft'
+              ? 'Saved as a draft. It is not on the site.'
+              : isCollection
+                ? 'Published. The site is updated.'
+                : 'Saved. The site is updated.',
         redirect: isNew ? `${adminPath}/${v.key}/${v.slug}?created=1` : undefined,
       } satisfies SaveResult);
     },
@@ -117,6 +151,7 @@ export function createHandlers(ctx: Context) {
       if (ctx.config[key]?.kind !== 'collection' || typeof slug !== 'string') return json({ ok: false, message: 'Unknown entry.' }, 400);
       await store.remove(key, slug);
       await store.removeDraft(key, slug);
+      await store.removePending(key, slug);
       changed(ctx, { type: 'delete', key, slug });
       return json({ ok: true, redirect: `${adminPath}/${key}` });
     },
@@ -145,6 +180,17 @@ export function createHandlers(ctx: Context) {
       const back = request.headers.get('referer');
       const target = back && new URL(back).host === new URL(request.url).host ? back : '/';
       return Response.redirect(new URL(target, request.url), 303);
+    },
+
+    /** Deletes a stored file. The admin warns first if entries still use it. */
+    async 'media/delete'(request) {
+      if (!(await isAdmin(ctx))) return unauthorized();
+      const media = ctx.options.media;
+      if (!media?.delete) return json({ ok: false, message: 'This storage does not support deleting files.' }, 501);
+      const { key } = await request.json().catch(() => ({}));
+      if (typeof key !== 'string' || !MEDIA_KEY.test(key) || key.includes('..')) return json({ ok: false, message: 'Unknown file.' }, 400);
+      await media.delete(key);
+      return json({ ok: true });
     },
 
     async upload(request) {
@@ -179,7 +225,7 @@ export function createHandlers(ctx: Context) {
   async function GET(_request: Request, { params }: { params: Promise<{ route?: string[] }> }) {
     const [first, ...rest] = (await params).route ?? [];
     const key = rest.join('/');
-    if (first !== 'media' || !ctx.options.media || !/^[\w.\-/]+$/.test(key) || key.includes('..')) return new Response('Not found', { status: 404 });
+    if (first !== 'media' || !ctx.options.media || !MEDIA_KEY.test(key) || key.includes('..')) return new Response('Not found', { status: 404 });
     const file = await ctx.options.media.get(key);
     if (!file) return new Response('Not found', { status: 404 });
     return new Response(file.body, {
