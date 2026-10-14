@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from './button.js';
 import { useAdmin } from './context.js';
@@ -11,6 +11,8 @@ export function LoginForm() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [show, setShow] = useState(false);
+  const showId = useId();
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -27,13 +29,34 @@ export function LoginForm() {
   };
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3">
-      <label htmlFor="password" className={labelClass}>
-        Password
-      </label>
-      <input id="password" name="password" type="password" required autoFocus autoComplete="current-password" className={inputClass} />
-      {error && <p className="text-sm text-cms-danger">{error}</p>}
-      <Button type="submit" disabled={pending}>
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label htmlFor="password" className={labelClass}>
+          Password
+        </label>
+        <input
+          id="password"
+          name="password"
+          type={show ? 'text' : 'password'}
+          required
+          autoFocus
+          autoComplete="current-password"
+          aria-invalid={!!error}
+          aria-describedby={error ? 'login-error' : undefined}
+          className={inputClass}
+          style={{ height: 40 }}
+        />
+        <label htmlFor={showId} className="text-cms-text-soft select-none" style={{ display: 'flex', width: 'fit-content', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+          <input id={showId} type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} style={{ width: 16, height: 16, accentColor: 'var(--cms-primary)' }} />
+          Show password
+        </label>
+      </div>
+      {error && (
+        <p id="login-error" role="alert" style={{ margin: 0, padding: '8px 12px', borderRadius: 6, color: 'var(--cms-danger)', background: 'color-mix(in srgb, var(--cms-danger) 10%, transparent)' }}>
+          {error}
+        </p>
+      )}
+      <Button type="submit" disabled={pending} style={{ width: '100%', height: 40 }}>
         {pending ? 'Checking…' : 'Sign in'}
       </Button>
     </form>
