@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.0
+
+### Major Changes
+
+- 809ddb3: Everything named `cms-*` is now `mnml-*`.
+
+  - CSS variables `--cms-*` → `--mnml-*` (e.g. `--mnml-primary`, `--mnml-font-brand`), classes `cms-prose` / `cms-root` / `cms-state` → `mnml-*`, and the Tailwind tokens `bg-cms-*` / `text-cms-*` / `font-cms-brand` → `bg-mnml-*` / `text-mnml-*` / `font-mnml-brand`. Rename any overrides in your CSS.
+  - The default `apiPath` is `/api/mnml` (was `/api/cms`): move `app/api/cms/[...route]/route.ts` to `app/api/mnml/[...route]/route.ts`. Images saved before are stored as `/api/cms/media/…` URLs, so existing sites should keep `apiPath: '/api/cms'` (or rewrite those URLs in the entries) — otherwise those images 404 and the Media screen lists them as unused.
+  - `localMedia()` stores files in `.mnml-uploads` (was `.cms-uploads`): rename the folder and its `.gitignore` entry.
+  - Cookies are `mnml_session` and `mnml_preview`, so editors sign in again once after upgrading.
+  - Docs and the example use `mnml.config.ts`, `src/mnml.ts` and `src/mnml-editor.ts` (file names are your choice; nothing in the package depends on them).
+
+### Minor Changes
+
+- 809ddb3: Extend the rich-text editor with your own Tiptap extensions and toolbar buttons.
+
+  - New entry `@n3wtou/mnml-cms/editor` with `defineEditor({ extensions, tools })` and ready-made `tools.underline`, `tools.strike` and `tools.horizontalRule`. `extensions` is added to the defaults, or a function that gets the defaults and returns the full list.
+  - `editorProvider(config)` from `@n3wtou/mnml-cms/admin` makes the client component to pass as the new `editor` option of `createCms`.
+  - `<RichText>` takes an `editor` prop so the site renders with the same extensions.
+  - The toolbar is grouped (history, text style, formatting, blocks, inserts; tools take an optional `group`), and its heading and quote buttons are now one text-style menu (Paragraph, Heading 1–4, Quote). Headings now go from level 1 to 4 (was 2 and 3); add styles for `h1` and `h4` to your site's rich-text CSS.
+
 ## 0.2.0
 
 ### Minor Changes
