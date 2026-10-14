@@ -13,6 +13,8 @@ export const entriesTable = (name = 'entries') =>
       collection: text('collection').notNull(),
       slug: text('slug').notNull(),
       data: jsonb('data').notNull(),
+      // 'draft' entries are hidden from the public readers. Singletons are always 'published'.
+      status: text('status').notNull().default('published'),
       createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
       updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     },
