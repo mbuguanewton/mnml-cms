@@ -1,15 +1,12 @@
 import './globals.css';
-import { cms } from '@/cms';
 
 export const metadata = { title: 'mnml-cms example' };
 
+// Just the document shell. The site's header and footer live in (site)/layout.tsx, so the admin has none.
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        <cms.PreviewBanner />
-        {children}
-      </body>
+      <body className="flex min-h-dvh flex-col">{children}</body>
     </html>
   );
 }

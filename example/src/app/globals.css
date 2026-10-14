@@ -1,2 +1,34 @@
 @import "tailwindcss";
 @import "@n3wtou/mnml-cms/styles.css";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --color-paper: #faf8f4;
+  --color-ink: #1c1917;
+  --color-soft: #57534e;
+  --color-mute: #a8a29e;
+  --color-line: #e7e2d9;
+  --color-accent: #b4451f;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Article body: styles the rich text the CMS renders. */
+.article > * + * { margin-top: 1.25rem; }
+.article { font-family: var(--font-serif); font-size: 1.125rem; line-height: 1.75; }
+.article h2 { font-size: 1.6rem; line-height: 1.25; font-weight: 600; margin-top: 2.5rem; letter-spacing: -0.01em; }
+.article h3 { font-size: 1.25rem; font-weight: 600; margin-top: 2rem; }
+.article ul, .article ol { padding-left: 1.5rem; }
+.article ul { list-style: disc; }
+.article ol { list-style: decimal; }
+.article li + li { margin-top: 0.4rem; }
+.article a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 3px; }
+.article blockquote { border-left: 3px solid var(--color-accent); padding-left: 1.25rem; font-style: italic; color: var(--color-soft); }
+.article code { font-family: ui-monospace, monospace; font-size: 0.9em; background: #efeae0; padding: 0.1em 0.35em; border-radius: 4px; }
+.article img { max-width: 100%; border-radius: 8px; }
