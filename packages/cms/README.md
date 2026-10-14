@@ -19,7 +19,7 @@ pnpm add @n3wtou/mnml-cms drizzle-orm
 
 ## Set up
 
-**1. Content model** (`cms.config.ts`; plain data, safe to import anywhere):
+**1. Content model** (`mnml.config.ts`; plain data, safe to import anywhere):
 
 ```ts
 import { collection, config, fields, singleton } from '@n3wtou/mnml-cms';
@@ -40,11 +40,11 @@ export default config({
 });
 ```
 
-**2. Wiring** (`src/cms.ts`, server only):
+**2. Wiring** (`src/mnml.ts`, server only):
 
 ```ts
 import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next';
-import config from '../cms.config';
+import config from '../mnml.config';
 
 export const cms = createCms(config, {
   database: neonDatabase(process.env.DATABASE_URL), // or any Drizzle Postgres database
@@ -57,11 +57,11 @@ export const cms = createCms(config, {
 
 ```ts
 // app/admin/[[...path]]/page.tsx
-import { cms } from '@/cms';
+import { cms } from '@/mnml';
 export default cms.AdminPage;
 
-// app/api/cms/[...route]/route.ts
-import { cms } from '@/cms';
+// app/api/mnml/[...route]/route.ts
+import { cms } from '@/mnml';
 export const { GET, POST } = cms.handlers;
 
 // proxy.ts
@@ -74,7 +74,7 @@ Keep the admin out of your site's header and footer by putting those in a route 
 `app/(site)/layout.tsx`.
 
 **4. Styles** (your global CSS): `@import "@n3wtou/mnml-cms/styles.css";`. Restyle the admin by overriding
-the `--cms-*` variables (see `styles.css`).
+the `--mnml-*` variables (see `styles.css`).
 
 **5. Database table:** point drizzle-kit at the package's schema and push it:
 
@@ -140,7 +140,7 @@ export const generateMetadata = async () => seoMetadata((await cms.getSingleton(
 ## Reading content
 
 ```tsx
-import { cms } from '@/cms';
+import { cms } from '@/mnml';
 import { RichText } from '@n3wtou/mnml-cms/rich-text';
 
 const settings = await cms.getSingleton('settings');
@@ -172,6 +172,91 @@ orange over green (published, with saved changes that aren't live yet).
 The public readers (`listEntries`, `getEntry`, `listSlugs`) only return published entries, so a draft is a 404
 on your site; editors still see it in live preview. Singletons are always live.
 
+## Extending the editor
+
+Add Tiptap extensions and toolbar buttons with one config file and a 3-line client file. The editor runs in
+the browser and `<RichText>` on the server, and both need the same extensions, so the config lives in a plain
+module that both import:
+
+```ts
+// src/mnml-editor.ts (no 'use client')
+import { defineEditor, tools } from '@n3wtou/mnml-cms/editor';
+
+export const editor = defineEditor({
+  extensions: [], // added to the defaults (StarterKit + Image)
+  tools: [tools.underline, tools.strike, tools.horizontalRule],
+});
+```
+
+```tsx
+// src/mnml-editor-client.tsx
+'use client';
+import { editorProvider } from '@n3wtou/mnml-cms/admin';
+import { editor } from './mnml-editor';
+export const Editor = editorProvider(editor);
+```
+
+Then pass `editor: Editor` to `createCms`, and `editor={editor}` to every `<RichText>`:
+
+```tsx
+<RichText content={post.content} editor={editor} />
+```
+
+`tools.underline`, `tools.strike` and `tools.horizontalRule` are buttons for things StarterKit already has, so
+they need no extension. A tool of your own is an object; the editor passed to `run`, `isActive` and `disabled`
+is the live Tiptap editor:
+
+```ts
+type EditorTool = {
+  name: string; // unique; the React key
+  label: string; // tooltip and accessible name
+  icon: ReactNode;
+  run: (editor: Editor) => void;
+  isActive?: (editor: Editor) => boolean; // shows the button as pressed
+  disabled?: (editor: Editor) => boolean;
+  group?: 'format' | 'block' | 'insert'; // toolbar group; left out, a group of its own at the end
+};
+```
+
+The toolbar is grouped: undo and redo, the text style menu (paragraph, headings, quote), text formatting
+(bold, italic, code), blocks (lists) and inserts (link, image). A tool with a `group` joins that group;
+`tools.underline` and `tools.strike` go in `format`, `tools.horizontalRule` in `insert`.
+
+**Example: code blocks with syntax highlighting.** StarterKit has a plain code block; swap it for
+[`CodeBlockLowlight`](https://tiptap.dev/docs/editor/extensions/nodes/code-block-lowlight) and add a button.
+To replace or remove a default, pass a function: it gets the defaults and returns the full list.
+
+```tsx
+// src/mnml-editor.tsx
+import { defineEditor } from '@n3wtou/mnml-cms/editor';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { common, createLowlight } from 'lowlight';
+import { SquareCodeIcon } from 'lucide-react';
+
+export const editor = defineEditor({
+  extensions: (defaults) => [
+    ...defaults.map((ext) => (ext.name === 'starterKit' ? ext.configure({ codeBlock: false }) : ext)),
+    CodeBlockLowlight.configure({ lowlight: createLowlight(common) }),
+  ],
+  tools: [
+    {
+      name: 'codeBlock',
+      label: 'Code block',
+      group: 'block',
+      icon: <SquareCodeIcon />,
+      isActive: (e) => e.isActive('codeBlock'),
+      run: (e) => e.chain().focus().toggleCodeBlock().run(),
+    },
+  ],
+});
+```
+
+The highlighting is an editor decoration: `<RichText>` renders `<pre><code class="language-…">`, which you
+highlight on the site with any highlighter (or style as plain code).
+
+The config applies to every rich-text field. It can't be set per field, because extensions and functions can't
+be stored in the schema that is sent to the admin.
+
 ## Options
 
 | Option | Purpose |
@@ -181,10 +266,11 @@ on your site; editors still see it in live preview. Singletons are always live.
 | `storage` | Instead of `database`: your own `EntryStorage` (see [Other ORMs](#other-orms)). |
 | `auth` | `{ password, secret }` for the built-in single-password login, or an `AuthAdapter` (see [Authentication](#authentication)). |
 | `media` | Storage for uploaded images (see [Image storage](#image-storage)). |
-| `adminPath`, `apiPath` | Default `/admin` and `/api/cms`; must match where the files live. |
+| `adminPath`, `apiPath` | Default `/admin` and `/api/mnml`; must match where the files live. |
 | `brand` | Sidebar title: a string or (async) function. |
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }`. |
 | `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`, built with `@n3wtou/mnml-cms/admin`. |
+| `editor` | Extra editor extensions and toolbar buttons: the component from `editorProvider()` (see [Extending the editor](#extending-the-editor)). |
 | `revalidate` | Called after each save or delete. |
 | `onChange` | Runs after the response on each save or delete (via `after()`), e.g. to update a search index. |
 
@@ -239,7 +325,7 @@ entries that use it (image fields and images in rich text, including unpublished
 and a Delete button. Deleting warns first if the file is still in use. Both bundled adapters support it.
 
 - `vercelBlobMedia({ prefix = 'cms/', access = 'private', token })` only serves keys under `prefix`.
-- `localMedia({ dir = '.cms-uploads' })` writes to disk. It is the default in `next dev` when you pass no
+- `localMedia({ dir = '.mnml-uploads' })` writes to disk. It is the default in `next dev` when you pass no
   `media`. Don't use it on serverless hosting; add the folder to `.gitignore`.
 - For S3, R2 or anything else, implement the two methods.
 
@@ -326,6 +412,7 @@ const storage: EntryStorage = {
 | `@n3wtou/mnml-cms/next` | `createCms`, `neonDatabase`, `drizzleStorage`, `vercelBlobMedia`, `localMedia` |
 | `@n3wtou/mnml-cms/proxy` | `adminProxy` |
 | `@n3wtou/mnml-cms/rich-text` | `RichText` server renderer |
-| `@n3wtou/mnml-cms/admin` | UI pieces for extra admin pages |
+| `@n3wtou/mnml-cms/editor` | `defineEditor`, ready-made `tools` (server-safe) |
+| `@n3wtou/mnml-cms/admin` | UI pieces for extra admin pages, `editorProvider` |
 | `@n3wtou/mnml-cms/db` | Drizzle table for scripts and drizzle-kit |
-| `@n3wtou/mnml-cms/styles.css` | Admin styles and `--cms-*` variables |
+| `@n3wtou/mnml-cms/styles.css` | Admin styles and `--mnml-*` variables |

@@ -10,7 +10,7 @@ export const SINGLETON_SLUG = 'singleton';
 // Preview drafts live in the same table under `draft:<key>`. They are only read while Draft Mode is
 // on, which only signed-in editors can turn on, and only for the one entry named in PREVIEW_COOKIE,
 // so abandoned drafts never leak into other previews.
-export const PREVIEW_COOKIE = 'cms_preview';
+export const PREVIEW_COOKIE = 'mnml_preview';
 const draftKey = (key: string) => `draft:${key}`;
 // Saved-but-unpublished edits to a published entry. Never read by the public readers.
 const pendingKey = (key: string) => `pending:${key}`;

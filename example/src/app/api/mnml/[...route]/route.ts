@@ -1,3 +1,3 @@
-import { cms } from '@/cms';
+import { cms } from '@/mnml';
 
 export const { GET, POST } = cms.handlers;

@@ -29,11 +29,11 @@ export function FieldRenderer({ field, value, onChange, path, errors }: Props) {
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className={labelClass}>
         {field.label}
-        {field.required && <span className="text-cms-danger"> *</span>}
+        {field.required && <span className="text-mnml-danger"> *</span>}
       </label>
-      {field.help && <p className="-mt-1 text-cms-text-mute">{field.help}</p>}
+      {field.help && <p className="-mt-1 text-mnml-text-mute">{field.help}</p>}
       <Input id={id} field={field} value={value} onChange={onChange} path={path} errors={errors} invalid={!!error} />
-      {error && <p className="text-cms-danger">{error}</p>}
+      {error && <p className="text-mnml-danger">{error}</p>}
     </div>
   );
 }
@@ -72,7 +72,7 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
     case 'image':
       return <ImageInput id={id} value={value as ImageValue | null} onChange={onChange} />;
     case 'boolean':
-      return <input id={id} type="checkbox" className="size-4 self-start accent-cms-primary" checked={value === true} onChange={(e) => onChange(e.target.checked)} />;
+      return <input id={id} type="checkbox" className="size-4 self-start accent-mnml-primary" checked={value === true} onChange={(e) => onChange(e.target.checked)} />;
     case 'number':
       return (
         <input
@@ -113,9 +113,9 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
 
 function GroupInput({ field, value, onChange, path, errors }: { field: GroupField; value: Record<string, unknown>; onChange: (v: unknown) => void; path: string; errors: Errors }) {
   return (
-    <fieldset className="flex min-w-0 flex-col gap-4 rounded-[8px] border border-cms-line px-4 pb-4 pt-3">
+    <fieldset className="flex min-w-0 flex-col gap-4 rounded-[8px] border border-mnml-line px-4 pb-4 pt-3">
       <legend className="px-1 text-sm font-semibold">{field.label}</legend>
-      {field.help && <p className="-mt-1 text-cms-text-mute">{field.help}</p>}
+      {field.help && <p className="-mt-1 text-mnml-text-mute">{field.help}</p>}
       {Object.entries(field.fields).map(([k, f]) => (
         <FieldRenderer key={k} field={f} value={value[k]} onChange={(v) => onChange({ ...value, [k]: v })} path={`${path}.${k}`} errors={errors} />
       ))}
@@ -164,9 +164,9 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
         {value ? (
           // Plain <img>: previews may be any uploaded URL, no need for next/image here.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value.url} alt="" className="size-16 rounded-[6px] border border-cms-line object-cover" />
+          <img src={value.url} alt="" className="size-16 rounded-[6px] border border-mnml-line object-cover" />
         ) : (
-          <div className="flex size-16 items-center justify-center rounded-[6px] border border-dashed border-cms-line text-xs text-cms-text-mute">None</div>
+          <div className="flex size-16 items-center justify-center rounded-[6px] border border-dashed border-mnml-line text-xs text-mnml-text-mute">None</div>
         )}
         <div className="flex flex-col items-start gap-2">
           <div className="flex gap-2">
@@ -192,7 +192,7 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
           }}
         />
       </div>
-      {error && <p className="break-words text-cms-danger">{error}</p>}
+      {error && <p className="break-words text-mnml-danger">{error}</p>}
       {value && (
         <input
           aria-label="Alt text"
@@ -215,11 +215,11 @@ function TagsInput({ id, value, onChange }: { id: string; value: string[]; onCha
     setDraft('');
   };
   return (
-    <div className={`${inputClass} flex flex-wrap items-center gap-1 focus-within:border-cms-primary`}>
+    <div className={`${inputClass} flex flex-wrap items-center gap-1 focus-within:border-mnml-primary`}>
       {value.map((t) => (
-        <span key={t} className="flex items-center gap-1 rounded-[4px] bg-cms-surface py-0.5 pl-2 pr-0.5 text-xs text-cms-text">
+        <span key={t} className="flex items-center gap-1 rounded-[4px] bg-mnml-surface py-0.5 pl-2 pr-0.5 text-xs text-mnml-text">
           {t}
-          <button type="button" aria-label={`Remove ${t}`} className="cms-state rounded p-0.5" onClick={() => onChange(value.filter((x) => x !== t))}>
+          <button type="button" aria-label={`Remove ${t}`} className="mnml-state rounded p-0.5" onClick={() => onChange(value.filter((x) => x !== t))}>
             <XIcon className="size-3" />
           </button>
         </span>
@@ -279,23 +279,23 @@ function ArrayInput({
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <ul className="w-full divide-y divide-cms-line overflow-hidden rounded-[8px] border border-cms-line">
-        {value.length === 0 && <li className="px-3 py-2.5 text-cms-text-mute">No items</li>}
+      <ul className="w-full divide-y divide-mnml-line overflow-hidden rounded-[8px] border border-mnml-line">
+        {value.length === 0 && <li className="px-3 py-2.5 text-mnml-text-mute">No items</li>}
         {value.map((item, i) => {
           const isOpen = open === i;
           const hasError = Object.keys(errors).some((k) => k.startsWith(`${path}.${i}.`));
           return (
             <li key={i}>
-              <div className={`flex items-center gap-1 pr-1.5 ${isOpen ? 'bg-cms-panel' : 'hover:bg-cms-panel'}`}>
+              <div className={`flex items-center gap-1 pr-1.5 ${isOpen ? 'bg-mnml-panel' : 'hover:bg-mnml-panel'}`}>
                 <button
                   type="button"
                   aria-expanded={isOpen}
                   onClick={() => setOpen(isOpen ? null : i)}
                   className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
                 >
-                  <ChevronRightIcon className={`size-4 shrink-0 text-cms-text-mute transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                  <ChevronRightIcon className={`size-4 shrink-0 text-mnml-text-mute transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                   <span className="truncate">{(field.itemLabel && String(item[field.itemLabel] ?? '')) || `Item ${i + 1}`}</span>
-                  {hasError && <span className="shrink-0 text-xs text-cms-danger">Needs attention</span>}
+                  {hasError && <span className="shrink-0 text-xs text-mnml-danger">Needs attention</span>}
                 </button>
                 <Button type="button" variant="ghost" size="icon-xs" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
                   <ArrowUpIcon />
@@ -308,7 +308,7 @@ function ArrayInput({
                 </Button>
               </div>
               {isOpen && (
-                <div className="flex flex-col gap-4 border-t border-cms-line px-4 py-4 sm:pl-9">
+                <div className="flex flex-col gap-4 border-t border-mnml-line px-4 py-4 sm:pl-9">
                   {Object.entries(field.fields).map(([k, f]) => (
                     <FieldRenderer key={k} field={f} value={item[k]} onChange={(v) => update(i, { ...item, [k]: v })} path={`${path}.${i}.${k}`} errors={errors} />
                   ))}

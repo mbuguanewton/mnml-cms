@@ -22,8 +22,10 @@ body {
 /* Article body: styles the rich text the CMS renders. */
 .article > * + * { margin-top: 1.25rem; }
 .article { font-family: var(--font-serif); font-size: 1.125rem; line-height: 1.75; }
+.article h1 { font-size: 2rem; line-height: 1.2; font-weight: 600; margin-top: 2.5rem; letter-spacing: -0.015em; }
 .article h2 { font-size: 1.6rem; line-height: 1.25; font-weight: 600; margin-top: 2.5rem; letter-spacing: -0.01em; }
 .article h3 { font-size: 1.25rem; font-weight: 600; margin-top: 2rem; }
+.article h4 { font-size: 1.125rem; font-weight: 600; margin-top: 1.75rem; }
 .article ul, .article ol { padding-left: 1.5rem; }
 .article ul { list-style: disc; }
 .article ol { list-style: decimal; }

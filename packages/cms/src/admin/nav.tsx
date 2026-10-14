@@ -20,7 +20,7 @@ export function AdminNav({ brand, groups, signOutEverywhere }: { brand: string; 
       key={href}
       href={href}
       aria-current={active ? 'page' : undefined}
-      className={`${itemClass} ${active ? 'bg-cms-surface font-medium text-cms-text' : 'cms-state text-cms-text-soft'}`}
+      className={`${itemClass} ${active ? 'bg-mnml-surface font-medium text-mnml-text' : 'mnml-state text-mnml-text-soft'}`}
     >
       {icon}
       {label}
@@ -28,9 +28,9 @@ export function AdminNav({ brand, groups, signOutEverywhere }: { brand: string; 
   );
 
   return (
-    <aside className="flex shrink-0 flex-col border-cms-line bg-cms-panel md:sticky md:top-0 md:h-dvh md:w-60 md:border-r max-md:border-b">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-cms-line px-4">
-        <span className="flex size-7 items-center justify-center rounded-[6px] bg-cms-primary font-cms-brand text-lg font-bold text-cms-on-primary">
+    <aside className="flex shrink-0 flex-col border-mnml-line bg-mnml-panel md:sticky md:top-0 md:h-dvh md:w-60 md:border-r max-md:border-b">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-mnml-line px-4">
+        <span className="flex size-7 items-center justify-center rounded-[6px] bg-mnml-primary font-mnml-brand text-lg font-bold text-mnml-on-primary">
           {brand[0] ?? 'A'}
         </span>
         <span className="truncate font-semibold">{brand}</span>
@@ -39,12 +39,12 @@ export function AdminNav({ brand, groups, signOutEverywhere }: { brand: string; 
         {item({ href: adminPath, label: 'Dashboard', icon: <HouseIcon /> }, pathname === adminPath)}
         {groups.map((g) => (
           <div key={g.title} className="flex gap-0.5 md:flex-col">
-            <div className="px-2.5 pb-1 pt-4 text-xs font-medium text-cms-text-mute max-md:hidden">{g.title}</div>
+            <div className="px-2.5 pb-1 pt-4 text-xs font-medium text-mnml-text-mute max-md:hidden">{g.title}</div>
             {g.items.map((i) => item(i, pathname === i.href || pathname.startsWith(`${i.href}/`)))}
           </div>
         ))}
-        <div className="flex gap-0.5 md:mt-auto md:flex-col md:border-t md:border-cms-line md:pt-2">
-          <Link href="/" target="_blank" className={`${itemClass} cms-state text-cms-text-soft`}>
+        <div className="flex gap-0.5 md:mt-auto md:flex-col md:border-t md:border-mnml-line md:pt-2">
+          <Link href="/" target="_blank" className={`${itemClass} mnml-state text-mnml-text-soft`}>
             <ExternalLinkIcon /> View site
           </Link>
           <SignOut apiPath={apiPath} everywhere={!!signOutEverywhere} />
@@ -84,7 +84,7 @@ function SignOut({ apiPath, everywhere }: { apiPath: string; everywhere: boolean
   return (
     <div ref={root} className="flex shrink-0">
       <form action={`${apiPath}/logout`} method="post" className="flex-1">
-        <button type="submit" className={`${itemClass} cms-state w-full cursor-pointer text-cms-text-soft`}>
+        <button type="submit" className={`${itemClass} mnml-state w-full cursor-pointer text-mnml-text-soft`}>
           <LogOutIcon /> Sign out
         </button>
       </form>
@@ -96,14 +96,14 @@ function SignOut({ apiPath, everywhere }: { apiPath: string; everywhere: boolean
             aria-haspopup="menu"
             aria-expanded={!!menu}
             onClick={toggle}
-            className="cms-state flex shrink-0 cursor-pointer items-center rounded-[6px] px-1.5 text-cms-text-soft [&_svg]:size-4"
+            className="mnml-state flex shrink-0 cursor-pointer items-center rounded-[6px] px-1.5 text-mnml-text-soft [&_svg]:size-4"
           >
             <ChevronUpIcon />
           </button>
           <div
             role="menu"
             hidden={!menu}
-            className="z-30 rounded-[8px] border border-cms-line bg-cms-bg p-1 shadow-lg"
+            className="z-30 rounded-[8px] border border-mnml-line bg-mnml-bg p-1 shadow-lg"
             style={{ position: 'fixed', width: 224, ...menu }}
           >
             <form

@@ -1,6 +1,6 @@
 // Signed admin session cookie. Web Crypto only, so it also runs in the proxy.
 
-export const SESSION_COOKIE = 'cms_session';
+export const SESSION_COOKIE = 'mnml_session';
 // An idle timeout: the proxy re-issues the cookie while the editor is active (see adminProxy).
 export const SESSION_MAX_AGE = 60 * 60 * 24; // seconds
 

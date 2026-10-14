@@ -1,5 +1,5 @@
 import 'server-only';
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { CmsConfig } from '../define.js';
 import type { AuthAdapter, PasswordAuth } from './auth.js';
 import type { Database } from './db.js';
@@ -42,10 +42,10 @@ export type CmsOptions<C extends CmsConfig> = StorageOptions & {
    *  or an `AuthAdapter` to use your own login. */
   auth: PasswordAuth | AuthAdapter;
   /** Where uploaded images are stored, e.g. vercelBlobMedia(). Served back at <apiPath>/media/<key>.
-   *  Left out, `next dev` stores them in ./.cms-uploads (localMedia()); in production the
+   *  Left out, `next dev` stores them in ./.mnml-uploads (localMedia()); in production the
    *  upload buttons report that uploads aren't configured. */
   media?: MediaStorage;
-  /** Defaults: '/admin' and '/api/cms'. Must match where the page and route files live. */
+  /** Defaults: '/admin' and '/api/mnml'. Must match where the page and route files live. */
   adminPath?: string;
   apiPath?: string;
   /** Sidebar title. A function is called on each admin render (e.g. to read a name from a singleton). */
@@ -54,6 +54,9 @@ export type CmsOptions<C extends CmsConfig> = StorageOptions & {
   icons?: Partial<Record<keyof C, ReactNode>>;
   /** Extra admin screens, listed in the sidebar. */
   pages?: AdminPageDef[];
+  /** Extra extensions and toolbar buttons for the rich-text editor: the component from `editorProvider(config)`,
+   *  exported from a 'use client' file. Pass the same config to `<RichText editor>`. */
+  editor?: ComponentType<{ children: ReactNode }>;
   /** Called after each save or delete. Default: revalidatePath('/', 'layout'). */
   revalidate?: (change: Change) => void;
   /** Runs after the response is sent (via after()), e.g. to update a search index. */
@@ -74,7 +77,7 @@ export function createContext<C extends CmsConfig>(config: C, options: CmsOption
     authAdapter,
     session: sessionCodec(authAdapter ? undefined : (options.auth as PasswordAuth).secret),
     adminPath,
-    apiPath: options.apiPath ?? '/api/cms',
+    apiPath: options.apiPath ?? '/api/mnml',
     /** Where signed-out visitors go. */
     // With an adapter's own `login` UI it is the admin's login page; otherwise the adapter's `loginUrl` ('/' if it gave neither).
     loginUrl: authAdapter ? (authAdapter.loginUrl ?? (authAdapter.login ? `${adminPath}/login` : '/')) : `${adminPath}/login`,

@@ -39,7 +39,7 @@ const fieldsOnly = (def: Singleton | Collection, entry: AnyEntry): AnyEntry => O
 // The whole admin as one server component, mounted at <adminPath>/[[...path]]:
 //   (none) dashboard · login · <singleton> · <collection> · <collection>/new · <collection>/<slug> · <extra page>
 
-const rootClass = 'cms-root flex flex-1 flex-col bg-cms-bg text-sm text-cms-text [font-family:ui-sans-serif,system-ui,sans-serif]';
+const rootClass = 'mnml-root flex flex-1 flex-col bg-mnml-bg text-sm text-mnml-text [font-family:ui-sans-serif,system-ui,sans-serif]';
 
 export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
   const { config, store, adminPath, apiPath, options } = ctx;
@@ -48,7 +48,10 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
 
   return async function AdminPage({ params, searchParams }: Props) {
     const path = (await params).path ?? [];
-    const provider = (children: React.ReactNode) => <AdminProvider value={{ adminPath, apiPath }}>{children}</AdminProvider>;
+    const Editor = options.editor;
+    const provider = (children: React.ReactNode) => (
+      <AdminProvider value={{ adminPath, apiPath }}>{Editor ? <Editor>{children}</Editor> : children}</AdminProvider>
+    );
 
     if (path.length === 1 && path[0] === 'login') {
       const adapter = ctx.authAdapter;
@@ -58,7 +61,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       const brand = await brandName();
       // Laid out with inline styles on purpose: this page must look right even when the host's Tailwind
       // build hasn't generated the admin's newest classes yet (e.g. a dev server that wasn't restarted).
-      const line = 'color-mix(in srgb, var(--cms-text) 14%, transparent)';
+      const line = 'color-mix(in srgb, var(--mnml-text) 14%, transparent)';
       const fade = 'radial-gradient(ellipse 75% 65% at 50% 38%, #000 25%, transparent 78%)';
       // Dashes: each line direction is its own layer, cut into 4px dashes along its length, then faded at the edges.
       const dashes = (to: string) => `repeating-linear-gradient(${to}, #000 0, #000 4px, transparent 4px, transparent 9px)`;
@@ -76,18 +79,18 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         }) as React.CSSProperties;
       return provider(
         <main
-          className={`${rootClass} bg-cms-panel`}
+          className={`${rootClass} bg-mnml-panel`}
           style={{ position: 'relative', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}
         >
           <title>{`Sign in — ${brand}`}</title>
           {/* Decorative: a soft accent glow, and a dashed grid that fades out toward the edges. */}
-          <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(48rem 24rem at 50% 0%, color-mix(in srgb, var(--cms-accent) 80%, transparent), transparent)' }} />
+          <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(48rem 24rem at 50% 0%, color-mix(in srgb, var(--mnml-accent) 80%, transparent), transparent)' }} />
           <div aria-hidden style={gridLayer(`linear-gradient(90deg, ${line} 1px, transparent 1px)`, '40px auto', 'to bottom')} />
           <div aria-hidden style={gridLayer(`linear-gradient(${line} 1px, transparent 1px)`, 'auto 40px', 'to right')} />
           <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, width: '100%', maxWidth: 384 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
               <span
-                className="font-cms-brand"
+                className="font-mnml-brand"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -97,14 +100,14 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                   borderRadius: 12,
                   fontSize: 24,
                   fontWeight: 700,
-                  background: 'var(--cms-primary)',
-                  color: 'var(--cms-on-primary)',
+                  background: 'var(--mnml-primary)',
+                  color: 'var(--mnml-on-primary)',
                   boxShadow: '0 1px 2px rgb(0 0 0 / 0.12)',
                 }}
               >
                 {brand[0] ?? 'A'}
               </span>
-              <span className="font-cms-brand" style={{ fontSize: 18, fontWeight: 600 }}>
+              <span className="font-mnml-brand" style={{ fontSize: 18, fontWeight: 600 }}>
                 {brand}
               </span>
             </div>
@@ -113,16 +116,16 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                 width: '100%',
                 padding: 28,
                 borderRadius: 12,
-                border: '1px solid var(--cms-line)',
-                background: 'var(--cms-bg)',
+                border: '1px solid var(--mnml-line)',
+                background: 'var(--mnml-bg)',
                 boxShadow: '0 1px 3px rgb(0 0 0 / 0.08), 0 8px 24px rgb(0 0 0 / 0.04)',
               }}
             >
               <h1 style={{ fontSize: 20, fontWeight: 600, fontFamily: 'inherit', margin: 0 }}>Welcome back</h1>
-              <p style={{ margin: '4px 0 24px', color: 'var(--cms-text-mute)' }}>{adapter ? 'Sign in to continue.' : 'Enter the admin password to continue.'}</p>
+              <p style={{ margin: '4px 0 24px', color: 'var(--mnml-text-mute)' }}>{adapter ? 'Sign in to continue.' : 'Enter the admin password to continue.'}</p>
               {adapter ? adapter.login : <LoginForm />}
             </div>
-            <Link href="/" className="no-underline hover:text-cms-text" style={{ color: 'var(--cms-text-mute)' }}>
+            <Link href="/" className="no-underline hover:text-mnml-text" style={{ color: 'var(--mnml-text-mute)' }}>
               ← Back to site
             </Link>
           </div>
@@ -279,15 +282,15 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       const name = (f.key.split('/').pop() ?? f.key).replace(/^[0-9a-f]{8}-/, '');
       const meta = [size(f.size), f.uploadedAt?.toLocaleDateString('en-US', { dateStyle: 'medium' })].filter(Boolean).join(' · ');
       return (
-        <li key={f.key} className="flex flex-col overflow-hidden rounded-[8px] bg-cms-panel">
+        <li key={f.key} className="flex flex-col overflow-hidden rounded-[8px] bg-mnml-panel">
           {/* Plain <img>: served by the CMS media route. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`${apiPath}/media/${f.key}`} alt="" loading="lazy" className="aspect-[4/3] w-full bg-cms-surface object-cover" />
+          <img src={`${apiPath}/media/${f.key}`} alt="" loading="lazy" className="aspect-[4/3] w-full bg-mnml-surface object-cover" />
           <div className="flex flex-1 flex-col gap-1" style={{ padding: '12px 14px 6px' }}>
             <p className="truncate text-sm font-medium" title={name}>
               {name}
             </p>
-            <p className="text-xs text-cms-text-mute">{meta}</p>
+            <p className="text-xs text-mnml-text-mute">{meta}</p>
           </div>
           {media?.delete && (
             <div className="flex" style={{ padding: '2px 8px 8px' }}>
@@ -303,9 +306,9 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       <section key={title} className="flex flex-col gap-3">
         <h2 className="flex items-baseline gap-2 text-sm font-semibold [font-family:inherit]">
           {title}
-          <span className="font-normal text-cms-text-mute">{count}</span>
+          <span className="font-normal text-mnml-text-mute">{count}</span>
         </h2>
-        {hint && <p className="-mt-1 text-xs text-cms-text-mute">{hint}</p>}
+        {hint && <p className="-mt-1 text-xs text-mnml-text-mute">{hint}</p>}
         <ul className={grid}>{list}</ul>
       </section>
     );
@@ -315,12 +318,12 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         <AdminHeader crumbs={[home, { label: 'Media' }]} />
         <main className={`${bodyClass} flex max-w-6xl flex-col gap-8`}>
           {!files ? (
-            <p className="text-cms-text-mute">{media ? 'This media storage cannot list files.' : 'Image uploads are not configured.'}</p>
+            <p className="text-mnml-text-mute">{media ? 'This media storage cannot list files.' : 'Image uploads are not configured.'}</p>
           ) : files.length === 0 ? (
-            <p className="text-cms-text-mute">No files yet. Images you upload in the editor appear here.</p>
+            <p className="text-mnml-text-mute">No files yet. Images you upload in the editor appear here.</p>
           ) : (
             <>
-              <p className="text-cms-text-mute">
+              <p className="text-mnml-text-mute">
                 {files.length} {files.length === 1 ? 'file' : 'files'} · {unused.length} unused
               </p>
               {sections.map((g) =>
@@ -391,7 +394,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         <main className={bodyClass}>
           <div className={`${cardClass} overflow-hidden`}>
             <table className="w-full text-left">
-              <thead className="border-b border-cms-line bg-cms-panel text-cms-text-soft">
+              <thead className="border-b border-mnml-line bg-mnml-panel text-mnml-text-soft">
                 <tr>
                   <th className="px-4 py-2 font-medium">{def.fields[def.titleField]?.label ?? 'Title'}</th>
                   <th className="px-4 py-2 font-medium max-sm:hidden">Slug</th>
@@ -399,30 +402,30 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                   {dateField && <th className="w-32 px-4 py-2 font-medium">{def.fields[dateField].label}</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-cms-line">
+              <tbody className="divide-y divide-mnml-line">
                 {items.length === 0 && (
                   <tr>
-                    <td colSpan={cols} className="px-4 py-6 text-center text-cms-text-mute">
+                    <td colSpan={cols} className="px-4 py-6 text-center text-mnml-text-mute">
                       No entries yet.
                     </td>
                   </tr>
                 )}
                 {items.map(({ slug, entry, status }) => (
                   // The title link's overlay makes the whole row clickable.
-                  <tr key={slug} className="relative hover:bg-cms-panel">
+                  <tr key={slug} className="relative hover:bg-mnml-panel">
                     <td className="px-4 py-2.5">
                       <Link href={`${adminPath}/${key}/${slug}`} className="font-medium no-underline after:absolute after:inset-0">
                         {String(entry[def.titleField] || slug)}
                       </Link>
                     </td>
-                    <td className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs text-cms-text-mute max-sm:hidden">{slug}</td>
+                    <td className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs text-mnml-text-mute max-sm:hidden">{slug}</td>
                     <td className="px-4 py-2.5">
-                      <span className="flex items-center gap-2 text-cms-text-soft">
+                      <span className="flex items-center gap-2 text-mnml-text-soft">
                         <StatusDot state={status === 'draft' ? 'draft' : pending.has(slug) ? 'changes' : 'published'} />
                         {status === 'draft' ? 'Draft' : pending.has(slug) ? 'Changes' : 'Published'}
                       </span>
                     </td>
-                    {dateField && <td className="px-4 py-2.5 tabular-nums text-cms-text-soft">{String(entry[dateField] ?? '—')}</td>}
+                    {dateField && <td className="px-4 py-2.5 tabular-nums text-mnml-text-soft">{String(entry[dateField] ?? '—')}</td>}
                   </tr>
                 ))}
               </tbody>
@@ -445,13 +448,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Card({ href, title, detail, children }: { href: string; title: string; detail?: string; children?: React.ReactNode }) {
   return (
-    <div className={`${cardClass} relative flex items-center gap-3 px-4 py-3 hover:border-cms-text-mute`}>
+    <div className={`${cardClass} relative flex items-center gap-3 px-4 py-3 hover:border-mnml-text-mute`}>
       <div className="min-w-0 flex-1">
         {/* The overlay makes the whole card clickable while keeping the + button separate. */}
         <Link href={href} className="font-medium no-underline after:absolute after:inset-0">
           {title}
         </Link>
-        {detail && <div className="text-cms-text-mute">{detail}</div>}
+        {detail && <div className="text-mnml-text-mute">{detail}</div>}
       </div>
       {children}
     </div>

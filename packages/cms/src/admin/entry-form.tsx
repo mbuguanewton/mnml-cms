@@ -130,10 +130,10 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
       <label htmlFor="f-slug" className={labelClass}>
         Slug
       </label>
-      <p className="-mt-1 text-cms-text-mute">{mode === 'update' ? 'The URL is fixed once an entry is created.' : 'Used in the URL. Filled in from the title.'}</p>
+      <p className="-mt-1 text-mnml-text-mute">{mode === 'update' ? 'The URL is fixed once an entry is created.' : 'Used in the URL. Filled in from the title.'}</p>
       <input
         id="f-slug"
-        className={`${inputClass} [font-family:ui-monospace,monospace] text-xs read-only:bg-cms-panel read-only:text-cms-text-soft`}
+        className={`${inputClass} [font-family:ui-monospace,monospace] text-xs read-only:bg-mnml-panel read-only:text-mnml-text-soft`}
         aria-invalid={!!errors.$slug}
         value={slug}
         readOnly={mode === 'update'}
@@ -142,7 +142,7 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
           setSlug(e.target.value);
         }}
       />
-      {errors.$slug && <p className="text-cms-danger">{errors.$slug}</p>}
+      {errors.$slug && <p className="text-mnml-danger">{errors.$slug}</p>}
     </div>
   );
 
@@ -152,7 +152,7 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
         <AdminHeader crumbs={crumbs}>
           {isCollection && mode === 'update' && <StatusDot state={dotState} className="mx-1" />}
           {result && (
-            <span role="status" className={`max-sm:hidden ${result.ok ? 'text-cms-primary' : 'text-cms-danger'}`}>
+            <span role="status" className={`max-sm:hidden ${result.ok ? 'text-mnml-primary' : 'text-mnml-danger'}`}>
               {result.message}
             </span>
           )}
@@ -198,7 +198,7 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
           <div className={showPreview ? 'w-[min(36rem,45%)] shrink-0' : 'w-full'}>
             <div className={`${bodyClass} flex flex-col gap-6`}>
               {tabs.length > 0 && (
-                <div className="sticky top-14 z-10 -mx-6 border-b border-cms-line bg-cms-bg/90 px-6 py-3 backdrop-blur">
+                <div className="sticky top-14 z-10 -mx-6 border-b border-mnml-line bg-mnml-bg/90 px-6 py-3 backdrop-blur">
                   <div
                     role="tablist"
                     aria-label="Field groups"
@@ -221,12 +221,12 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
                         aria-selected={tab === t.id}
                         tabIndex={tab === t.id ? 0 : -1}
                         onClick={() => setTab(t.id)}
-                        className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-cms-primary/40 ${
-                          tab === t.id ? 'bg-cms-primary text-cms-on-primary' : 'cms-state text-cms-text-soft'
+                        className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-mnml-primary/40 ${
+                          tab === t.id ? 'bg-mnml-primary text-mnml-on-primary' : 'mnml-state text-mnml-text-soft'
                         }`}
                       >
                         {t.label}
-                        {errorTabs.has(t.id) && <span role="img" aria-label="Has errors" className="size-1.5 rounded-full bg-cms-danger ring-2 ring-cms-bg/60" />}
+                        {errorTabs.has(t.id) && <span role="img" aria-label="Has errors" className="size-1.5 rounded-full bg-mnml-danger ring-2 ring-mnml-bg/60" />}
                       </button>
                     ))}
                   </div>
@@ -266,9 +266,9 @@ function DerivedRow({ label, value }: { label: string; value: string }) {
     <div className="flex flex-col gap-1.5">
       <span className={labelClass}>
         {label}
-        <span className="ml-2 rounded-full bg-cms-surface px-2 py-0.5 text-xs font-normal text-cms-text-mute">Computed</span>
+        <span className="ml-2 rounded-full bg-mnml-surface px-2 py-0.5 text-xs font-normal text-mnml-text-mute">Computed</span>
       </span>
-      <output className="rounded-[6px] border border-dashed border-cms-line bg-cms-panel px-3 py-1.5 text-cms-text-soft">{value}</output>
+      <output className="rounded-[6px] border border-dashed border-mnml-line bg-mnml-panel px-3 py-1.5 text-mnml-text-soft">{value}</output>
     </div>
   );
 }
