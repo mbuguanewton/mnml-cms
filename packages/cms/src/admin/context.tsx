@@ -1,18 +1,24 @@
 'use client';
 
 import { createContext, use } from 'react';
+import { DialogProvider, useDialogs } from './confirm.js';
 
 type AdminContextValue = { adminPath: string; apiPath: string };
 
 const AdminContext = createContext<AdminContextValue>({ adminPath: '/admin', apiPath: '/api/cms' });
 
 export function AdminProvider({ value, children }: { value: AdminContextValue; children: React.ReactNode }) {
-  return <AdminContext value={value}>{children}</AdminContext>;
+  return (
+    <AdminContext value={value}>
+      <DialogProvider>{children}</DialogProvider>
+    </AdminContext>
+  );
 }
 
-/** Admin and API paths, and `post()` for calling the CMS route handler. */
+/** Admin and API paths, `post()` for calling the CMS route handler, and `confirm()` / `alert()` for dialogs. */
 export function useAdmin() {
   const ctx = use(AdminContext);
+  const dialogs = useDialogs();
   async function post<T>(route: string, body: unknown): Promise<T> {
     const res = await fetch(`${ctx.apiPath}/${route}`, {
       method: 'POST',
@@ -23,5 +29,5 @@ export function useAdmin() {
     if (!res.ok && json.ok === undefined) throw new Error(json.error ?? json.message ?? `Request failed (${res.status})`);
     return json as T;
   }
-  return { ...ctx, post };
+  return { ...ctx, ...dialogs, post };
 }
