@@ -3,7 +3,7 @@
 import { useState, useSyncExternalStore, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { EyeIcon, FileXIcon } from 'lucide-react';
-import { slugify, type Collection, type Fields, type Singleton } from '../define.js';
+import { isVisible, slugify, type Collection, type Fields, type Singleton } from '../define.js';
 import type { EntryInput, EntryStatus, SaveAction, SaveResult } from '../api.js';
 import { ActionMenu, MenuItem } from './action-menu.js';
 import { Button } from './button.js';
@@ -52,14 +52,16 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
 
   // Like Sanity's field groups: an "All fields" tab, plus one tab per `group` field that shows only
   // that group. Fields outside any group are under "General". No tab bar without a group.
-  const groupKeys = Object.entries(fields).filter(([, f]) => f.type === 'group').map(([k]) => k);
-  const hasLoose = Object.values(fields).some((f) => f.type !== 'group');
+  const groupKeys = Object.entries(fields).filter(([, f]) => f.type === 'group' && isVisible(f, data)).map(([k]) => k);
+  const hasLoose = Object.values(fields).some((f) => f.type !== 'group' && isVisible(f, data));
   const tabs = groupKeys.length === 0 ? [] : [
     { id: ALL, label: 'All fields' },
     ...(hasLoose ? [{ id: GENERAL, label: 'General' }] : []),
     ...groupKeys.map((k) => ({ id: k, label: fields[k].label })),
   ];
-  const [tab, setTab] = useState(ALL);
+  const [pickedTab, setTab] = useState(ALL);
+  // The picked tab can vanish when its group is hidden by a showIf.
+  const tab = tabs.some((t) => t.id === pickedTab) ? pickedTab : ALL;
   // The tab an error lives in, so a hidden one can be flagged and opened.
   const tabOf = (errorPath: string) => {
     const top = errorPath.split('.')[0];
@@ -234,7 +236,7 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
               )}
               {Object.entries(fields).filter(([k]) => inTab(k)).map(([k, f]) => (
                 <div key={k} className="contents">
-                  <FieldRenderer field={f} value={data[k]} onChange={(v) => set(k, v)} path={k} errors={errors} />
+                  <FieldRenderer field={f} value={data[k]} onChange={(v) => set(k, v)} path={k} errors={errors} siblings={data} />
                   {def.kind === 'collection' && k === def.titleField && slugField}
                   {derived.filter((d) => d.after === k).map((d) => (
                     <DerivedRow key={d.key} label={d.label} value={d.value} />

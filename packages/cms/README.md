@@ -102,10 +102,46 @@ Options for every field: `{ required, help }`.
 | `tags` | `string[]` |
 | `array(label, fields, { itemLabel })` | a repeatable list of `fields` |
 | `group(label, fields)` | a nested object shown as one section: `page.hero.headline` |
+| `blocks(label, { hero: block('Hero', fields), … }, { itemLabel })` | a list of sections, each one of the blocks: `{ kind: 'hero', …its fields }[]` |
 | `seo(label?)` | a `group` of `title`, `description` and `image` |
 
 Entries with groups get tabs above the form: **All fields**, **General** (fields outside any group) and one
 tab per group. Use one singleton per page with groups as sections, or a collection when editors add pages.
+
+### Blocks
+
+For pages made of different kinds of sections, give each kind its own fields:
+
+```ts
+sections: fields.blocks('Sections', {
+  hero: block('Hero', { title: fields.text('Title'), image: fields.image('Image') }),
+  posts: block('Posts', { count: fields.number('How many') }),
+  divider: block('Divider', {}),
+}),
+```
+
+Editors pick a block to add and see only its fields. Each stored item carries its block's key as `kind`, and
+reading narrows by it: `section.kind === 'hero'` gives `section.image`. `kind` is reserved, so no block can have
+a field of that name. A stored item whose `kind` is no longer in the config is dropped on read, so removing
+a block from the config removes it from the entries the next time they are saved.
+
+### Conditional fields
+
+`showIf` on any field shows it only while its sibling fields (the ones next to it in the same entry, group,
+array item or block) match:
+
+```ts
+type: fields.select('Type', ['post', 'link'] as const),
+url: fields.url('URL', { required: true, showIf: { type: 'link' } }),
+badge: fields.text('Badge', { showIf: { type: ['link', 'video'], price: { gt: 0 } } }), // every key must match
+```
+
+A condition is a value (equals), a list (any of), `{ not: … }`, a comparison (`gt`, `gte`, `lt`, `lte`) or
+`{ empty: true | false }`. It is plain data rather than a function so the admin form can evaluate it as the editor
+types. A condition that names something other than a sibling field throws when the config loads.
+
+A hidden field isn't validated, so a hidden `required` field never blocks a save. Its stored value is kept (toggle
+back and the text is still there), and readers still return it, so check the same condition when rendering.
 
 ### Derived values
 
