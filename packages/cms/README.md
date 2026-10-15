@@ -120,7 +120,9 @@ sections: fields.blocks('Sections', {
 }),
 ```
 
-Editors pick a block to add and see only its fields. Each stored item carries its block's key as `kind`, and
+Editors add a section from one "Add section" button that opens a list of the blocks (with a search box once
+there are more than eight), and see only that block's fields. `block(label, fields, { description })` adds a one-line
+hint to the list, and `fields.blocks(…, { addLabel })` renames the button. Each stored item carries its block's key as `kind`, and
 reading narrows by it: `section.kind === 'hero'` gives `section.image`. `kind` is reserved, so no block can have
 a field of that name. A stored item whose `kind` is no longer in the config is dropped on read, so removing
 a block from the config removes it from the entries the next time they are saved.

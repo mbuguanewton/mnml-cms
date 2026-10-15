@@ -8,12 +8,23 @@ export default config({
       name: fields.text('Site name', { required: true }),
       tagline: fields.text('Tagline'),
       footer: fields.group('Footer', {
-        note: fields.text('Note', { help: 'Shown next to the copyright line.' }),
-        links: fields.array('Links', { label: fields.text('Label', { required: true }), url: fields.url('URL', { required: true }) }, { itemLabel: 'label' }),
+        note: fields.text('Note', {
+          help: 'Shown next to the copyright line.',
+        }),
+        links: fields.array(
+          'Links',
+          {
+            label: fields.text('Label', { required: true }),
+            url: fields.url('URL', { required: true }),
+          },
+          { itemLabel: 'label' },
+        ),
       }),
     },
     derived: {
-      copyright: derive((s) => `© ${new Date().getFullYear()} ${s.name}`, { after: 'footer' }),
+      copyright: derive((s) => `© ${new Date().getFullYear()} ${s.name}`, {
+        after: 'footer',
+      }),
     },
   }),
   home: singleton({
@@ -26,11 +37,22 @@ export default config({
         headline: fields.text('Headline'),
         intro: fields.textarea('Intro'),
         ctaLabel: fields.text('Button label'),
-        ctaUrl: fields.url('Button link', { help: 'A full URL. Leave empty to link to all posts.', showIf: { ctaLabel: { empty: false } } }),
-        image: fields.image('Image', { help: 'Optional. Wide images work best.' }),
+        ctaUrl: fields.url('Button link', {
+          help: 'A full URL. Leave empty to link to all posts.',
+          showIf: { ctaLabel: { empty: false } },
+        }),
+        image: fields.image('Image', {
+          help: 'Optional. Wide images work best.',
+        }),
       }),
-      featuredPost: fields.reference('Featured post', 'posts', { help: 'Shown large under the hero.' }),
-      postCount: fields.number('Latest posts to show', { min: 1, max: 12, step: 1 }),
+      featuredPost: fields.reference('Featured post', 'posts', {
+        help: 'Shown large under the hero.',
+      }),
+      postCount: fields.number('Latest posts to show', {
+        min: 1,
+        max: 12,
+        step: 1,
+      }),
       seo: fields.seo(),
     },
   }),
@@ -45,9 +67,20 @@ export default config({
       sections: fields.blocks(
         'Sections',
         {
-          hero: block('Hero', { eyebrow: fields.text('Eyebrow'), title: fields.text('Title'), intro: fields.textarea('Intro') }),
+          hero: block(
+            'Hero',
+            {
+              eyebrow: fields.text('Eyebrow'),
+              title: fields.text('Title'),
+              intro: fields.textarea('Intro'),
+            },
+            { description: 'Big heading with a short intro' },
+          ),
           text: block('Text', { content: fields.richtext('Content') }),
-          latestPosts: block('Latest posts', { title: fields.text('Title'), count: fields.number('How many', { min: 1, max: 12, step: 1 }) }),
+          latestPosts: block('Latest posts', {
+            title: fields.text('Title'),
+            count: fields.number('How many', { min: 1, max: 12, step: 1 }),
+          }),
           divider: block('Divider', {}),
         },
         { itemLabel: 'title' },

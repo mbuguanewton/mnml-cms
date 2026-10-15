@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, use, useRef, useState } from 'react';
-import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
+import { createContext, use, useEffect, useRef, useState } from 'react';
+import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
-import { isVisible, withDefaults, type ArrayField, type BlocksField, type Field, type GroupField, type ImageValue } from '../define.js';
+import { isVisible, withDefaults, type ArrayField, type Block, type BlocksField, type Field, type GroupField, type ImageValue } from '../define.js';
+import { useMenu } from './action-menu.js';
 import { Button } from './button.js';
 import { useAdmin } from './context.js';
 import { RichTextEditor } from './rich-text-editor.js';
@@ -126,7 +127,7 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
     case 'array':
       return <ArrayInput field={field} value={(value as Record<string, unknown>[]) ?? []} onChange={onChange} path={path} errors={errors} />;
     case 'blocks':
-      return <BlocksInput field={field} value={(value as Block[]) ?? []} onChange={onChange} path={path} errors={errors} />;
+      return <BlocksInput field={field} value={(value as BlockItem[]) ?? []} onChange={onChange} path={path} errors={errors} />;
   }
 }
 
@@ -390,7 +391,7 @@ function ArrayInput({
   );
 }
 
-type Block = { kind: string } & Record<string, unknown>;
+type BlockItem = { kind: string } & Record<string, unknown>;
 
 // Like ArrayInput, but each item is one of the field's blocks: "Add" picks which, and the row shows only that block's fields.
 function BlocksInput({
@@ -401,7 +402,7 @@ function BlocksInput({
   errors,
 }: {
   field: BlocksField;
-  value: Block[];
+  value: BlockItem[];
   onChange: (v: unknown) => void;
   path: string;
   errors: Errors;
@@ -411,11 +412,13 @@ function BlocksInput({
     onChange([...value, { kind, ...withDefaults(field.blocks[kind].fields, {}) }]);
     setOpen(value.length);
   };
+  // "Sections" → "Add section"
+  const addLabel = field.addLabel ?? `Add ${field.label.replace(/(?<!s)s$/i, '').toLowerCase()}`;
 
   return (
     <div className="flex flex-col items-start gap-2">
       <ul className="w-full divide-y divide-mnml-line overflow-hidden rounded-[8px] border border-mnml-line">
-        {value.length === 0 && <li className="px-3 py-2.5 text-mnml-text-mute">No items</li>}
+        {value.length === 0 && <li className="px-3 py-3 text-mnml-text-mute">Nothing here yet. Use “{addLabel}” below.</li>}
         {value.map((item, i) => {
           const def = field.blocks[item.kind];
           if (!def) return null;
@@ -466,13 +469,95 @@ function BlocksInput({
           );
         })}
       </ul>
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(field.blocks).map(([kind, b]) => (
-          <Button key={kind} type="button" variant="outline" size="sm" onClick={() => add(kind)}>
-            <PlusIcon /> {b.label}
-          </Button>
-        ))}
-      </div>
+      <BlockPicker blocks={field.blocks} label={addLabel} onPick={add} />
+    </div>
+  );
+}
+
+// More than this many blocks and the picker gets a search box.
+const SEARCH_FROM = 8;
+
+/** One "Add" button that opens the list of block kinds, so the form doesn't grow with them. */
+function BlockPicker({ blocks, label, onPick }: { blocks: Record<string, Block>; label: string; onPick: (kind: string) => void }) {
+  const { open, setOpen, root } = useMenu();
+  const [q, setQ] = useState('');
+  const popup = useRef<HTMLDivElement>(null);
+  const all = Object.entries(blocks);
+  const needle = q.trim().toLowerCase();
+  const shown = all.filter(([kind, b]) => !needle || `${b.label} ${kind} ${b.description ?? ''}`.toLowerCase().includes(needle));
+
+  // Land on the search box (or the first block) so the keyboard works straight away.
+  useEffect(() => {
+    if (open) popup.current?.querySelector<HTMLElement>('input, button')?.focus();
+  }, [open]);
+
+  const pick = (kind: string) => {
+    setOpen(false);
+    onPick(kind);
+  };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const items = [...(popup.current?.querySelectorAll<HTMLElement>('input, button') ?? [])];
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    items[Math.min(items.length - 1, Math.max(0, at + step))]?.focus();
+  };
+
+  return (
+    <div ref={root} className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => {
+          setQ('');
+          setOpen(!open);
+        }}
+      >
+        <PlusIcon /> {label} <ChevronDownIcon className="text-mnml-text-mute" />
+      </Button>
+      {open && (
+        <div
+          ref={popup}
+          role="menu"
+          onKeyDown={onKeyDown}
+          className="absolute left-0 top-full z-20 mt-1 w-72 max-w-[calc(100vw-3rem)] rounded-[8px] border border-mnml-line bg-mnml-bg p-1 shadow-lg"
+        >
+          {all.length > SEARCH_FROM && (
+            <input
+              aria-label="Search blocks"
+              placeholder="Search…"
+              className={`${inputClass} mb-1`}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (shown[0]) pick(shown[0][0]);
+                }
+              }}
+            />
+          )}
+          <div className="flex max-h-72 flex-col overflow-y-auto">
+            {shown.length === 0 && <p className="px-2.5 py-2 text-mnml-text-mute">No match</p>}
+            {shown.map(([kind, b]) => (
+              <button
+                key={kind}
+                type="button"
+                role="menuitem"
+                onClick={() => pick(kind)}
+                className="flex w-full cursor-pointer flex-col items-start rounded-[4px] px-2.5 py-1.5 text-left outline-none transition-colors hover:bg-mnml-surface focus-visible:bg-mnml-surface"
+              >
+                <span className="text-sm text-mnml-text">{b.label}</span>
+                {b.description && <span className="text-xs text-mnml-text-mute">{b.description}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
