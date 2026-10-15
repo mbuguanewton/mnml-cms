@@ -65,6 +65,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       // A custom adapter with a `loginUrl` signs in on your own page.
       if (adapter?.loginUrl) redirect(adapter.loginUrl);
       if (await isAdmin(ctx)) redirect(adminPath);
+      const query = await searchParams;
       const brand = await brandName();
       // Laid out with inline styles on purpose: this page must look right even when the host's Tailwind
       // build hasn't generated the admin's newest classes yet (e.g. a dev server that wasn't restarted).
@@ -139,7 +140,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
               <p style={{ margin: '4px 0 24px', color: 'var(--mnml-text-mute)' }}>
                 {adapter ? 'Sign in to continue.' : 'Enter the admin password to continue.'}
               </p>
-              {adapter ? adapter.login : <LoginForm />}
+              {adapter ? adapter.login : <LoginForm error={typeof query.error === 'string' ? query.error : undefined} />}
             </div>
             <Link href="/" className="no-underline hover:text-mnml-text" style={{ color: 'var(--mnml-text-mute)' }}>
               ← Back to site

@@ -70,21 +70,28 @@ export function createHandlers(ctx: Context) {
   const { store, adminPath } = ctx;
 
   const routes: Record<string, (request: Request) => Promise<Response>> = {
+    // The login form posts JSON. Without JavaScript (or before it loads) the browser posts the form itself,
+    // so a form-encoded request is answered with redirects instead and the password never ends up in a URL.
     async login(request) {
       if (ctx.authAdapter) return json({ error: 'Not found' }, 404);
+      const form = (request.headers.get('content-type') ?? '').includes('application/x-www-form-urlencoded');
+      const back = (error: string) => Response.redirect(new URL(`${ctx.loginUrl}?error=${error}`, request.url), 303);
       const ip = clientIp(request);
       const wait = await lockedFor(ctx.storage, ip);
-      if (wait > 0) return json({ ok: false, message: `Too many attempts. Try again in ${Math.ceil(wait / 60)} ${wait > 60 ? 'minutes' : 'minute'}.` }, 429);
-      const { password } = await request.json().catch(() => ({}));
+      if (wait > 0) {
+        if (form) return back('locked');
+        return json({ ok: false, message: `Too many attempts. Try again in ${Math.ceil(wait / 60)} ${wait > 60 ? 'minutes' : 'minute'}.` }, 429);
+      }
+      const password = form ? (await request.formData().catch(() => null))?.get('password') : (await request.json().catch(() => ({}))).password;
       if (!checkPassword((ctx.options.auth as PasswordAuth).password, String(password ?? ''))) {
         await recordFailure(ctx.storage, ip);
         // Slow down guessing; there is only one shared password.
         await new Promise((r) => setTimeout(r, 1000));
-        return json({ ok: false, message: 'Wrong password.' }, 401);
+        return form ? back('wrong') : json({ ok: false, message: 'Wrong password.' }, 401);
       }
       await clearFailures(ctx.storage, ip);
       (await cookies()).set(SESSION_COOKIE, await ctx.session.create(await sessionVersion(ctx)), sessionCookieOptions());
-      return json({ ok: true, redirect: adminPath });
+      return form ? Response.redirect(new URL(adminPath, request.url), 303) : json({ ok: true, redirect: adminPath });
     },
 
     async logout(request) {
