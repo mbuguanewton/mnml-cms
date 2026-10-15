@@ -59,7 +59,12 @@ const rows = [
   {
     collection: 'authors',
     slug: 'sam-reyes',
-    data: { name: 'Sam Reyes', role: 'Contributing engineer', bio: 'Sam builds web infrastructure and writes about databases, caching and small tools.', photo: null },
+    data: {
+      name: 'Sam Reyes',
+      role: 'Contributing engineer',
+      bio: 'Sam builds web infrastructure and writes about databases, caching and small tools.',
+      photo: null,
+    },
   },
   {
     collection: 'posts',
@@ -95,7 +100,11 @@ const rows = [
       content: doc(
         p('Start from the page, not the database. Sketch what an editor needs to change, then name each piece.'),
         h2('Fields, groups and collections'),
-        list('A field is a single value: a title, a date, a toggle.', 'A group is a section of one page: the hero, the footer.', 'A collection is anything an editor adds more of: posts, authors, products.'),
+        list(
+          'A field is a single value: a title, a date, a toggle.',
+          'A group is a section of one page: the hero, the footer.',
+          'A collection is anything an editor adds more of: posts, authors, products.',
+        ),
         p('If you are unsure, begin with a group. Promoting it to a collection later is easy; the reverse rarely happens.'),
       ),
       seo,

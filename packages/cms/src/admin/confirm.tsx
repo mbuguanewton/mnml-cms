@@ -44,7 +44,10 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
       }),
     [],
   );
-  const alert = useCallback(async (o: Omit<ConfirmOptions, 'cancelLabel'>) => void (await confirm({ confirmLabel: 'OK', ...o, cancelLabel: false })), [confirm]);
+  const alert = useCallback(
+    async (o: Omit<ConfirmOptions, 'cancelLabel'>) => void (await confirm({ confirmLabel: 'OK', ...o, cancelLabel: false })),
+    [confirm],
+  );
 
   useEffect(() => {
     if (!opts) return;

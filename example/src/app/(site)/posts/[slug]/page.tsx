@@ -24,7 +24,9 @@ export default async function PostPage({ params }: Props) {
   const meta = [formatDate(post.date), post.readingTime && `${post.readingTime} min read`].filter(Boolean).join(' · ');
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
-      <Link href="/posts" className="text-sm text-soft hover:text-accent">← All posts</Link>
+      <Link href="/posts" className="text-sm text-soft hover:text-accent">
+        ← All posts
+      </Link>
       <header className="mt-8 flex flex-col gap-4">
         <Category>{post.category}</Category>
         <h1 className="font-serif text-4xl font-semibold leading-tight tracking-tight md:text-5xl">{post.title}</h1>
@@ -32,7 +34,10 @@ export default async function PostPage({ params }: Props) {
         <p className="text-sm text-mute">
           {author && post.author && (
             <>
-              By <Link href={`/authors/${post.author}`} className="text-ink hover:text-accent">{author.name}</Link>
+              By{' '}
+              <Link href={`/authors/${post.author}`} className="text-ink hover:text-accent">
+                {author.name}
+              </Link>
               {meta && ' · '}
             </>
           )}

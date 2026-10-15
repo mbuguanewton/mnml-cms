@@ -9,7 +9,9 @@ export const menuItemClass =
 
 /** A row in an ActionMenu. Use `danger` for destructive actions. */
 export function MenuItem({ danger, className = '', ...props }: ComponentProps<'button'> & { danger?: boolean }) {
-  return <button type="button" role="menuitem" className={`${menuItemClass} ${danger ? 'text-mnml-danger [&_svg]:text-mnml-danger' : ''} ${className}`} {...props} />;
+  return (
+    <button type="button" role="menuitem" className={`${menuItemClass} ${danger ? 'text-mnml-danger [&_svg]:text-mnml-danger' : ''} ${className}`} {...props} />
+  );
 }
 
 /** Open state for a dropdown in `root`: closes on a click outside it or Escape. */
@@ -42,7 +44,12 @@ export function ActionMenu({ children }: { children: React.ReactNode }) {
         <MoreVerticalIcon />
       </Button>
       {/* Kept mounted (just hidden) so an item's own state, e.g. a pending delete, survives closing. */}
-      <div role="menu" hidden={!open} onClick={() => setOpen(false)} className="absolute right-0 top-full z-20 mt-1 w-48 rounded-[8px] border border-mnml-line bg-mnml-bg p-1 shadow-lg">
+      <div
+        role="menu"
+        hidden={!open}
+        onClick={() => setOpen(false)}
+        className="absolute right-0 top-full z-20 mt-1 w-48 rounded-[8px] border border-mnml-line bg-mnml-bg p-1 shadow-lg"
+      >
         {children}
       </div>
     </div>

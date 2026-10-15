@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, use, useRef, useState } from 'react';
-import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
+import { createContext, use, useEffect, useRef, useState } from 'react';
+import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
-import { isVisible, withDefaults, type ArrayField, type BlocksField, type Field, type GroupField, type ImageValue } from '../define.js';
+import { isVisible, withDefaults, type ArrayField, type Block, type BlocksField, type Field, type GroupField, type ImageValue } from '../define.js';
+import { useMenu } from './action-menu.js';
 import { Button } from './button.js';
 import { useAdmin } from './context.js';
 import { RichTextEditor } from './rich-text-editor.js';
@@ -75,7 +76,15 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
     case 'image':
       return <ImageInput id={id} value={value as ImageValue | null} onChange={onChange} />;
     case 'boolean':
-      return <input id={id} type="checkbox" className="size-4 self-start accent-mnml-primary" checked={value === true} onChange={(e) => onChange(e.target.checked)} />;
+      return (
+        <input
+          id={id}
+          type="checkbox"
+          className="size-4 self-start accent-mnml-primary"
+          checked={value === true}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+      );
     case 'number':
       return (
         <input
@@ -92,7 +101,13 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
       );
     case 'select':
       return (
-        <select id={id} className={`${inputClass} w-auto`} aria-invalid={invalid} value={(value as string | null) ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+        <select
+          id={id}
+          className={`${inputClass} w-auto`}
+          aria-invalid={invalid}
+          value={(value as string | null) ?? ''}
+          onChange={(e) => onChange(e.target.value || null)}
+        >
           <option value="">—</option>
           {field.options.map((o) => (
             <option key={o} value={o}>
@@ -112,23 +127,55 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
     case 'array':
       return <ArrayInput field={field} value={(value as Record<string, unknown>[]) ?? []} onChange={onChange} path={path} errors={errors} />;
     case 'blocks':
-      return <BlocksInput field={field} value={(value as Block[]) ?? []} onChange={onChange} path={path} errors={errors} />;
+      return <BlocksInput field={field} value={(value as BlockItem[]) ?? []} onChange={onChange} path={path} errors={errors} />;
   }
 }
 
-function GroupInput({ field, value, onChange, path, errors }: { field: GroupField; value: Record<string, unknown>; onChange: (v: unknown) => void; path: string; errors: Errors }) {
+function GroupInput({
+  field,
+  value,
+  onChange,
+  path,
+  errors,
+}: {
+  field: GroupField;
+  value: Record<string, unknown>;
+  onChange: (v: unknown) => void;
+  path: string;
+  errors: Errors;
+}) {
   return (
     <fieldset className="flex min-w-0 flex-col gap-4 rounded-[8px] border border-mnml-line px-4 pb-4 pt-3">
       <legend className="px-1 text-sm font-semibold">{field.label}</legend>
       {field.help && <p className="-mt-1 text-mnml-text-mute">{field.help}</p>}
       {Object.entries(field.fields).map(([k, f]) => (
-        <FieldRenderer key={k} field={f} value={value[k]} onChange={(v) => onChange({ ...value, [k]: v })} path={`${path}.${k}`} errors={errors} siblings={value} />
+        <FieldRenderer
+          key={k}
+          field={f}
+          value={value[k]}
+          onChange={(v) => onChange({ ...value, [k]: v })}
+          path={`${path}.${k}`}
+          errors={errors}
+          siblings={value}
+        />
       ))}
     </fieldset>
   );
 }
 
-function ReferenceInput({ id, collection, value, onChange, invalid }: { id: string; collection: string; value: string | null; onChange: (v: unknown) => void; invalid: boolean }) {
+function ReferenceInput({
+  id,
+  collection,
+  value,
+  onChange,
+  invalid,
+}: {
+  id: string;
+  collection: string;
+  value: string | null;
+  onChange: (v: unknown) => void;
+  invalid: boolean;
+}) {
   const options = use(RefOptionsContext)[collection] ?? [];
   // Keep a current value that is no longer offered (e.g. since unpublished) visible instead of silently dropping it.
   const missing = value && !options.some((o) => o.slug === value);
@@ -321,7 +368,15 @@ function ArrayInput({
               {isOpen && (
                 <div className="flex flex-col gap-4 border-t border-mnml-line px-4 py-4 sm:pl-9">
                   {Object.entries(field.fields).map(([k, f]) => (
-                    <FieldRenderer key={k} field={f} value={item[k]} onChange={(v) => update(i, { ...item, [k]: v })} path={`${path}.${i}.${k}`} errors={errors} siblings={item} />
+                    <FieldRenderer
+                      key={k}
+                      field={f}
+                      value={item[k]}
+                      onChange={(v) => update(i, { ...item, [k]: v })}
+                      path={`${path}.${i}.${k}`}
+                      errors={errors}
+                      siblings={item}
+                    />
                   ))}
                 </div>
               )}
@@ -336,20 +391,34 @@ function ArrayInput({
   );
 }
 
-type Block = { kind: string } & Record<string, unknown>;
+type BlockItem = { kind: string } & Record<string, unknown>;
 
 // Like ArrayInput, but each item is one of the field's blocks: "Add" picks which, and the row shows only that block's fields.
-function BlocksInput({ field, value, onChange, path, errors }: { field: BlocksField; value: Block[]; onChange: (v: unknown) => void; path: string; errors: Errors }) {
+function BlocksInput({
+  field,
+  value,
+  onChange,
+  path,
+  errors,
+}: {
+  field: BlocksField;
+  value: BlockItem[];
+  onChange: (v: unknown) => void;
+  path: string;
+  errors: Errors;
+}) {
   const { open, setOpen, update, move, remove } = useListEditing(value, onChange);
   const add = (kind: string) => {
     onChange([...value, { kind, ...withDefaults(field.blocks[kind].fields, {}) }]);
     setOpen(value.length);
   };
+  // "Sections" → "Add section"
+  const addLabel = field.addLabel ?? `Add ${field.label.replace(/(?<!s)s$/i, '').toLowerCase()}`;
 
   return (
     <div className="flex flex-col items-start gap-2">
       <ul className="w-full divide-y divide-mnml-line overflow-hidden rounded-[8px] border border-mnml-line">
-        {value.length === 0 && <li className="px-3 py-2.5 text-mnml-text-mute">No items</li>}
+        {value.length === 0 && <li className="px-3 py-3 text-mnml-text-mute">Nothing here yet. Use “{addLabel}” below.</li>}
         {value.map((item, i) => {
           const def = field.blocks[item.kind];
           if (!def) return null;
@@ -359,7 +428,12 @@ function BlocksInput({ field, value, onChange, path, errors }: { field: BlocksFi
           return (
             <li key={i}>
               <div className={`flex items-center gap-1 pr-1.5 ${isOpen ? 'bg-mnml-panel' : 'hover:bg-mnml-panel'}`}>
-                <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : i)} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left">
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => setOpen(isOpen ? null : i)}
+                  className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
+                >
                   <ChevronRightIcon className={`size-4 shrink-0 text-mnml-text-mute transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                   <span className="shrink-0 rounded-[4px] bg-mnml-surface px-1.5 py-0.5 text-xs text-mnml-text-mute">{def.label}</span>
                   <span className="truncate">{title}</span>
@@ -379,7 +453,15 @@ function BlocksInput({ field, value, onChange, path, errors }: { field: BlocksFi
                 <div className="flex flex-col gap-4 border-t border-mnml-line px-4 py-4 sm:pl-9">
                   {Object.keys(def.fields).length === 0 && <p className="text-mnml-text-mute">Nothing to edit.</p>}
                   {Object.entries(def.fields).map(([k, f]) => (
-                    <FieldRenderer key={k} field={f} value={item[k]} onChange={(v) => update(i, { ...item, [k]: v })} path={`${path}.${i}.${k}`} errors={errors} siblings={item} />
+                    <FieldRenderer
+                      key={k}
+                      field={f}
+                      value={item[k]}
+                      onChange={(v) => update(i, { ...item, [k]: v })}
+                      path={`${path}.${i}.${k}`}
+                      errors={errors}
+                      siblings={item}
+                    />
                   ))}
                 </div>
               )}
@@ -387,13 +469,95 @@ function BlocksInput({ field, value, onChange, path, errors }: { field: BlocksFi
           );
         })}
       </ul>
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(field.blocks).map(([kind, b]) => (
-          <Button key={kind} type="button" variant="outline" size="sm" onClick={() => add(kind)}>
-            <PlusIcon /> {b.label}
-          </Button>
-        ))}
-      </div>
+      <BlockPicker blocks={field.blocks} label={addLabel} onPick={add} />
+    </div>
+  );
+}
+
+// More than this many blocks and the picker gets a search box.
+const SEARCH_FROM = 8;
+
+/** One "Add" button that opens the list of block kinds, so the form doesn't grow with them. */
+function BlockPicker({ blocks, label, onPick }: { blocks: Record<string, Block>; label: string; onPick: (kind: string) => void }) {
+  const { open, setOpen, root } = useMenu();
+  const [q, setQ] = useState('');
+  const popup = useRef<HTMLDivElement>(null);
+  const all = Object.entries(blocks);
+  const needle = q.trim().toLowerCase();
+  const shown = all.filter(([kind, b]) => !needle || `${b.label} ${kind} ${b.description ?? ''}`.toLowerCase().includes(needle));
+
+  // Land on the search box (or the first block) so the keyboard works straight away.
+  useEffect(() => {
+    if (open) popup.current?.querySelector<HTMLElement>('input, button')?.focus();
+  }, [open]);
+
+  const pick = (kind: string) => {
+    setOpen(false);
+    onPick(kind);
+  };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const items = [...(popup.current?.querySelectorAll<HTMLElement>('input, button') ?? [])];
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    items[Math.min(items.length - 1, Math.max(0, at + step))]?.focus();
+  };
+
+  return (
+    <div ref={root} className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => {
+          setQ('');
+          setOpen(!open);
+        }}
+      >
+        <PlusIcon /> {label} <ChevronDownIcon className="text-mnml-text-mute" />
+      </Button>
+      {open && (
+        <div
+          ref={popup}
+          role="menu"
+          onKeyDown={onKeyDown}
+          className="absolute left-0 top-full z-20 mt-1 w-72 max-w-[calc(100vw-3rem)] rounded-[8px] border border-mnml-line bg-mnml-bg p-1 shadow-lg"
+        >
+          {all.length > SEARCH_FROM && (
+            <input
+              aria-label="Search blocks"
+              placeholder="Search…"
+              className={`${inputClass} mb-1`}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (shown[0]) pick(shown[0][0]);
+                }
+              }}
+            />
+          )}
+          <div className="flex max-h-72 flex-col overflow-y-auto">
+            {shown.length === 0 && <p className="px-2.5 py-2 text-mnml-text-mute">No match</p>}
+            {shown.map(([kind, b]) => (
+              <button
+                key={kind}
+                type="button"
+                role="menuitem"
+                onClick={() => pick(kind)}
+                className="flex w-full cursor-pointer flex-col items-start rounded-[4px] px-2.5 py-1.5 text-left outline-none transition-colors hover:bg-mnml-surface focus-visible:bg-mnml-surface"
+              >
+                <span className="text-sm text-mnml-text">{b.label}</span>
+                {b.description && <span className="text-xs text-mnml-text-mute">{b.description}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

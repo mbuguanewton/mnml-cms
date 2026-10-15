@@ -13,15 +13,31 @@ type Status = { kind: 'loading' } | { kind: 'ready' } | { kind: 'paused'; messag
 /**
  * The public page in an iframe, kept in sync with the form. Each change is stored as a draft
  * (with Draft Mode on), then the frame reloads at the same scroll position.
+ *
+ * When the form autosaves, the autosave is the draft: the preview is only set up once (to turn Draft Mode on),
+ * then reloads whenever `autosaveVersion` changes. `pausedMessage` is why autosave isn't saving.
  */
-export function LivePreview({ input, onClose }: { input: EntryInput; onClose: () => void }) {
+export function LivePreview({
+  input,
+  onClose,
+  autosaveVersion,
+  pausedMessage,
+}: {
+  input: EntryInput;
+  onClose: () => void;
+  autosaveVersion?: number;
+  pausedMessage?: string;
+}) {
   const { post } = useAdmin();
   const frame = useRef<HTMLIFrameElement>(null);
   const scrollY = useRef(0);
   const seq = useRef(0);
   const [url, setUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: 'loading' });
-  const key = JSON.stringify(input);
+  const auto = autosaveVersion !== undefined;
+  // With autosave, the form at mount is all the setup call needs.
+  const [firstKey] = useState(() => JSON.stringify(input));
+  const key = auto ? firstKey : JSON.stringify(input);
 
   useEffect(() => {
     const id = ++seq.current;
@@ -52,6 +68,15 @@ export function LivePreview({ input, onClose }: { input: EntryInput; onClose: ()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
+  useEffect(() => {
+    const win = frame.current?.contentWindow;
+    if (!autosaveVersion || !win) return;
+    scrollY.current = win.scrollY;
+    win.location.reload();
+  }, [autosaveVersion]);
+
+  const paused = pausedMessage ?? (status.kind === 'paused' ? status.message : null);
+
   const onLoad = () => {
     frame.current?.contentWindow?.scrollTo(0, scrollY.current);
     setStatus((s) => (s.kind === 'loading' ? { kind: 'ready' } : s));
@@ -62,11 +87,25 @@ export function LivePreview({ input, onClose }: { input: EntryInput; onClose: ()
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-mnml-line px-3">
         <span className="min-w-0 flex-1 truncate [font-family:ui-monospace,monospace] text-xs text-mnml-text-soft">{url ?? 'Preview'}</span>
         {status.kind === 'loading' && <LoaderCircleIcon className="size-3.5 animate-spin text-mnml-text-mute" aria-label="Updating" />}
-        <Button type="button" variant="ghost" size="icon-xs" aria-label="Reload" title="Reload" disabled={!url} onClick={() => frame.current?.contentWindow?.location.reload()}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Reload"
+          title="Reload"
+          disabled={!url}
+          onClick={() => frame.current?.contentWindow?.location.reload()}
+        >
           <RotateCwIcon />
         </Button>
         {url && (
-          <a href={url} target="_blank" aria-label="Open in new tab" title="Open in new tab" className="mnml-state flex size-6 items-center justify-center rounded-[6px] text-mnml-text-soft">
+          <a
+            href={url}
+            target="_blank"
+            aria-label="Open in new tab"
+            title="Open in new tab"
+            className="mnml-state flex size-6 items-center justify-center rounded-[6px] text-mnml-text-soft"
+          >
             <ExternalLinkIcon className="size-3.5" />
           </a>
         )}
@@ -74,16 +113,16 @@ export function LivePreview({ input, onClose }: { input: EntryInput; onClose: ()
           <XIcon />
         </Button>
       </div>
-      {status.kind === 'paused' && (
+      {paused && (
         <p role="status" className="border-b border-mnml-line bg-mnml-warn px-3 py-1.5 text-xs text-mnml-on-warn">
-          Preview paused: {status.message}
+          Preview paused: {paused}
         </p>
       )}
       <div className="relative min-h-0 flex-1">
         {url ? (
           <iframe ref={frame} src={url} title="Live preview" onLoad={onLoad} className="absolute inset-0 size-full bg-mnml-bg" />
         ) : (
-          <p className="p-6 text-center text-mnml-text-mute">{status.kind === 'paused' ? 'Fill in the required fields to see the page.' : 'Loading preview…'}</p>
+          <p className="p-6 text-center text-mnml-text-mute">{paused ? 'Fill in the required fields to see the page.' : 'Loading preview…'}</p>
         )}
       </div>
     </aside>

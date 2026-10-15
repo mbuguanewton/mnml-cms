@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0
+
+### Minor Changes
+
+- 8544bca: New `blocks` field for pages built from different kinds of sections: `fields.blocks('Sections', { hero: block('Hero', { … }), … })`. Each section is one of the blocks, with its own fields in the admin and a `kind` to narrow on when rendering. Stored items are `{ kind, …fields }`; items whose kind is not in the config are dropped on read.
+- 8544bca: Conditional fields: `showIf` on any field shows it only while its sibling fields match, e.g. `fields.url('URL', { showIf: { type: 'link' } })`. Hidden fields are not validated and keep their stored value. A `showIf` that names a field that is not a sibling throws when the config loads.
+
 ## 1.0.0
 
 ### Major Changes

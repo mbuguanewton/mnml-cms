@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useSyncExternalStore, useTransition } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { EyeIcon, FileXIcon } from 'lucide-react';
+import { EyeIcon, FileXIcon, Undo2Icon } from 'lucide-react';
 import { isVisible, slugify, type Collection, type Fields, type Singleton } from '../define.js';
-import type { EntryInput, EntryStatus, SaveAction, SaveResult } from '../api.js';
+import type { AutosaveResult, EntryInput, EntryStatus, SaveAction, SaveResult } from '../api.js';
 import { ActionMenu, MenuItem } from './action-menu.js';
 import { Button } from './button.js';
 import { useAdmin } from './context.js';
@@ -25,8 +25,10 @@ type Props = {
   crumbs: Crumb[];
   /** Collections only: the saved status of an existing entry. */
   status?: EntryStatus;
-  /** Collections only: the entry is published and has saved changes that aren't live yet. */
+  /** The entry has autosaved changes that aren't live yet. */
   hasPending?: boolean;
+  /** Fingerprint of the stored entry, sent with every autosave so a change made elsewhere is noticed. */
+  rev?: string;
   /** Read-only derived values (already formatted), shown after the field named in `after`, else at the end. */
   derived?: { key: string; label: string; after?: string; value: string }[];
   /** Entries the `reference` fields can pick from, by collection key. */
@@ -35,8 +37,21 @@ type Props = {
   actions?: React.ReactNode;
 };
 
-export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug, notice, crumbs, status: savedStatus, hasPending = false, derived = [], refOptions = {}, actions }: Props) {
-  const { post } = useAdmin();
+export function EntryForm({
+  schemaKey,
+  schema: def,
+  initial,
+  slug: existingSlug,
+  notice,
+  crumbs,
+  status: savedStatus,
+  hasPending = false,
+  rev: initialRev = '',
+  derived = [],
+  refOptions = {},
+  actions,
+}: Props) {
+  const { post, confirm } = useAdmin();
   const router = useRouter();
   const fields: Fields = def.fields;
   const mode: 'create' | 'update' = def.kind === 'collection' && !existingSlug ? 'create' : 'update';
@@ -52,13 +67,18 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
 
   // Like Sanity's field groups: an "All fields" tab, plus one tab per `group` field that shows only
   // that group. Fields outside any group are under "General". No tab bar without a group.
-  const groupKeys = Object.entries(fields).filter(([, f]) => f.type === 'group' && isVisible(f, data)).map(([k]) => k);
+  const groupKeys = Object.entries(fields)
+    .filter(([, f]) => f.type === 'group' && isVisible(f, data))
+    .map(([k]) => k);
   const hasLoose = Object.values(fields).some((f) => f.type !== 'group' && isVisible(f, data));
-  const tabs = groupKeys.length === 0 ? [] : [
-    { id: ALL, label: 'All fields' },
-    ...(hasLoose ? [{ id: GENERAL, label: 'General' }] : []),
-    ...groupKeys.map((k) => ({ id: k, label: fields[k].label })),
-  ];
+  const tabs =
+    groupKeys.length === 0
+      ? []
+      : [
+          { id: ALL, label: 'All fields' },
+          ...(hasLoose ? [{ id: GENERAL, label: 'General' }] : []),
+          ...groupKeys.map((k) => ({ id: k, label: fields[k].label })),
+        ];
   const [pickedTab, setTab] = useState(ALL);
   // The picked tab can vanish when its group is hidden by a showIf.
   const tab = tabs.some((t) => t.id === pickedTab) ? pickedTab : ALL;
@@ -81,15 +101,69 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
   const [baseline, setBaseline] = useState(snapshot);
   const dirty = snapshot() !== baseline;
 
+  // Collections autosave once they exist, and so do singletons that opt in with `drafts`. Publish makes the draft live.
+  const draftable = isCollection || (def.kind === 'singleton' && !!def.drafts);
+  const autosave = draftable && mode === 'update';
+  const [rev, setRev] = useState(initialRev);
+  type Auto = { kind: 'idle' | 'saving' | 'saved' } | { kind: 'paused' | 'conflict' | 'error'; message: string };
+  const [auto, setAuto] = useState<Auto>({ kind: 'idle' });
+  // Bumped after each autosave, so the live preview reloads.
+  const [version, setVersion] = useState(0);
+  // The form state that last failed to save; not retried until it changes.
+  const failed = useRef<string | null>(null);
+  const current = snapshot();
+  const unsaved = autosave && current !== baseline;
+
+  useEffect(() => {
+    if (!autosave || auto.kind === 'saving' || auto.kind === 'conflict' || current === baseline || current === failed.current) return;
+    const t = setTimeout(async () => {
+      setAuto({ kind: 'saving' });
+      try {
+        const r = await post<AutosaveResult>('autosave', { ...input(), rev });
+        if (r.ok) {
+          failed.current = null;
+          setBaseline(current);
+          setRev(r.rev);
+          setChanges(r.changes);
+          setVersion((n) => n + 1);
+          setAuto({ kind: 'saved' });
+        } else if (r.conflict) {
+          setAuto({ kind: 'conflict', message: r.message });
+        } else {
+          // Incomplete or invalid: keep editing, nothing is saved until it is valid.
+          failed.current = current;
+          const [path, msg] = Object.entries(r.errors)[0] ?? [];
+          setAuto({ kind: 'paused', message: path ? `${path.replace('$', '')}: ${msg}` : r.message });
+        }
+      } catch (e) {
+        failed.current = current;
+        setAuto({ kind: 'error', message: `Couldn't save: ${(e as Error).message}` });
+      }
+    }, AUTOSAVE_MS);
+    return () => clearTimeout(t);
+    // `input` and `post` are recreated every render; the edit itself (`current`) is what should restart the timer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autosave, auto.kind, current, baseline, rev]);
+
+  // Edits that aren't saved yet are lost on leaving.
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [unsaved]);
+
   const input = (): EntryInput => ({ key: schemaKey, slug: def.kind === 'collection' ? slug : undefined, mode, data });
   const canPreview = def.preview !== undefined && def.preview !== false;
   const [previewHidden, setPreviewHidden] = useState(false);
   const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
   const showPreview = canPreview && wide && !previewHidden;
 
-  const published = mode === 'update' && status === 'published';
-  // Singletons only ever save (publish). Collections: Save draft keeps it off the site (or, on a published
-  // entry, keeps the edits pending); Publish makes the form the live version; Unpublish takes it down.
+  // A singleton is always live; a collection entry is once it has been published.
+  const published = isCollection ? mode === 'update' && status === 'published' : true;
+  // Existing entries autosave, so Publish makes the form the live version and Unpublish takes it down.
+  // A new entry has nothing to autosave into yet: Create draft stores it off the site. A singleton without
+  // `drafts` just saves (publishes).
   const save = (action: SaveAction) => {
     const sent = snapshot();
     startTransition(async () => {
@@ -106,6 +180,9 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
       }
       if (r.ok) {
         setBaseline(sent);
+        failed.current = null;
+        setAuto({ kind: 'idle' });
+        if (r.rev) setRev(r.rev);
         if (action === 'publish') {
           setStatus('published');
           setChanges(false);
@@ -119,8 +196,26 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
   };
   const dotState = status === 'draft' ? 'draft' : changes ? 'changes' : 'published';
   // Publish appears once there is something to publish; a saved draft can always be published.
-  const showPublish = isCollection && (!published || dirty || changes);
-  const canPublish = dirty || changes || (mode === 'update' && status === 'draft');
+  const showPublish = draftable && (!published || dirty || changes);
+  const canPublish = dirty || changes || (isCollection && mode === 'update' && status === 'draft');
+  const discard = async () => {
+    const ok = await confirm({
+      title: 'Discard changes?',
+      description: 'The unpublished changes are deleted and the live version comes back.',
+      confirmLabel: 'Discard',
+      danger: true,
+    });
+    if (!ok) return;
+    const r = await post<{ ok: boolean }>('discard', { key: schemaKey, slug: def.kind === 'collection' ? slug : undefined });
+    if (r.ok) window.location.reload();
+  };
+  // What the header says about saving: autosave progress, or the result of the last manual save.
+  const note =
+    autosave && 'message' in auto
+      ? { ok: false, text: auto.kind === 'paused' ? `Not saved: ${auto.message}` : auto.message }
+      : autosave && auto.kind !== 'idle'
+        ? { ok: true, text: auto.kind === 'saving' ? 'Saving…' : 'Saved' }
+        : result && { ok: result.ok, text: result.message };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (pending) return;
@@ -132,7 +227,9 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
       <label htmlFor="f-slug" className={labelClass}>
         Slug
       </label>
-      <p className="-mt-1 text-mnml-text-mute">{mode === 'update' ? 'The URL is fixed once an entry is created.' : 'Used in the URL. Filled in from the title.'}</p>
+      <p className="-mt-1 text-mnml-text-mute">
+        {mode === 'update' ? 'The URL is fixed once an entry is created.' : 'Used in the URL. Filled in from the title.'}
+      </p>
       <input
         id="f-slug"
         className={`${inputClass} [font-family:ui-monospace,monospace] text-xs read-only:bg-mnml-panel read-only:text-mnml-text-soft`}
@@ -153,9 +250,9 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
       <form onSubmit={submit} className="flex flex-1 flex-col">
         <AdminHeader crumbs={crumbs}>
           {isCollection && mode === 'update' && <StatusDot state={dotState} className="mx-1" />}
-          {result && (
-            <span role="status" className={`max-sm:hidden ${result.ok ? 'text-mnml-primary' : 'text-mnml-danger'}`}>
-              {result.message}
+          {note && (
+            <span role="status" className={`max-sm:hidden ${note.ok ? 'text-mnml-primary' : 'text-mnml-danger'}`}>
+              {note.text}
             </span>
           )}
           {canPreview && (
@@ -169,13 +266,15 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
               <EyeIcon /> Preview
             </Button>
           )}
-          {isCollection ? (
+          {draftable ? (
             <>
-              <Button type="button" variant={showPublish ? 'outline' : 'default'} disabled={pending || !dirty} onClick={() => save('draft')}>
-                Save draft
-              </Button>
+              {!autosave && (
+                <Button type="button" variant="outline" disabled={pending || !dirty} onClick={() => save('draft')}>
+                  Create draft
+                </Button>
+              )}
               {showPublish && (
-                <Button type="submit" disabled={pending || !canPublish} className="px-4">
+                <Button type="submit" disabled={pending || auto.kind === 'saving' || !canPublish} className="px-4">
                   {pending ? 'Saving…' : 'Publish'}
                 </Button>
               )}
@@ -185,9 +284,14 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
               {pending ? 'Saving…' : 'Save'}
             </Button>
           )}
-          {(published || actions) && (
+          {((isCollection && published) || (autosave && published && changes) || actions) && (
             <ActionMenu>
-              {published && (
+              {autosave && published && changes && (
+                <MenuItem disabled={pending} onClick={discard}>
+                  <Undo2Icon /> Discard changes
+                </MenuItem>
+              )}
+              {isCollection && published && (
                 <MenuItem disabled={pending} onClick={() => save('unpublish')}>
                   <FileXIcon /> Unpublish
                 </MenuItem>
@@ -228,29 +332,39 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
                         }`}
                       >
                         {t.label}
-                        {errorTabs.has(t.id) && <span role="img" aria-label="Has errors" className="size-1.5 rounded-full bg-mnml-danger ring-2 ring-mnml-bg/60" />}
+                        {errorTabs.has(t.id) && (
+                          <span role="img" aria-label="Has errors" className="size-1.5 rounded-full bg-mnml-danger ring-2 ring-mnml-bg/60" />
+                        )}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-              {Object.entries(fields).filter(([k]) => inTab(k)).map(([k, f]) => (
-                <div key={k} className="contents">
-                  <FieldRenderer field={f} value={data[k]} onChange={(v) => set(k, v)} path={k} errors={errors} siblings={data} />
-                  {def.kind === 'collection' && k === def.titleField && slugField}
-                  {derived.filter((d) => d.after === k).map((d) => (
-                    <DerivedRow key={d.key} label={d.label} value={d.value} />
-                  ))}
-                </div>
-              ))}
-              {(tab === ALL || tab === GENERAL) && derived.filter((d) => !d.after || !(d.after in fields)).map((d) => (
-                <DerivedRow key={d.key} label={d.label} value={d.value} />
-              ))}
+              {Object.entries(fields)
+                .filter(([k]) => inTab(k))
+                .map(([k, f]) => (
+                  <div key={k} className="contents">
+                    <FieldRenderer field={f} value={data[k]} onChange={(v) => set(k, v)} path={k} errors={errors} siblings={data} />
+                    {def.kind === 'collection' && k === def.titleField && slugField}
+                    {derived
+                      .filter((d) => d.after === k)
+                      .map((d) => (
+                        <DerivedRow key={d.key} label={d.label} value={d.value} />
+                      ))}
+                  </div>
+                ))}
+              {(tab === ALL || tab === GENERAL) &&
+                derived.filter((d) => !d.after || !(d.after in fields)).map((d) => <DerivedRow key={d.key} label={d.label} value={d.value} />)}
             </div>
           </div>
           {showPreview && (
             <div className="sticky top-14 flex h-[calc(100dvh-3.5rem)] min-w-0 flex-1">
-              <LivePreview input={input()} onClose={() => setPreviewHidden(true)} />
+              <LivePreview
+                input={input()}
+                onClose={() => setPreviewHidden(true)}
+                autosaveVersion={autosave ? version : undefined}
+                pausedMessage={autosave && auto.kind === 'paused' ? auto.message : undefined}
+              />
             </div>
           )}
         </div>
@@ -260,6 +374,8 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
 }
 
 const ALL = '$all';
+// How long to wait after the last edit before autosaving.
+const AUTOSAVE_MS = 1500;
 const GENERAL = '$general';
 
 /** A computed value, in the same place and shape as a field but not editable. */

@@ -40,7 +40,10 @@ export type PasswordAuth = { password: string | undefined; secret: string | unde
 const AUTH = '_auth';
 
 const fingerprint = (password: string | undefined, secret: string | undefined) =>
-  createHash('sha256').update(`${password ?? ''}\0${secret ?? ''}`).digest('hex').slice(0, 12);
+  createHash('sha256')
+    .update(`${password ?? ''}\0${secret ?? ''}`)
+    .digest('hex')
+    .slice(0, 12);
 
 const readEpoch = cache(async (storage: EntryStorage) => {
   const row = await storage.readRow(AUTH, 'epoch');

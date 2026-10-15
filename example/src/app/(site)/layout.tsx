@@ -14,8 +14,12 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             {settings?.name || 'Example'}
           </Link>
           <nav className="flex items-center gap-6 text-sm text-soft">
-            <Link href="/posts" className="hover:text-ink">Posts</Link>
-            <Link href="/admin" className="rounded-full border border-line px-3 py-1 hover:border-ink hover:text-ink">Admin</Link>
+            <Link href="/posts" className="hover:text-ink">
+              Posts
+            </Link>
+            <Link href="/admin" className="rounded-full border border-line px-3 py-1 hover:border-ink hover:text-ink">
+              Admin
+            </Link>
           </nav>
         </div>
       </header>
@@ -29,7 +33,9 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           <ul className="flex gap-5">
             {settings?.footer.links.map((l) => (
               <li key={l.url}>
-                <a href={l.url ?? '#'} className="hover:text-ink">{l.label}</a>
+                <a href={l.url ?? '#'} className="hover:text-ink">
+                  {l.label}
+                </a>
               </li>
             ))}
           </ul>

@@ -2,17 +2,17 @@ import 'server-only';
 import { revalidatePath } from 'next/cache';
 import { cookies, draftMode } from 'next/headers';
 import { after } from 'next/server';
-import type { EntryInput, Invalid, PreviewResult, SaveResult } from '../api.js';
+import type { AutosaveInput, AutosaveResult, EntryInput, Invalid, PreviewResult, SaveResult } from '../api.js';
 import { objectSchema, previewPath, slugSchema } from '../define.js';
 import { checkPassword, clearFailures, clientIp, isAdmin, lockedFor, recordFailure, sessionVersion, signOutEverywhere, type PasswordAuth } from './auth.js';
 import type { Change, Context } from './context.js';
 import { SESSION_COOKIE, sessionCookieOptions } from './session.js';
+import { revOf } from './rev.js';
 import { PREVIEW_COOKIE, SINGLETON_SLUG } from './store.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
-//   POST: login · logout · logout-all · save · delete · preview · preview/exit · upload · media/delete
+//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · upload · media/delete
 //   GET:  media/<key> (uploaded images, public)
-
 
 // No SVG: it can carry scripts. Vercel caps function request bodies at 4.5 MB.
 const IMAGE_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
@@ -56,34 +56,42 @@ function validate(ctx: Context, input: EntryInput): Invalid | { ok: true; key: s
 function changed(ctx: Context, change: Change) {
   (ctx.options.revalidate ?? (() => revalidatePath('/', 'layout')))(change);
   const onChange = ctx.options.onChange;
-  if (onChange) after(async () => {
-    try {
-      await onChange(change);
-    } catch (e) {
-      console.error('cms onChange failed:', e);
-    }
-  });
+  if (onChange)
+    after(async () => {
+      try {
+        await onChange(change);
+      } catch (e) {
+        console.error('cms onChange failed:', e);
+      }
+    });
 }
 
 export function createHandlers(ctx: Context) {
   const { store, adminPath } = ctx;
 
   const routes: Record<string, (request: Request) => Promise<Response>> = {
+    // The login form posts JSON. Without JavaScript (or before it loads) the browser posts the form itself,
+    // so a form-encoded request is answered with redirects instead and the password never ends up in a URL.
     async login(request) {
       if (ctx.authAdapter) return json({ error: 'Not found' }, 404);
+      const form = (request.headers.get('content-type') ?? '').includes('application/x-www-form-urlencoded');
+      const back = (error: string) => Response.redirect(new URL(`${ctx.loginUrl}?error=${error}`, request.url), 303);
       const ip = clientIp(request);
       const wait = await lockedFor(ctx.storage, ip);
-      if (wait > 0) return json({ ok: false, message: `Too many attempts. Try again in ${Math.ceil(wait / 60)} ${wait > 60 ? 'minutes' : 'minute'}.` }, 429);
-      const { password } = await request.json().catch(() => ({}));
+      if (wait > 0) {
+        if (form) return back('locked');
+        return json({ ok: false, message: `Too many attempts. Try again in ${Math.ceil(wait / 60)} ${wait > 60 ? 'minutes' : 'minute'}.` }, 429);
+      }
+      const password = form ? (await request.formData().catch(() => null))?.get('password') : (await request.json().catch(() => ({}))).password;
       if (!checkPassword((ctx.options.auth as PasswordAuth).password, String(password ?? ''))) {
         await recordFailure(ctx.storage, ip);
         // Slow down guessing; there is only one shared password.
         await new Promise((r) => setTimeout(r, 1000));
-        return json({ ok: false, message: 'Wrong password.' }, 401);
+        return form ? back('wrong') : json({ ok: false, message: 'Wrong password.' }, 401);
       }
       await clearFailures(ctx.storage, ip);
       (await cookies()).set(SESSION_COOKIE, await ctx.session.create(await sessionVersion(ctx)), sessionCookieOptions());
-      return json({ ok: true, redirect: adminPath });
+      return form ? Response.redirect(new URL(adminPath, request.url), 303) : json({ ok: true, redirect: adminPath });
     },
 
     async logout(request) {
@@ -142,7 +150,58 @@ export function createHandlers(ctx: Context) {
                 ? 'Published. The site is updated.'
                 : 'Saved. The site is updated.',
         redirect: isNew ? `${adminPath}/${v.key}/${v.slug}?created=1` : undefined,
+        rev: revOf(ctx.config[v.key], v.data),
       } satisfies SaveResult);
+    },
+
+    /**
+     * Keeps the form's current (valid) data as the entry's draft, so the live version only changes on Publish.
+     * A published entry's draft is stored beside it; an entry that was never published is just updated.
+     * Refuses when the stored entry has changed since the form loaded it (`rev`).
+     */
+    async autosave(request) {
+      if (!(await isAdmin(ctx))) return unauthorized();
+      const input = (await request.json()) as AutosaveInput;
+      const v = validate(ctx, input);
+      if (!v.ok) return json(v satisfies AutosaveResult);
+      const def = ctx.config[v.key];
+      const isCollection = def.kind === 'collection';
+      if (def.kind === 'collection' ? input.mode !== 'update' : !def.drafts) {
+        return json({ ok: false, message: 'Autosave is not available for this content.', errors: {} } satisfies AutosaveResult);
+      }
+      const live = await store.getRow(v.key, v.slug);
+      if (isCollection && !live) return json({ ok: false, message: 'This entry no longer exists.', errors: {} } satisfies AutosaveResult);
+      const current = (await store.getPending(v.key, v.slug)) ?? live?.data;
+      if (input.rev !== revOf(def, current)) {
+        return json({ ok: false, conflict: true, message: 'Changed somewhere else. Reload to see the latest version.', errors: {} } satisfies AutosaveResult);
+      }
+      const rev = revOf(def, v.data);
+      let changes = false;
+      if (live?.status === 'draft') {
+        await store.upsert(v.key, v.slug, v.data, 'draft');
+      } else if (live && revOf(def, live.data) === rev) {
+        // Edited back to the live version: nothing left to publish.
+        await store.removePending(v.key, v.slug);
+      } else {
+        await store.savePending(v.key, v.slug, v.data);
+        changes = true;
+      }
+      // A preview copy of the unsaved form would shadow the draft.
+      await store.removeDraft(v.key, v.slug);
+      return json({ ok: true, rev, changes } satisfies AutosaveResult);
+    },
+
+    /** Throws away an entry's unpublished changes, going back to the live version. */
+    async discard(request) {
+      if (!(await isAdmin(ctx))) return unauthorized();
+      const { key, slug } = await request.json();
+      const def = typeof key === 'string' && Object.hasOwn(ctx.config, key) ? ctx.config[key] : undefined;
+      if (!def) return json({ ok: false, message: 'Unknown entry.' }, 400);
+      const at = def.kind === 'singleton' ? SINGLETON_SLUG : slug;
+      if (typeof at !== 'string') return json({ ok: false, message: 'Unknown entry.' }, 400);
+      await store.removePending(key, at);
+      await store.removeDraft(key, at);
+      return json({ ok: true });
     },
 
     async delete(request) {
@@ -202,7 +261,12 @@ export function createHandlers(ctx: Context) {
       const ext = IMAGE_TYPES[file.type];
       if (!ext) return json({ error: 'Use a JPEG, PNG, WebP, GIF or AVIF image.' }, 415);
       if (file.size > MAX_IMAGE_BYTES) return json({ error: 'Images must be under 4 MB.' }, 413);
-      const base = file.name.replace(/\.[^.]*$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'image';
+      const base =
+        file.name
+          .replace(/\.[^.]*$/, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '') || 'image';
       const key = await media.put(file, `${base}.${ext}`);
       return json({ url: `${ctx.apiPath}/media/${key}` });
     },

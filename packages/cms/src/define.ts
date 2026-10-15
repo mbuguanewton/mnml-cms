@@ -10,10 +10,7 @@ type Scalar = string | number | boolean | null;
  * a comparison (`gt`, `gte`, `lt`, `lte`, numbers only) or `{ empty }` (no value, text or items).
  */
 export type Condition =
-  | Scalar
-  | readonly Scalar[]
-  | { not: Scalar | readonly Scalar[] }
-  | { gt?: number; gte?: number; lt?: number; lte?: number; empty?: boolean };
+  Scalar | readonly Scalar[] | { not: Scalar | readonly Scalar[] } | { gt?: number; gte?: number; lt?: number; lte?: number; empty?: boolean };
 /** Show a field only while its sibling fields (same entry, group, item or block) match; every key must. */
 export type ShowIf = Record<string, Condition>;
 
@@ -39,12 +36,12 @@ export type ArrayField<F extends Fields = Fields> = Base & { type: 'array'; fiel
 export type GroupField<F extends Fields = Fields> = Base & { type: 'group'; fields: F };
 
 /** One kind of section inside a `blocks` field. Build it with `block()`. */
-export type Block<F extends Fields = Fields> = { label: string; fields: F };
+export type Block<F extends Fields = Fields> = { label: string; fields: F; description?: string };
 /**
  * A list where each item is one of several kinds of block, each with its own fields. Items are stored
- * as `{ kind: 'hero', …fields }`, so reading one narrows by `kind`. `itemLabel` names the field shown as a row's title.
+ * as `{ kind: 'hero', …fields }`, so reading one narrows by `kind`. `itemLabel` names the field shown as a row's title; `addLabel` is the text of the add button (default: "Add" and the field's label, singular).
  */
-export type BlocksField<B extends Record<string, Block> = Record<string, Block>> = Base & { type: 'blocks'; blocks: B; itemLabel?: string };
+export type BlocksField<B extends Record<string, Block> = Record<string, Block>> = Base & { type: 'blocks'; blocks: B; itemLabel?: string; addLabel?: string };
 
 export type Field =
   | TextField
@@ -97,7 +94,8 @@ export type EntryOf<F extends Fields> = { [K in keyof F]: ValueOf<F[K]> };
 
 type Opts = Omit<Base, 'label'>;
 
-export const block = <F extends Fields>(label: string, fields: F): Block<F> => ({ label, fields });
+/** One kind of section for `fields.blocks()`. `description` is a one-line hint shown in the picker. */
+export const block = <F extends Fields>(label: string, fields: F, o: { description?: string } = {}): Block<F> => ({ label, fields, ...o });
 
 export type SeoField = GroupField<{ title: TextField; description: TextareaField; image: ImageField }>;
 
@@ -127,7 +125,7 @@ export const fields = {
     ...o,
   }),
   /** A list of sections, each one of the `blocks` (made with `block()`), keyed by the `kind` stored with it. */
-  blocks: <const B extends Record<string, Block>>(label: string, blocks: B, o: Opts & { itemLabel?: string } = {}): BlocksField<B> => {
+  blocks: <const B extends Record<string, Block>>(label: string, blocks: B, o: Opts & { itemLabel?: string; addLabel?: string } = {}): BlocksField<B> => {
     if (Object.keys(blocks).length === 0) throw new Error(`"${label}": blocks needs at least one block.`);
     for (const [k, b] of Object.entries(blocks)) {
       if ('kind' in b.fields) throw new Error(`"${label}": block "${k}" has a field named "kind", which is reserved.`);
@@ -156,6 +154,11 @@ export type Singleton<F extends Fields = Fields, D = NoDerived> = {
   kind: 'singleton';
   label: string;
   preview?: string;
+  /**
+   * Edits autosave as a draft and go live with Publish, like collection entries. Off by default:
+   * a singleton's Save publishes straight away.
+   */
+  drafts?: boolean;
   fields: F;
   derived?: DerivedFns<F, D>;
 };
@@ -319,7 +322,8 @@ export function withDefaults<F extends Fields>(fields: F, data: unknown): EntryO
     if (v === undefined) out[k] = emptyValue(f);
     else if (f.type === 'array' && Array.isArray(v)) out[k] = v.map((item) => withDefaults(f.fields, item));
     // A block whose kind is no longer in the config is dropped.
-    else if (f.type === 'blocks' && Array.isArray(v)) out[k] = v.flatMap((item) => (isBlockOf(f, item) ? [{ kind: item.kind, ...withDefaults(f.blocks[item.kind].fields, item) }] : []));
+    else if (f.type === 'blocks' && Array.isArray(v))
+      out[k] = v.flatMap((item) => (isBlockOf(f, item) ? [{ kind: item.kind, ...withDefaults(f.blocks[item.kind].fields, item) }] : []));
     else if (f.type === 'group') out[k] = withDefaults(f.fields, v);
     else if (f.type === 'image') out[k] = toImage(v);
     else out[k] = v;

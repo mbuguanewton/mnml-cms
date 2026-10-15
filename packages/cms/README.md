@@ -120,7 +120,9 @@ sections: fields.blocks('Sections', {
 }),
 ```
 
-Editors pick a block to add and see only its fields. Each stored item carries its block's key as `kind`, and
+Editors add a section from one "Add section" button that opens a list of the blocks (with a search box once
+there are more than eight), and see only that block's fields. `block(label, fields, { description })` adds a one-line
+hint to the list, and `fields.blocks(…, { addLabel })` renames the button. Each stored item carries its block's key as `kind`, and
 reading narrows by it: `section.kind === 'hero'` gives `section.image`. `kind` is reserved, so no block can have
 a field of that name. A stored item whose `kind` is no longer in the config is dropped on read, so removing
 a block from the config removes it from the entries the next time they are saved.
@@ -198,15 +200,35 @@ and pages stay static for everyone else. Saving revalidates the whole site by de
 ## Drafts and publishing
 
 Collection entries are drafts or published, shown in the admin as a dot: green (published), grey (draft), or
-orange over green (published, with saved changes that aren't live yet).
+orange over green (published, with changes that aren't live yet).
 
-- **Save draft** keeps the edits off the site. On a published entry they are stored as pending changes and the
-  live version stays as it was.
-- **Publish** makes the form the live version.
+Edits to an existing entry **autosave** about a second and a half after you stop typing ("Saving…" / "Saved" in
+the header), so there is no save button for drafts:
+
+- **Publish** makes the draft the live version.
+- **Discard changes** (in the "⋮" menu) throws the unpublished changes away and brings back the live version.
 - **Unpublish** (in the "⋮" menu) takes a published entry off the site; its content becomes a draft.
 
+A new entry has nothing to autosave into yet: **Create draft** stores it (or **Publish** goes live straight away),
+and it autosaves from then on.
+
+Autosave only stores valid data. While a field is invalid or a required one is empty, the header says
+"Not saved: <field>: <problem>" and the edits since the last good state are only in the browser (leaving the
+page warns first). Publish can therefore never fail on a stored draft.
+
+If someone else changed the entry since you opened it, autosave stops and asks you to reload instead of
+overwriting their version.
+
 The public readers (`listEntries`, `getEntry`, `listSlugs`) only return published entries, so a draft is a 404
-on your site; editors still see it in live preview. Singletons are always live.
+on your site; editors see their autosaved draft in live preview, and anywhere on the site while Draft Mode is on
+for that entry (until they press "Exit preview").
+
+Singletons are always live by default: their Save publishes straight away. Give one `drafts: true` to make it
+behave like a collection entry, with autosave, Publish and Discard changes:
+
+```ts
+settings: singleton({ label: 'Settings', drafts: true, fields: { /* … */ } }),
+```
 
 ## Extending the editor
 

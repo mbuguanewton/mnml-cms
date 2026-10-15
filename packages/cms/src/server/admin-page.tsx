@@ -17,6 +17,8 @@ import { LoginForm } from '../admin/login-form.js';
 import { AdminNav, type NavGroup } from '../admin/nav.js';
 import { bodyClass, cardClass } from '../admin/styles.js';
 import { isAdmin } from './auth.js';
+import { revOf } from './rev.js';
+import { SINGLETON_SLUG } from './store.js';
 import type { Context } from './context.js';
 
 type Props = { params: Promise<{ path?: string[] }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
@@ -25,8 +27,13 @@ type AnyEntry = Record<string, unknown>;
 /** The entry's derived values as display strings, shown read-only in the form (see `derive()` for placement). */
 function derivedRows(def: Singleton | Collection, entry: AnyEntry | null) {
   if (!entry) return [];
-  const show = (v: unknown) => (v == null || v === '' ? '—' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : typeof v === 'object' ? JSON.stringify(v) : String(v));
-  const spaced = (k: string) => k.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase()).replace(/ ([A-Z])/g, (m) => m.toLowerCase());
+  const show = (v: unknown) =>
+    v == null || v === '' ? '—' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  const spaced = (k: string) =>
+    k
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/^./, (c) => c.toUpperCase())
+      .replace(/ ([A-Z])/g, (m) => m.toLowerCase());
   return Object.entries(def.derived ?? {}).map(([key, fn]) => {
     const meta = fn as { label?: string; after?: string };
     return { key, label: meta.label ?? spaced(key), after: meta.after, value: show(entry[key]) };
@@ -58,6 +65,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       // A custom adapter with a `loginUrl` signs in on your own page.
       if (adapter?.loginUrl) redirect(adapter.loginUrl);
       if (await isAdmin(ctx)) redirect(adminPath);
+      const query = await searchParams;
       const brand = await brandName();
       // Laid out with inline styles on purpose: this page must look right even when the host's Tailwind
       // build hasn't generated the admin's newest classes yet (e.g. a dev server that wasn't restarted).
@@ -84,7 +92,14 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         >
           <title>{`Sign in — ${brand}`}</title>
           {/* Decorative: a soft accent glow, and a dashed grid that fades out toward the edges. */}
-          <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(48rem 24rem at 50% 0%, color-mix(in srgb, var(--mnml-accent) 80%, transparent), transparent)' }} />
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: 'radial-gradient(48rem 24rem at 50% 0%, color-mix(in srgb, var(--mnml-accent) 80%, transparent), transparent)',
+            }}
+          />
           <div aria-hidden style={gridLayer(`linear-gradient(90deg, ${line} 1px, transparent 1px)`, '40px auto', 'to bottom')} />
           <div aria-hidden style={gridLayer(`linear-gradient(${line} 1px, transparent 1px)`, 'auto 40px', 'to right')} />
           <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, width: '100%', maxWidth: 384 }}>
@@ -122,8 +137,10 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
               }}
             >
               <h1 style={{ fontSize: 20, fontWeight: 600, fontFamily: 'inherit', margin: 0 }}>Welcome back</h1>
-              <p style={{ margin: '4px 0 24px', color: 'var(--mnml-text-mute)' }}>{adapter ? 'Sign in to continue.' : 'Enter the admin password to continue.'}</p>
-              {adapter ? adapter.login : <LoginForm />}
+              <p style={{ margin: '4px 0 24px', color: 'var(--mnml-text-mute)' }}>
+                {adapter ? 'Sign in to continue.' : 'Enter the admin password to continue.'}
+              </p>
+              {adapter ? adapter.login : <LoginForm error={typeof query.error === 'string' ? query.error : undefined} />}
             </div>
             <Link href="/" className="no-underline hover:text-mnml-text" style={{ color: 'var(--mnml-text-mute)' }}>
               ← Back to site
@@ -165,8 +182,14 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const icon = (key: string, def: Singleton | Collection) =>
       options.icons?.[key as keyof C] ?? (def.kind === 'singleton' ? <SettingsIcon /> : <FileTextIcon />);
     const groups: NavGroup[] = [
-      { title: 'Singletons', items: defs.filter(([, d]) => d.kind === 'singleton').map(([k, d]) => ({ href: `${adminPath}/${k}`, label: d.label, icon: icon(k, d) })) },
-      { title: 'Collections', items: defs.filter(([, d]) => d.kind === 'collection').map(([k, d]) => ({ href: `${adminPath}/${k}`, label: d.label, icon: icon(k, d) })) },
+      {
+        title: 'Singletons',
+        items: defs.filter(([, d]) => d.kind === 'singleton').map(([k, d]) => ({ href: `${adminPath}/${k}`, label: d.label, icon: icon(k, d) })),
+      },
+      {
+        title: 'Collections',
+        items: defs.filter(([, d]) => d.kind === 'collection').map(([k, d]) => ({ href: `${adminPath}/${k}`, label: d.label, icon: icon(k, d) })),
+      },
     ];
     for (const p of options.pages ?? []) {
       const title = p.group ?? 'Tools';
@@ -194,14 +217,35 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     if (def.kind === 'singleton') {
       if (sub) notFound();
       const stored = (await store.getSingleton(key as never, { drafts: false })) as AnyEntry | null;
-      const entry = stored ?? withDefaults(def.fields, {});
-      return <EntryForm schemaKey={key} schema={plainDef(def)} initial={fieldsOnly(def, entry as AnyEntry)} derived={derivedRows(def, stored)} refOptions={await refOptions(def)} crumbs={[home, { label: def.label }]} />;
+      // With drafts on, the autosaved draft replaces the live version in the form.
+      const pending = def.drafts ? ((await store.getPending(key, SINGLETON_SLUG)) as AnyEntry | undefined) : undefined;
+      const entry = pending ? (withDefaults(def.fields, pending) as AnyEntry) : (stored ?? withDefaults(def.fields, {}));
+      return (
+        <EntryForm
+          schemaKey={key}
+          schema={plainDef(def)}
+          initial={fieldsOnly(def, entry as AnyEntry)}
+          hasPending={pending !== undefined}
+          rev={revOf(def, pending ?? stored)}
+          derived={derivedRows(def, stored)}
+          refOptions={await refOptions(def)}
+          crumbs={[home, { label: def.label }]}
+        />
+      );
     }
 
     const listCrumb = { label: def.label, href: `${adminPath}/${key}` };
     if (!sub) return collectionList(key, def);
     if (sub === 'new') {
-      return <EntryForm schemaKey={key} schema={plainDef(def)} initial={withDefaults(def.fields, {})} refOptions={await refOptions(def)} crumbs={[home, listCrumb, { label: 'New' }]} />;
+      return (
+        <EntryForm
+          schemaKey={key}
+          schema={plainDef(def)}
+          initial={withDefaults(def.fields, {})}
+          refOptions={await refOptions(def)}
+          crumbs={[home, listCrumb, { label: 'New' }]}
+        />
+      );
     }
 
     const entry = (await store.getEntry(key as never, sub, { drafts: false, all: true })) as AnyEntry | null;
@@ -219,6 +263,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         slug={sub}
         initial={fieldsOnly(def, pending ? (withDefaults(def.fields, pending) as AnyEntry) : entry)}
         hasPending={pending !== undefined}
+        rev={revOf(def, pending ?? entry)}
         derived={derivedRows(def, entry)}
         status={status}
         refOptions={await refOptions(def)}
@@ -252,7 +297,10 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     };
     for (const [key, def] of defs) {
       if (def.kind === 'singleton') {
-        scan(await store.getSingleton(key as never, { drafts: false }), { group: key, entry: def.label, href: `${adminPath}/${key}` });
+        const use = { group: key, entry: def.label, href: `${adminPath}/${key}` };
+        scan(await store.getSingleton(key as never, { drafts: false }), use);
+        const pending = def.drafts ? await store.getPending(key, SINGLETON_SLUG) : undefined;
+        if (pending !== undefined) scan(pending, { ...use, pending: true });
         continue;
       }
       const items = (await store.listEntries(key as never, { drafts: false, all: true } as never)) as { slug: string; entry: AnyEntry }[];
@@ -334,7 +382,13 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                   g.files.length,
                 ),
               )}
-              {unused.length > 0 && section('Unused', 'Not used by any entry. Safe to delete.', unused.map((f) => card(f)), unused.length)}
+              {unused.length > 0 &&
+                section(
+                  'Unused',
+                  'Not used by any entry. Safe to delete.',
+                  unused.map((f) => card(f)),
+                  unused.length,
+                )}
             </>
           )}
         </main>
@@ -377,11 +431,14 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
   async function collectionList(key: string, def: Collection) {
     // Columns: the title field, the slug, and the first date field if there is one (newest first).
     const dateField = Object.entries(def.fields).find(([, f]) => f.type === 'date')?.[0];
-    const items = (await store.listEntries(key as never, {
-      drafts: false,
-      all: true,
-      ...(dateField && { orderBy: dateField, order: 'desc' }),
-    } as never)) as { slug: string; entry: AnyEntry; status: EntryStatus }[];
+    const items = (await store.listEntries(
+      key as never,
+      {
+        drafts: false,
+        all: true,
+        ...(dateField && { orderBy: dateField, order: 'desc' }),
+      } as never,
+    )) as { slug: string; entry: AnyEntry; status: EntryStatus }[];
     const pending = await store.listPending(key);
     const cols = dateField ? 4 : 3;
     return (
