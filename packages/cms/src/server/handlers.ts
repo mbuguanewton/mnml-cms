@@ -2,15 +2,16 @@ import 'server-only';
 import { revalidatePath } from 'next/cache';
 import { cookies, draftMode } from 'next/headers';
 import { after } from 'next/server';
-import type { EntryInput, Invalid, PreviewResult, SaveResult } from '../api.js';
+import type { AutosaveInput, AutosaveResult, EntryInput, Invalid, PreviewResult, SaveResult } from '../api.js';
 import { objectSchema, previewPath, slugSchema } from '../define.js';
 import { checkPassword, clearFailures, clientIp, isAdmin, lockedFor, recordFailure, sessionVersion, signOutEverywhere, type PasswordAuth } from './auth.js';
 import type { Change, Context } from './context.js';
 import { SESSION_COOKIE, sessionCookieOptions } from './session.js';
+import { revOf } from './rev.js';
 import { PREVIEW_COOKIE, SINGLETON_SLUG } from './store.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
-//   POST: login · logout · logout-all · save · delete · preview · preview/exit · upload · media/delete
+//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · upload · media/delete
 //   GET:  media/<key> (uploaded images, public)
 
 // No SVG: it can carry scripts. Vercel caps function request bodies at 4.5 MB.
@@ -142,7 +143,58 @@ export function createHandlers(ctx: Context) {
                 ? 'Published. The site is updated.'
                 : 'Saved. The site is updated.',
         redirect: isNew ? `${adminPath}/${v.key}/${v.slug}?created=1` : undefined,
+        rev: revOf(ctx.config[v.key], v.data),
       } satisfies SaveResult);
+    },
+
+    /**
+     * Keeps the form's current (valid) data as the entry's draft, so the live version only changes on Publish.
+     * A published entry's draft is stored beside it; an entry that was never published is just updated.
+     * Refuses when the stored entry has changed since the form loaded it (`rev`).
+     */
+    async autosave(request) {
+      if (!(await isAdmin(ctx))) return unauthorized();
+      const input = (await request.json()) as AutosaveInput;
+      const v = validate(ctx, input);
+      if (!v.ok) return json(v satisfies AutosaveResult);
+      const def = ctx.config[v.key];
+      const isCollection = def.kind === 'collection';
+      if (def.kind === 'collection' ? input.mode !== 'update' : !def.drafts) {
+        return json({ ok: false, message: 'Autosave is not available for this content.', errors: {} } satisfies AutosaveResult);
+      }
+      const live = await store.getRow(v.key, v.slug);
+      if (isCollection && !live) return json({ ok: false, message: 'This entry no longer exists.', errors: {} } satisfies AutosaveResult);
+      const current = (await store.getPending(v.key, v.slug)) ?? live?.data;
+      if (input.rev !== revOf(def, current)) {
+        return json({ ok: false, conflict: true, message: 'Changed somewhere else. Reload to see the latest version.', errors: {} } satisfies AutosaveResult);
+      }
+      const rev = revOf(def, v.data);
+      let changes = false;
+      if (live?.status === 'draft') {
+        await store.upsert(v.key, v.slug, v.data, 'draft');
+      } else if (live && revOf(def, live.data) === rev) {
+        // Edited back to the live version: nothing left to publish.
+        await store.removePending(v.key, v.slug);
+      } else {
+        await store.savePending(v.key, v.slug, v.data);
+        changes = true;
+      }
+      // A preview copy of the unsaved form would shadow the draft.
+      await store.removeDraft(v.key, v.slug);
+      return json({ ok: true, rev, changes } satisfies AutosaveResult);
+    },
+
+    /** Throws away an entry's unpublished changes, going back to the live version. */
+    async discard(request) {
+      if (!(await isAdmin(ctx))) return unauthorized();
+      const { key, slug } = await request.json();
+      const def = typeof key === 'string' && Object.hasOwn(ctx.config, key) ? ctx.config[key] : undefined;
+      if (!def) return json({ ok: false, message: 'Unknown entry.' }, 400);
+      const at = def.kind === 'singleton' ? SINGLETON_SLUG : slug;
+      if (typeof at !== 'string') return json({ ok: false, message: 'Unknown entry.' }, 400);
+      await store.removePending(key, at);
+      await store.removeDraft(key, at);
+      return json({ ok: true });
     },
 
     async delete(request) {

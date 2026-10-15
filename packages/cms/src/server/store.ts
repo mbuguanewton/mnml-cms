@@ -81,6 +81,9 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
     const isPreview = p?.key === key && p.slug === slug;
     const draft = isPreview ? await readRow(draftKey(key), slug) : undefined;
     if (draft) return draft.data;
+    // Autosaved edits to the entry being previewed.
+    const pending = isPreview ? await readRow(pendingKey(key), slug) : undefined;
+    if (pending) return pending.data;
     const row = await readRow(key, slug);
     return row && (row.status === 'published' || o?.all || isPreview) ? row.data : undefined;
   }
@@ -107,7 +110,7 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
       // In preview, the draft replaces its saved entry (even an unpublished one), or shows up if the entry is new.
       const p = await previewing(o);
       if (p?.key === key) {
-        const draft = await readRow(draftKey(key), p.slug);
+        const draft = (await readRow(draftKey(key), p.slug)) ?? (await readRow(pendingKey(key), p.slug));
         if (draft !== undefined) {
           const saved = (await readRow(key, p.slug))?.status as EntryStatus | undefined;
           const prev = items.get(p.slug);
@@ -133,6 +136,9 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
     async listSlugs(key: CollectionKey<C>, o?: Pick<ReadOptions, 'all'>) {
       return (await readRows(key)).filter((r) => r.status === 'published' || o?.all).map((r) => r.slug);
     },
+
+    /** The stored row of an entry (live, or a never-published draft), or undefined. */
+    getRow: (key: string, slug: string) => readRow(key, slug),
 
     /** The saved status of a collection entry, or null if it doesn't exist. */
     async getStatus(key: string, slug: string): Promise<EntryStatus | null> {

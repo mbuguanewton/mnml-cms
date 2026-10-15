@@ -153,6 +153,11 @@ export type Singleton<F extends Fields = Fields, D = NoDerived> = {
   kind: 'singleton';
   label: string;
   preview?: string;
+  /**
+   * Edits autosave as a draft and go live with Publish, like collection entries. Off by default:
+   * a singleton's Save publishes straight away.
+   */
+  drafts?: boolean;
   fields: F;
   derived?: DerivedFns<F, D>;
 };

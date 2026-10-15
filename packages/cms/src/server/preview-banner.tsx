@@ -14,7 +14,7 @@ export function createPreviewBanner(apiPath: string) {
     return (
       <div className="mnml-root sticky top-0 z-50 flex items-center justify-center gap-3 bg-mnml-warn px-4 py-2 text-sm text-mnml-on-warn [font-family:ui-sans-serif,system-ui,sans-serif]">
         <EyeIcon className="size-4" />
-        <span>Preview: unsaved changes are shown. Visitors see the saved version.</span>
+        <span>Preview: unpublished changes are shown. Visitors see the published version.</span>
         <form action={`${apiPath}/preview/exit`} method="post">
           <button type="submit" className="cursor-pointer rounded-[6px] bg-mnml-bg/70 px-2.5 py-1 font-medium hover:bg-mnml-bg">
             Exit preview

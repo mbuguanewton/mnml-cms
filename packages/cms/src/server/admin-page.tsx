@@ -17,6 +17,8 @@ import { LoginForm } from '../admin/login-form.js';
 import { AdminNav, type NavGroup } from '../admin/nav.js';
 import { bodyClass, cardClass } from '../admin/styles.js';
 import { isAdmin } from './auth.js';
+import { revOf } from './rev.js';
+import { SINGLETON_SLUG } from './store.js';
 import type { Context } from './context.js';
 
 type Props = { params: Promise<{ path?: string[] }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
@@ -214,12 +216,16 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     if (def.kind === 'singleton') {
       if (sub) notFound();
       const stored = (await store.getSingleton(key as never, { drafts: false })) as AnyEntry | null;
-      const entry = stored ?? withDefaults(def.fields, {});
+      // With drafts on, the autosaved draft replaces the live version in the form.
+      const pending = def.drafts ? ((await store.getPending(key, SINGLETON_SLUG)) as AnyEntry | undefined) : undefined;
+      const entry = pending ? (withDefaults(def.fields, pending) as AnyEntry) : (stored ?? withDefaults(def.fields, {}));
       return (
         <EntryForm
           schemaKey={key}
           schema={plainDef(def)}
           initial={fieldsOnly(def, entry as AnyEntry)}
+          hasPending={pending !== undefined}
+          rev={revOf(def, pending ?? stored)}
           derived={derivedRows(def, stored)}
           refOptions={await refOptions(def)}
           crumbs={[home, { label: def.label }]}
@@ -256,6 +262,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         slug={sub}
         initial={fieldsOnly(def, pending ? (withDefaults(def.fields, pending) as AnyEntry) : entry)}
         hasPending={pending !== undefined}
+        rev={revOf(def, pending ?? entry)}
         derived={derivedRows(def, entry)}
         status={status}
         refOptions={await refOptions(def)}
@@ -289,7 +296,10 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     };
     for (const [key, def] of defs) {
       if (def.kind === 'singleton') {
-        scan(await store.getSingleton(key as never, { drafts: false }), { group: key, entry: def.label, href: `${adminPath}/${key}` });
+        const use = { group: key, entry: def.label, href: `${adminPath}/${key}` };
+        scan(await store.getSingleton(key as never, { drafts: false }), use);
+        const pending = def.drafts ? await store.getPending(key, SINGLETON_SLUG) : undefined;
+        if (pending !== undefined) scan(pending, { ...use, pending: true });
         continue;
       }
       const items = (await store.listEntries(key as never, { drafts: false, all: true } as never)) as { slug: string; entry: AnyEntry }[];

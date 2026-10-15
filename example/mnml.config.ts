@@ -19,6 +19,7 @@ export default config({
   home: singleton({
     label: 'Home page',
     preview: '/',
+    drafts: true,
     fields: {
       hero: fields.group('Hero', {
         eyebrow: fields.text('Eyebrow'),
