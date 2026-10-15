@@ -44,7 +44,10 @@ export function RichTextEditor({ value, onChange, invalid }: { value: JSONConten
   });
 
   return (
-    <div aria-invalid={invalid} className="rounded-[6px] border border-mnml-line bg-mnml-bg focus-within:border-mnml-text-mute/50 aria-invalid:border-mnml-danger">
+    <div
+      aria-invalid={invalid}
+      className="rounded-[6px] border border-mnml-line bg-mnml-bg focus-within:border-mnml-text-mute/50 aria-invalid:border-mnml-danger"
+    >
       {editor && <Toolbar editor={editor} extra={config?.tools ?? noTools} />}
       <EditorContent editor={editor} />
     </div>
@@ -56,10 +59,7 @@ const noTools: EditorTool[] = [];
 function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
   const { apiPath, alert } = useAdmin();
   // The heading extension's levels (1–4 by default; a site can change them), or none if it was removed.
-  const levels = useMemo(
-    () => (editor.extensionManager.extensions.find((e) => e.name === 'heading')?.options.levels as Level[] | undefined) ?? [],
-    [editor],
-  );
+  const levels = useMemo(() => (editor.extensionManager.extensions.find((e) => e.name === 'heading')?.options.levels as Level[] | undefined) ?? [], [editor]);
   const hasQuote = useMemo(() => editor.extensionManager.extensions.some((e) => e.name === 'blockquote'), [editor]);
   const s = useEditorState({
     editor,
@@ -102,7 +102,9 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
 
   type Tool = { name: string; icon: React.ReactNode; label: string; active?: boolean; disabled?: boolean; run: () => void };
   const own = (group?: EditorTool['group']): Tool[] =>
-    extra.filter((t) => t.group === group).map((t) => ({ name: `extra:${t.name}`, icon: t.icon, label: t.label, ...s.extra[t.name], run: () => t.run(editor) }));
+    extra
+      .filter((t) => t.group === group)
+      .map((t) => ({ name: `extra:${t.name}`, icon: t.icon, label: t.label, ...s.extra[t.name], run: () => t.run(editor) }));
   const buttons = (tools: Tool[]) => tools.map((t) => <ToolButton key={t.name} {...t} />);
 
   const history: Tool[] = [
@@ -182,7 +184,20 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
   );
 }
 
-function ToolButton({ icon, label, active, disabled, run }: { name: string; icon: React.ReactNode; label: string; active?: boolean; disabled?: boolean; run: () => void }) {
+function ToolButton({
+  icon,
+  label,
+  active,
+  disabled,
+  run,
+}: {
+  name: string;
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+  run: () => void;
+}) {
   return (
     <button
       type="button"

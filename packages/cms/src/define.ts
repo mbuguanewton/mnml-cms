@@ -10,10 +10,7 @@ type Scalar = string | number | boolean | null;
  * a comparison (`gt`, `gte`, `lt`, `lte`, numbers only) or `{ empty }` (no value, text or items).
  */
 export type Condition =
-  | Scalar
-  | readonly Scalar[]
-  | { not: Scalar | readonly Scalar[] }
-  | { gt?: number; gte?: number; lt?: number; lte?: number; empty?: boolean };
+  Scalar | readonly Scalar[] | { not: Scalar | readonly Scalar[] } | { gt?: number; gte?: number; lt?: number; lte?: number; empty?: boolean };
 /** Show a field only while its sibling fields (same entry, group, item or block) match; every key must. */
 export type ShowIf = Record<string, Condition>;
 
@@ -319,7 +316,8 @@ export function withDefaults<F extends Fields>(fields: F, data: unknown): EntryO
     if (v === undefined) out[k] = emptyValue(f);
     else if (f.type === 'array' && Array.isArray(v)) out[k] = v.map((item) => withDefaults(f.fields, item));
     // A block whose kind is no longer in the config is dropped.
-    else if (f.type === 'blocks' && Array.isArray(v)) out[k] = v.flatMap((item) => (isBlockOf(f, item) ? [{ kind: item.kind, ...withDefaults(f.blocks[item.kind].fields, item) }] : []));
+    else if (f.type === 'blocks' && Array.isArray(v))
+      out[k] = v.flatMap((item) => (isBlockOf(f, item) ? [{ kind: item.kind, ...withDefaults(f.blocks[item.kind].fields, item) }] : []));
     else if (f.type === 'group') out[k] = withDefaults(f.fields, v);
     else if (f.type === 'image') out[k] = toImage(v);
     else out[k] = v;

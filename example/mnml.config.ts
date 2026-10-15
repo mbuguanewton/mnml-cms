@@ -9,11 +9,7 @@ export default config({
       tagline: fields.text('Tagline'),
       footer: fields.group('Footer', {
         note: fields.text('Note', { help: 'Shown next to the copyright line.' }),
-        links: fields.array(
-          'Links',
-          { label: fields.text('Label', { required: true }), url: fields.url('URL', { required: true }) },
-          { itemLabel: 'label' },
-        ),
+        links: fields.array('Links', { label: fields.text('Label', { required: true }), url: fields.url('URL', { required: true }) }, { itemLabel: 'label' }),
       }),
     },
     derived: {

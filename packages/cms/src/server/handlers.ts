@@ -13,7 +13,6 @@ import { PREVIEW_COOKIE, SINGLETON_SLUG } from './store.js';
 //   POST: login · logout · logout-all · save · delete · preview · preview/exit · upload · media/delete
 //   GET:  media/<key> (uploaded images, public)
 
-
 // No SVG: it can carry scripts. Vercel caps function request bodies at 4.5 MB.
 const IMAGE_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -56,13 +55,14 @@ function validate(ctx: Context, input: EntryInput): Invalid | { ok: true; key: s
 function changed(ctx: Context, change: Change) {
   (ctx.options.revalidate ?? (() => revalidatePath('/', 'layout')))(change);
   const onChange = ctx.options.onChange;
-  if (onChange) after(async () => {
-    try {
-      await onChange(change);
-    } catch (e) {
-      console.error('cms onChange failed:', e);
-    }
-  });
+  if (onChange)
+    after(async () => {
+      try {
+        await onChange(change);
+      } catch (e) {
+        console.error('cms onChange failed:', e);
+      }
+    });
 }
 
 export function createHandlers(ctx: Context) {
@@ -202,7 +202,12 @@ export function createHandlers(ctx: Context) {
       const ext = IMAGE_TYPES[file.type];
       if (!ext) return json({ error: 'Use a JPEG, PNG, WebP, GIF or AVIF image.' }, 415);
       if (file.size > MAX_IMAGE_BYTES) return json({ error: 'Images must be under 4 MB.' }, 413);
-      const base = file.name.replace(/\.[^.]*$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'image';
+      const base =
+        file.name
+          .replace(/\.[^.]*$/, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '') || 'image';
       const key = await media.put(file, `${base}.${ext}`);
       return json({ url: `${ctx.apiPath}/media/${key}` });
     },

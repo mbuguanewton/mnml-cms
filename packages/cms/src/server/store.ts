@@ -101,7 +101,8 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
       type E = EntryFor<C, K>;
       const items = new Map<string, Item<unknown>>();
       for (const r of await readRows(key)) {
-        if (r.status === 'published' || o.all) items.set(r.slug, { slug: r.slug, entry: r.data, status: r.status as EntryStatus, createdAt: r.createdAt, updatedAt: r.updatedAt });
+        if (r.status === 'published' || o.all)
+          items.set(r.slug, { slug: r.slug, entry: r.data, status: r.status as EntryStatus, createdAt: r.createdAt, updatedAt: r.updatedAt });
       }
       // In preview, the draft replaces its saved entry (even an unpublished one), or shows up if the entry is new.
       const p = await previewing(o);
@@ -110,7 +111,13 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
         if (draft !== undefined) {
           const saved = (await readRow(key, p.slug))?.status as EntryStatus | undefined;
           const prev = items.get(p.slug);
-          items.set(p.slug, { slug: p.slug, entry: draft.data, status: saved ?? 'draft', createdAt: prev?.createdAt ?? null, updatedAt: prev?.updatedAt ?? null });
+          items.set(p.slug, {
+            slug: p.slug,
+            entry: draft.data,
+            status: saved ?? 'draft',
+            createdAt: prev?.createdAt ?? null,
+            updatedAt: prev?.updatedAt ?? null,
+          });
         }
       }
       const withData = [...items.values()].map((i) => ({ ...i, entry: withDerived(config[key], withDefaults(config[key].fields, i.entry)) as E }));

@@ -35,7 +35,19 @@ type Props = {
   actions?: React.ReactNode;
 };
 
-export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug, notice, crumbs, status: savedStatus, hasPending = false, derived = [], refOptions = {}, actions }: Props) {
+export function EntryForm({
+  schemaKey,
+  schema: def,
+  initial,
+  slug: existingSlug,
+  notice,
+  crumbs,
+  status: savedStatus,
+  hasPending = false,
+  derived = [],
+  refOptions = {},
+  actions,
+}: Props) {
   const { post } = useAdmin();
   const router = useRouter();
   const fields: Fields = def.fields;
@@ -52,13 +64,18 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
 
   // Like Sanity's field groups: an "All fields" tab, plus one tab per `group` field that shows only
   // that group. Fields outside any group are under "General". No tab bar without a group.
-  const groupKeys = Object.entries(fields).filter(([, f]) => f.type === 'group' && isVisible(f, data)).map(([k]) => k);
+  const groupKeys = Object.entries(fields)
+    .filter(([, f]) => f.type === 'group' && isVisible(f, data))
+    .map(([k]) => k);
   const hasLoose = Object.values(fields).some((f) => f.type !== 'group' && isVisible(f, data));
-  const tabs = groupKeys.length === 0 ? [] : [
-    { id: ALL, label: 'All fields' },
-    ...(hasLoose ? [{ id: GENERAL, label: 'General' }] : []),
-    ...groupKeys.map((k) => ({ id: k, label: fields[k].label })),
-  ];
+  const tabs =
+    groupKeys.length === 0
+      ? []
+      : [
+          { id: ALL, label: 'All fields' },
+          ...(hasLoose ? [{ id: GENERAL, label: 'General' }] : []),
+          ...groupKeys.map((k) => ({ id: k, label: fields[k].label })),
+        ];
   const [pickedTab, setTab] = useState(ALL);
   // The picked tab can vanish when its group is hidden by a showIf.
   const tab = tabs.some((t) => t.id === pickedTab) ? pickedTab : ALL;
@@ -132,7 +149,9 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
       <label htmlFor="f-slug" className={labelClass}>
         Slug
       </label>
-      <p className="-mt-1 text-mnml-text-mute">{mode === 'update' ? 'The URL is fixed once an entry is created.' : 'Used in the URL. Filled in from the title.'}</p>
+      <p className="-mt-1 text-mnml-text-mute">
+        {mode === 'update' ? 'The URL is fixed once an entry is created.' : 'Used in the URL. Filled in from the title.'}
+      </p>
       <input
         id="f-slug"
         className={`${inputClass} [font-family:ui-monospace,monospace] text-xs read-only:bg-mnml-panel read-only:text-mnml-text-soft`}
@@ -228,24 +247,29 @@ export function EntryForm({ schemaKey, schema: def, initial, slug: existingSlug,
                         }`}
                       >
                         {t.label}
-                        {errorTabs.has(t.id) && <span role="img" aria-label="Has errors" className="size-1.5 rounded-full bg-mnml-danger ring-2 ring-mnml-bg/60" />}
+                        {errorTabs.has(t.id) && (
+                          <span role="img" aria-label="Has errors" className="size-1.5 rounded-full bg-mnml-danger ring-2 ring-mnml-bg/60" />
+                        )}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-              {Object.entries(fields).filter(([k]) => inTab(k)).map(([k, f]) => (
-                <div key={k} className="contents">
-                  <FieldRenderer field={f} value={data[k]} onChange={(v) => set(k, v)} path={k} errors={errors} siblings={data} />
-                  {def.kind === 'collection' && k === def.titleField && slugField}
-                  {derived.filter((d) => d.after === k).map((d) => (
-                    <DerivedRow key={d.key} label={d.label} value={d.value} />
-                  ))}
-                </div>
-              ))}
-              {(tab === ALL || tab === GENERAL) && derived.filter((d) => !d.after || !(d.after in fields)).map((d) => (
-                <DerivedRow key={d.key} label={d.label} value={d.value} />
-              ))}
+              {Object.entries(fields)
+                .filter(([k]) => inTab(k))
+                .map(([k, f]) => (
+                  <div key={k} className="contents">
+                    <FieldRenderer field={f} value={data[k]} onChange={(v) => set(k, v)} path={k} errors={errors} siblings={data} />
+                    {def.kind === 'collection' && k === def.titleField && slugField}
+                    {derived
+                      .filter((d) => d.after === k)
+                      .map((d) => (
+                        <DerivedRow key={d.key} label={d.label} value={d.value} />
+                      ))}
+                  </div>
+                ))}
+              {(tab === ALL || tab === GENERAL) &&
+                derived.filter((d) => !d.after || !(d.after in fields)).map((d) => <DerivedRow key={d.key} label={d.label} value={d.value} />)}
             </div>
           </div>
           {showPreview && (

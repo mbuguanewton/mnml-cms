@@ -25,8 +25,13 @@ type AnyEntry = Record<string, unknown>;
 /** The entry's derived values as display strings, shown read-only in the form (see `derive()` for placement). */
 function derivedRows(def: Singleton | Collection, entry: AnyEntry | null) {
   if (!entry) return [];
-  const show = (v: unknown) => (v == null || v === '' ? '—' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : typeof v === 'object' ? JSON.stringify(v) : String(v));
-  const spaced = (k: string) => k.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase()).replace(/ ([A-Z])/g, (m) => m.toLowerCase());
+  const show = (v: unknown) =>
+    v == null || v === '' ? '—' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  const spaced = (k: string) =>
+    k
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/^./, (c) => c.toUpperCase())
+      .replace(/ ([A-Z])/g, (m) => m.toLowerCase());
   return Object.entries(def.derived ?? {}).map(([key, fn]) => {
     const meta = fn as { label?: string; after?: string };
     return { key, label: meta.label ?? spaced(key), after: meta.after, value: show(entry[key]) };
@@ -84,7 +89,14 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         >
           <title>{`Sign in — ${brand}`}</title>
           {/* Decorative: a soft accent glow, and a dashed grid that fades out toward the edges. */}
-          <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(48rem 24rem at 50% 0%, color-mix(in srgb, var(--mnml-accent) 80%, transparent), transparent)' }} />
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: 'radial-gradient(48rem 24rem at 50% 0%, color-mix(in srgb, var(--mnml-accent) 80%, transparent), transparent)',
+            }}
+          />
           <div aria-hidden style={gridLayer(`linear-gradient(90deg, ${line} 1px, transparent 1px)`, '40px auto', 'to bottom')} />
           <div aria-hidden style={gridLayer(`linear-gradient(${line} 1px, transparent 1px)`, 'auto 40px', 'to right')} />
           <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, width: '100%', maxWidth: 384 }}>
@@ -122,7 +134,9 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
               }}
             >
               <h1 style={{ fontSize: 20, fontWeight: 600, fontFamily: 'inherit', margin: 0 }}>Welcome back</h1>
-              <p style={{ margin: '4px 0 24px', color: 'var(--mnml-text-mute)' }}>{adapter ? 'Sign in to continue.' : 'Enter the admin password to continue.'}</p>
+              <p style={{ margin: '4px 0 24px', color: 'var(--mnml-text-mute)' }}>
+                {adapter ? 'Sign in to continue.' : 'Enter the admin password to continue.'}
+              </p>
               {adapter ? adapter.login : <LoginForm />}
             </div>
             <Link href="/" className="no-underline hover:text-mnml-text" style={{ color: 'var(--mnml-text-mute)' }}>
@@ -165,8 +179,14 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const icon = (key: string, def: Singleton | Collection) =>
       options.icons?.[key as keyof C] ?? (def.kind === 'singleton' ? <SettingsIcon /> : <FileTextIcon />);
     const groups: NavGroup[] = [
-      { title: 'Singletons', items: defs.filter(([, d]) => d.kind === 'singleton').map(([k, d]) => ({ href: `${adminPath}/${k}`, label: d.label, icon: icon(k, d) })) },
-      { title: 'Collections', items: defs.filter(([, d]) => d.kind === 'collection').map(([k, d]) => ({ href: `${adminPath}/${k}`, label: d.label, icon: icon(k, d) })) },
+      {
+        title: 'Singletons',
+        items: defs.filter(([, d]) => d.kind === 'singleton').map(([k, d]) => ({ href: `${adminPath}/${k}`, label: d.label, icon: icon(k, d) })),
+      },
+      {
+        title: 'Collections',
+        items: defs.filter(([, d]) => d.kind === 'collection').map(([k, d]) => ({ href: `${adminPath}/${k}`, label: d.label, icon: icon(k, d) })),
+      },
     ];
     for (const p of options.pages ?? []) {
       const title = p.group ?? 'Tools';
@@ -195,13 +215,30 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       if (sub) notFound();
       const stored = (await store.getSingleton(key as never, { drafts: false })) as AnyEntry | null;
       const entry = stored ?? withDefaults(def.fields, {});
-      return <EntryForm schemaKey={key} schema={plainDef(def)} initial={fieldsOnly(def, entry as AnyEntry)} derived={derivedRows(def, stored)} refOptions={await refOptions(def)} crumbs={[home, { label: def.label }]} />;
+      return (
+        <EntryForm
+          schemaKey={key}
+          schema={plainDef(def)}
+          initial={fieldsOnly(def, entry as AnyEntry)}
+          derived={derivedRows(def, stored)}
+          refOptions={await refOptions(def)}
+          crumbs={[home, { label: def.label }]}
+        />
+      );
     }
 
     const listCrumb = { label: def.label, href: `${adminPath}/${key}` };
     if (!sub) return collectionList(key, def);
     if (sub === 'new') {
-      return <EntryForm schemaKey={key} schema={plainDef(def)} initial={withDefaults(def.fields, {})} refOptions={await refOptions(def)} crumbs={[home, listCrumb, { label: 'New' }]} />;
+      return (
+        <EntryForm
+          schemaKey={key}
+          schema={plainDef(def)}
+          initial={withDefaults(def.fields, {})}
+          refOptions={await refOptions(def)}
+          crumbs={[home, listCrumb, { label: 'New' }]}
+        />
+      );
     }
 
     const entry = (await store.getEntry(key as never, sub, { drafts: false, all: true })) as AnyEntry | null;
@@ -334,7 +371,13 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                   g.files.length,
                 ),
               )}
-              {unused.length > 0 && section('Unused', 'Not used by any entry. Safe to delete.', unused.map((f) => card(f)), unused.length)}
+              {unused.length > 0 &&
+                section(
+                  'Unused',
+                  'Not used by any entry. Safe to delete.',
+                  unused.map((f) => card(f)),
+                  unused.length,
+                )}
             </>
           )}
         </main>
@@ -377,11 +420,14 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
   async function collectionList(key: string, def: Collection) {
     // Columns: the title field, the slug, and the first date field if there is one (newest first).
     const dateField = Object.entries(def.fields).find(([, f]) => f.type === 'date')?.[0];
-    const items = (await store.listEntries(key as never, {
-      drafts: false,
-      all: true,
-      ...(dateField && { orderBy: dateField, order: 'desc' }),
-    } as never)) as { slug: string; entry: AnyEntry; status: EntryStatus }[];
+    const items = (await store.listEntries(
+      key as never,
+      {
+        drafts: false,
+        all: true,
+        ...(dateField && { orderBy: dateField, order: 'desc' }),
+      } as never,
+    )) as { slug: string; entry: AnyEntry; status: EntryStatus }[];
     const pending = await store.listPending(key);
     const cols = dateField ? 4 : 3;
     return (

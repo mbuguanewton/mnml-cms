@@ -62,11 +62,25 @@ export function LivePreview({ input, onClose }: { input: EntryInput; onClose: ()
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-mnml-line px-3">
         <span className="min-w-0 flex-1 truncate [font-family:ui-monospace,monospace] text-xs text-mnml-text-soft">{url ?? 'Preview'}</span>
         {status.kind === 'loading' && <LoaderCircleIcon className="size-3.5 animate-spin text-mnml-text-mute" aria-label="Updating" />}
-        <Button type="button" variant="ghost" size="icon-xs" aria-label="Reload" title="Reload" disabled={!url} onClick={() => frame.current?.contentWindow?.location.reload()}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Reload"
+          title="Reload"
+          disabled={!url}
+          onClick={() => frame.current?.contentWindow?.location.reload()}
+        >
           <RotateCwIcon />
         </Button>
         {url && (
-          <a href={url} target="_blank" aria-label="Open in new tab" title="Open in new tab" className="mnml-state flex size-6 items-center justify-center rounded-[6px] text-mnml-text-soft">
+          <a
+            href={url}
+            target="_blank"
+            aria-label="Open in new tab"
+            title="Open in new tab"
+            className="mnml-state flex size-6 items-center justify-center rounded-[6px] text-mnml-text-soft"
+          >
             <ExternalLinkIcon className="size-3.5" />
           </a>
         )}
@@ -83,7 +97,9 @@ export function LivePreview({ input, onClose }: { input: EntryInput; onClose: ()
         {url ? (
           <iframe ref={frame} src={url} title="Live preview" onLoad={onLoad} className="absolute inset-0 size-full bg-mnml-bg" />
         ) : (
-          <p className="p-6 text-center text-mnml-text-mute">{status.kind === 'paused' ? 'Fill in the required fields to see the page.' : 'Loading preview…'}</p>
+          <p className="p-6 text-center text-mnml-text-mute">
+            {status.kind === 'paused' ? 'Fill in the required fields to see the page.' : 'Loading preview…'}
+          </p>
         )}
       </div>
     </aside>

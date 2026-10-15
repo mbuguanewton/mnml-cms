@@ -46,13 +46,33 @@ export function LoginForm() {
           className={inputClass}
           style={{ height: 40 }}
         />
-        <label htmlFor={showId} className="text-mnml-text-soft select-none" style={{ display: 'flex', width: 'fit-content', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-          <input id={showId} type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} style={{ width: 16, height: 16, accentColor: 'var(--mnml-primary)' }} />
+        <label
+          htmlFor={showId}
+          className="text-mnml-text-soft select-none"
+          style={{ display: 'flex', width: 'fit-content', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+        >
+          <input
+            id={showId}
+            type="checkbox"
+            checked={show}
+            onChange={(e) => setShow(e.target.checked)}
+            style={{ width: 16, height: 16, accentColor: 'var(--mnml-primary)' }}
+          />
           Show password
         </label>
       </div>
       {error && (
-        <p id="login-error" role="alert" style={{ margin: 0, padding: '8px 12px', borderRadius: 6, color: 'var(--mnml-danger)', background: 'color-mix(in srgb, var(--mnml-danger) 10%, transparent)' }}>
+        <p
+          id="login-error"
+          role="alert"
+          style={{
+            margin: 0,
+            padding: '8px 12px',
+            borderRadius: 6,
+            color: 'var(--mnml-danger)',
+            background: 'color-mix(in srgb, var(--mnml-danger) 10%, transparent)',
+          }}
+        >
           {error}
         </p>
       )}

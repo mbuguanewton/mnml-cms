@@ -75,7 +75,15 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
     case 'image':
       return <ImageInput id={id} value={value as ImageValue | null} onChange={onChange} />;
     case 'boolean':
-      return <input id={id} type="checkbox" className="size-4 self-start accent-mnml-primary" checked={value === true} onChange={(e) => onChange(e.target.checked)} />;
+      return (
+        <input
+          id={id}
+          type="checkbox"
+          className="size-4 self-start accent-mnml-primary"
+          checked={value === true}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+      );
     case 'number':
       return (
         <input
@@ -92,7 +100,13 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
       );
     case 'select':
       return (
-        <select id={id} className={`${inputClass} w-auto`} aria-invalid={invalid} value={(value as string | null) ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+        <select
+          id={id}
+          className={`${inputClass} w-auto`}
+          aria-invalid={invalid}
+          value={(value as string | null) ?? ''}
+          onChange={(e) => onChange(e.target.value || null)}
+        >
           <option value="">—</option>
           {field.options.map((o) => (
             <option key={o} value={o}>
@@ -116,19 +130,51 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
   }
 }
 
-function GroupInput({ field, value, onChange, path, errors }: { field: GroupField; value: Record<string, unknown>; onChange: (v: unknown) => void; path: string; errors: Errors }) {
+function GroupInput({
+  field,
+  value,
+  onChange,
+  path,
+  errors,
+}: {
+  field: GroupField;
+  value: Record<string, unknown>;
+  onChange: (v: unknown) => void;
+  path: string;
+  errors: Errors;
+}) {
   return (
     <fieldset className="flex min-w-0 flex-col gap-4 rounded-[8px] border border-mnml-line px-4 pb-4 pt-3">
       <legend className="px-1 text-sm font-semibold">{field.label}</legend>
       {field.help && <p className="-mt-1 text-mnml-text-mute">{field.help}</p>}
       {Object.entries(field.fields).map(([k, f]) => (
-        <FieldRenderer key={k} field={f} value={value[k]} onChange={(v) => onChange({ ...value, [k]: v })} path={`${path}.${k}`} errors={errors} siblings={value} />
+        <FieldRenderer
+          key={k}
+          field={f}
+          value={value[k]}
+          onChange={(v) => onChange({ ...value, [k]: v })}
+          path={`${path}.${k}`}
+          errors={errors}
+          siblings={value}
+        />
       ))}
     </fieldset>
   );
 }
 
-function ReferenceInput({ id, collection, value, onChange, invalid }: { id: string; collection: string; value: string | null; onChange: (v: unknown) => void; invalid: boolean }) {
+function ReferenceInput({
+  id,
+  collection,
+  value,
+  onChange,
+  invalid,
+}: {
+  id: string;
+  collection: string;
+  value: string | null;
+  onChange: (v: unknown) => void;
+  invalid: boolean;
+}) {
   const options = use(RefOptionsContext)[collection] ?? [];
   // Keep a current value that is no longer offered (e.g. since unpublished) visible instead of silently dropping it.
   const missing = value && !options.some((o) => o.slug === value);
@@ -321,7 +367,15 @@ function ArrayInput({
               {isOpen && (
                 <div className="flex flex-col gap-4 border-t border-mnml-line px-4 py-4 sm:pl-9">
                   {Object.entries(field.fields).map(([k, f]) => (
-                    <FieldRenderer key={k} field={f} value={item[k]} onChange={(v) => update(i, { ...item, [k]: v })} path={`${path}.${i}.${k}`} errors={errors} siblings={item} />
+                    <FieldRenderer
+                      key={k}
+                      field={f}
+                      value={item[k]}
+                      onChange={(v) => update(i, { ...item, [k]: v })}
+                      path={`${path}.${i}.${k}`}
+                      errors={errors}
+                      siblings={item}
+                    />
                   ))}
                 </div>
               )}
@@ -339,7 +393,19 @@ function ArrayInput({
 type Block = { kind: string } & Record<string, unknown>;
 
 // Like ArrayInput, but each item is one of the field's blocks: "Add" picks which, and the row shows only that block's fields.
-function BlocksInput({ field, value, onChange, path, errors }: { field: BlocksField; value: Block[]; onChange: (v: unknown) => void; path: string; errors: Errors }) {
+function BlocksInput({
+  field,
+  value,
+  onChange,
+  path,
+  errors,
+}: {
+  field: BlocksField;
+  value: Block[];
+  onChange: (v: unknown) => void;
+  path: string;
+  errors: Errors;
+}) {
   const { open, setOpen, update, move, remove } = useListEditing(value, onChange);
   const add = (kind: string) => {
     onChange([...value, { kind, ...withDefaults(field.blocks[kind].fields, {}) }]);
@@ -359,7 +425,12 @@ function BlocksInput({ field, value, onChange, path, errors }: { field: BlocksFi
           return (
             <li key={i}>
               <div className={`flex items-center gap-1 pr-1.5 ${isOpen ? 'bg-mnml-panel' : 'hover:bg-mnml-panel'}`}>
-                <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : i)} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left">
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => setOpen(isOpen ? null : i)}
+                  className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
+                >
                   <ChevronRightIcon className={`size-4 shrink-0 text-mnml-text-mute transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                   <span className="shrink-0 rounded-[4px] bg-mnml-surface px-1.5 py-0.5 text-xs text-mnml-text-mute">{def.label}</span>
                   <span className="truncate">{title}</span>
@@ -379,7 +450,15 @@ function BlocksInput({ field, value, onChange, path, errors }: { field: BlocksFi
                 <div className="flex flex-col gap-4 border-t border-mnml-line px-4 py-4 sm:pl-9">
                   {Object.keys(def.fields).length === 0 && <p className="text-mnml-text-mute">Nothing to edit.</p>}
                   {Object.entries(def.fields).map(([k, f]) => (
-                    <FieldRenderer key={k} field={f} value={item[k]} onChange={(v) => update(i, { ...item, [k]: v })} path={`${path}.${i}.${k}`} errors={errors} siblings={item} />
+                    <FieldRenderer
+                      key={k}
+                      field={f}
+                      value={item[k]}
+                      onChange={(v) => update(i, { ...item, [k]: v })}
+                      path={`${path}.${i}.${k}`}
+                      errors={errors}
+                      siblings={item}
+                    />
                   ))}
                 </div>
               )}

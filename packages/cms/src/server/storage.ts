@@ -49,7 +49,9 @@ export function drizzleStorage(getDb: () => Database, tableName?: string): Entry
       return rows.length > 0;
     },
     async remove(collection, slug) {
-      await getDb().delete(entries).where(and(eq(entries.collection, collection), eq(entries.slug, slug)));
+      await getDb()
+        .delete(entries)
+        .where(and(eq(entries.collection, collection), eq(entries.slug, slug)));
     },
   };
 }
