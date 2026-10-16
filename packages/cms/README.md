@@ -230,6 +230,47 @@ behave like a collection entry, with autosave, Publish and Discard changes:
 settings: singleton({ label: 'Settings', drafts: true, fields: { /* … */ } }),
 ```
 
+## Moving content between databases
+
+Seed production from your dev content, or pull production back into dev. `@n3wtou/mnml-cms/sync` exports
+the content to a JSON file, compares a file with a database, and writes the difference. It runs from a plain
+script (no Next.js): the example has one, `scripts/content.ts`, behind `pnpm db:export`, `db:import` and
+`db:sync`.
+
+```sh
+pnpm db:export                                                # DATABASE_URL → mnml-content.json
+pnpm db:import mnml-content.json --mode add                   # dry run against DATABASE_URL
+pnpm db:sync --from DATABASE_URL --to PROD_DATABASE_URL --mode add --apply --yes
+pnpm db:sync --from-env-file .env.local --to-env-file .env.production --mode add --apply --yes
+```
+
+`--env`, `--from` and `--to` name an environment variable that holds a database URL (put them in `.env.local`),
+so the URL itself never lands in your shell history. `--env-file`, `--from-env-file` and `--to-env-file` read the
+variable (still `DATABASE_URL` unless you also name one) from a file instead, so dev and prod can each keep their
+own `DATABASE_URL`. The file is only read, never loaded into the environment, and a `BLOB_READ_WRITE_TOKEN` in
+the target's file is used for the missing-image check. The modes:
+
+| `--mode`    | What it does                                                                  |
+| ----------- | ----------------------------------------------------------------------------- |
+| `add`       | Adds the entries the target doesn't have. Existing ones are left alone.       |
+| `overwrite` | Also replaces entries that differ.                                            |
+| `replace`   | Makes the target match the file, deleting entries the file doesn't have.      |
+
+Every run is a dry run that lists what would change, until you add `--apply`. Writing to a database that isn't
+on localhost also needs `--yes`. Before it writes, it saves the target's current content to
+`.mnml-backups/` (undo with `db:import <backup> --mode replace`). Entries are checked against your config first,
+and nothing is written if any don't fit. The same database can't be both source and target, and running an
+import twice is safe.
+
+What travels: the config's collections and singletons, and their autosaved drafts. What doesn't: sign-in state,
+preview copies, and **uploaded images**. The script lists any file the content uses that the target's media
+storage doesn't have, so an image uploaded in dev is broken in prod until the file is copied. Writes aren't
+atomic (the Neon HTTP driver has no transactions): if a run stops halfway, run it again. `createdAt` and
+`updatedAt` on the target are set when written.
+
+The same functions are exported for your own scripts: `exportContent`, `planImport`, `applyImport`,
+`describePlan`, `missingMedia`, and `drizzleStorage` / `neonDatabase` to connect.
+
 ## Extending the editor
 
 Add Tiptap extensions and toolbar buttons with one config file and a 3-line client file. The editor runs in
