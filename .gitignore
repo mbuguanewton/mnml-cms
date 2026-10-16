@@ -7,5 +7,7 @@ dist
 .env.local
 next-env.d.ts
 .mnml-uploads
+.mnml-backups
+mnml-content*.json
 TODO.md
 PUBLISH.md

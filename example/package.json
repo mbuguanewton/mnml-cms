@@ -7,7 +7,10 @@
     "build": "next build",
     "typecheck": "tsc --noEmit",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "db:export": "tsx scripts/content.ts export",
+    "db:import": "tsx scripts/content.ts import",
+    "db:sync": "tsx scripts/content.ts sync"
   },
   "dependencies": {
     "@n3wtou/mnml-cms": "workspace:*",

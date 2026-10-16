@@ -1,18 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
+import { canonical } from '../canonical.js';
 import { withDefaults, type Collection, type Singleton } from '../define.js';
-
-// Postgres jsonb reorders object keys, so sort them before hashing.
-const canonical = (v: unknown): unknown =>
-  Array.isArray(v)
-    ? v.map(canonical)
-    : v && typeof v === 'object'
-      ? Object.fromEntries(
-          Object.entries(v)
-            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-            .map(([k, x]) => [k, canonical(x)]),
-        )
-      : v;
 
 /**
  * A short fingerprint of an entry's content (missing fields filled in first). The admin form holds the one it

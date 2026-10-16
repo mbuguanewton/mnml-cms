@@ -39,6 +39,10 @@
       "types": "./dist/server/db.d.ts",
       "default": "./dist/server/db.js"
     },
+    "./sync": {
+      "types": "./dist/sync.d.ts",
+      "default": "./dist/sync.js"
+    },
     "./schema": {
       "types": "./dist/server/db.d.ts",
       "default": "./dist/server/db.js"
