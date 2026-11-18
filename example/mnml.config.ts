@@ -110,7 +110,16 @@ export default config({
       summary: fields.textarea('Summary'),
       // New posts start dated today (worked out when the form opens) and filed under news.
       date: fields.date('Date', { default: () => new Date().toISOString().slice(0, 10) }),
-      category: fields.select('Category', ['news', 'guide', 'opinion'] as const, { default: 'news' }),
+      // Labels for the admin; entries store the values ('news', 'guide', 'opinion').
+      category: fields.select(
+        'Category',
+        [
+          { value: 'news', label: 'News' },
+          { value: 'guide', label: 'How-to guide' },
+          { value: 'opinion', label: 'Opinion' },
+        ] as const,
+        { default: 'news' },
+      ),
       // A moment in time, stored in UTC; editors see it in their own time zone.
       publishedAt: fields.datetime('Published at', { default: () => new Date().toISOString() }),
       author: fields.reference('Author', 'authors'),

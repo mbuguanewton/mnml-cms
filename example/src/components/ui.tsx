@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import type { ImageValue } from '@n3wtou/mnml-cms';
+import { selectLabel, type ImageValue } from '@n3wtou/mnml-cms';
+import config from '../../mnml.config';
 
 /** The site's time zone, for showing stored (UTC) datetimes. */
 export const SITE_TIME_ZONE = 'Europe/London';
@@ -18,8 +19,10 @@ export function Picture({ image, className = '' }: { image: ImageValue | null; c
   return <img src={image.url} alt={image.alt} className={`object-cover ${className}`} />;
 }
 
+/** A post's category, shown by its label from the config. */
 export function Category({ children }: { children: string | null }) {
-  return children ? <span className="text-xs font-semibold uppercase tracking-widest text-accent">{children}</span> : null;
+  const label = selectLabel(config.posts.fields.category, children);
+  return label ? <span className="text-xs font-semibold uppercase tracking-widest text-accent">{label}</span> : null;
 }
 
 type PostItem = {

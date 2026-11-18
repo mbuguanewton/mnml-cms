@@ -96,7 +96,7 @@ Options for every field: `{ required, help }`.
 | `datetime` | a moment in UTC, `string \| null` (`2026-11-18T14:30:00.000Z`); edited in the editor's time zone |
 | `number(label, { min, max, step })` | `number \| null` |
 | `boolean` | `boolean` (default `false`) |
-| `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null` |
+| `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null`; options can have labels (below) |
 | `reference(label, 'authors')` | slug of a published entry in that collection, `string \| null`; resolve with `cms.getEntry` |
 | `image` | `{ url, alt } \| null` |
 | `richtext` | Tiptap JSON; render with `<RichText>` |
@@ -127,6 +127,19 @@ hint to the list, and `fields.blocks(…, { addLabel })` renames the button. Eac
 reading narrows by it: `section.kind === 'hero'` gives `section.image`. `kind` is reserved, so no block can have
 a field of that name. A stored item whose `kind` is no longer in the config is dropped on read, so removing
 a block from the config removes it from the entries the next time they are saved.
+
+### Select labels
+
+Options are values, or values with the label the admin shows. The two forms mix, and the value type is still
+inferred from the values:
+
+```ts
+category: fields.select('Category', ['news', { value: 'guide', label: 'How-to guide' }] as const), // 'news' | 'guide' | null
+```
+
+Entries, `default`, `showIf` and validation all use the values. To show the label on the site, use
+`selectLabel(field, value)` with the field from your config: `selectLabel(config.posts.fields.category, post.category)`.
+A value listed twice throws when the config loads.
 
 ### Dates and times
 
