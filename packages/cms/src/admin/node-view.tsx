@@ -3,6 +3,7 @@
 import type { Extensions } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { PencilIcon } from 'lucide-react';
+import { useRef } from 'react';
 import type { EditorTool, NodeFormConfig } from '../editor.js';
 import { useForm } from './form-context.js';
 
@@ -11,9 +12,17 @@ function NodeFormView({ node, updateAttributes, selected, config }: NodeViewProp
   const form = useForm();
   const attrs = node.attrs as Record<string, unknown>;
   const preview = config.preview?.(attrs);
+  // One form at a time: a double-click on the Edit button also clicks it twice.
+  const open = useRef(false);
   const edit = async () => {
-    const next = await form({ title: config.title, fields: config.fields, values: attrs, submitLabel: 'Save' });
-    if (next) updateAttributes(next);
+    if (open.current) return;
+    open.current = true;
+    try {
+      const next = await form({ title: config.title, fields: config.fields, values: attrs, submitLabel: 'Save' });
+      if (next) updateAttributes(next);
+    } finally {
+      open.current = false;
+    }
   };
   return (
     <NodeViewWrapper
@@ -33,6 +42,7 @@ function NodeFormView({ node, updateAttributes, selected, config }: NodeViewProp
         aria-label={`Edit ${config.label}`}
         title="Edit"
         onClick={() => void edit()}
+        onDoubleClick={(e) => e.stopPropagation()}
         className="mnml-state ml-1 flex size-6 shrink-0 items-center justify-center rounded-[6px] text-mnml-text-soft"
       >
         <PencilIcon />

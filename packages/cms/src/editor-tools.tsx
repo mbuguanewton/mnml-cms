@@ -46,13 +46,13 @@ export type NodeToolOptions<F extends NodeFormFields> = {
   preview?: (attrs: EntryOf<F>) => string;
 };
 
+/** The tool `tools.node()` returns: an `EditorTool` whose `run` can be awaited. */
+export type NodeTool = Omit<EditorTool, 'run' | 'nodeForm'> & { run: (editor: Editor, admin: ToolContext) => Promise<void>; nodeForm: NodeFormConfig };
+
 /**
  * A button that asks for the node's values in a form, then inserts it. In the admin the node shows as a card;
  * double-click it (or its Edit button) to change the values.
  */
-/** The tool `tools.node()` returns: an `EditorTool` whose `run` can be awaited. */
-export type NodeTool = Omit<EditorTool, 'run' | 'nodeForm'> & { run: (editor: Editor, admin: ToolContext) => Promise<void>; nodeForm: NodeFormConfig };
-
 function node<F extends NodeFormFields>(o: NodeToolOptions<F>): NodeTool {
   const title = o.title ?? o.label;
   return {
