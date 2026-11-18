@@ -14,9 +14,10 @@ function nodeMapping(components: RichTextComponents): Record<string, NodeRendere
   return Object.fromEntries(
     Object.entries(components).map(([name, Component]): [string, NodeRenderer] => [
       name,
+      // The renderer passes [] for leaf nodes (images…); components get no children for those.
       ({ node, children }) => (
         <Component node={node.toJSON() as JSONContent} attrs={node.attrs}>
-          {children}
+          {Array.isArray(children) && children.length === 0 ? undefined : children}
         </Component>
       ),
     ]),
