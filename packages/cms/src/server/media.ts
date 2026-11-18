@@ -10,6 +10,11 @@ import { del, get, list, put } from '@vercel/blob';
  * <apiPath>/media/<key>, so pages never need direct access to the storage.
  * Implement this for any backend (S3, R2, a disk…).
  */
+/** Image types the CMS stores, with their file extension. Shared by uploads and remote imports. */
+export const IMAGE_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
+/** The largest image an editor can upload. */
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
 export type MediaFile = { key: string; size?: number; uploadedAt?: Date };
 
 export type MediaStorage = {

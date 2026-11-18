@@ -7,6 +7,7 @@ import { objectSchema, previewPath, slugSchema } from '../define.js';
 import { checkPassword, clearFailures, clientIp, isAdmin, lockedFor, recordFailure, sessionVersion, signOutEverywhere, type PasswordAuth } from './auth.js';
 import type { Change, Context } from './context.js';
 import { SESSION_COOKIE, sessionCookieOptions } from './session.js';
+import { IMAGE_TYPES, MAX_IMAGE_BYTES } from './media.js';
 import { loadRefOptions } from './ref-options.js';
 import { revOf } from './rev.js';
 import { PREVIEW_COOKIE, SINGLETON_SLUG } from './store.js';
@@ -16,9 +17,6 @@ import { PREVIEW_COOKIE, SINGLETON_SLUG } from './store.js';
 //   GET:  media/<key> (uploaded images, public)
 
 // No SVG: it can carry scripts. Vercel caps function request bodies at 4.5 MB.
-const IMAGE_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
-
 const MEDIA_KEY = /^[\w.\-/]+$/;
 
 const json = (data: unknown, status = 200) => Response.json(data, { status });

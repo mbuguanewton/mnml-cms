@@ -10,6 +10,7 @@ import type { EntryStorage } from './server/storage.js';
 export { drizzleStorage } from './server/storage.js';
 export { neonDatabase } from './server/db.js';
 export { localMedia, vercelBlobMedia, type MediaStorage } from './server/media.js';
+export { importRemoteMedia, mediaImporter, type RemoteMediaOptions, type RemoteMediaResult } from './remote-media.js';
 
 // Autosaved changes to an entry live under `pending:<key>` (see the store).
 const PENDING = 'pending:';

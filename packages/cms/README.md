@@ -349,6 +349,28 @@ atomic (the Neon HTTP driver has no transactions): if a run stops halfway, run i
 The same functions are exported for your own scripts: `exportContent`, `planImport`, `applyImport`,
 `describePlan`, `missingMedia`, and `drizzleStorage` / `neonDatabase` to connect.
 
+### Rehosting images
+
+When content comes from another CMS, its images live on that CMS's CDN (e.g. `cdn.sanity.io`). `mediaImporter`
+copies them into this site's media storage and returns the URL to put in an `image` field:
+
+```ts
+import { mediaImporter, vercelBlobMedia } from '@n3wtou/mnml-cms/sync';
+
+const importImage = mediaImporter(vercelBlobMedia()); // the same storage as the site; pass `apiPath` if not /api/mnml
+const { url } = await importImage('https://cdn.sanity.io/images/…/photo.jpg');
+await storage.upsert('posts', slug, { …post, cover: { url, alt } }, 'published');
+```
+
+- Each source URL is stored once. The file is named after a hash of the URL, so running the script again finds it
+  (through the storage's `list()`, which both built-in storages have) and returns the same URL without downloading.
+  A custom `MediaStorage` without `list()` only avoids repeats within one importer.
+- Only `https://` images (also after redirects) that are JPEG, PNG, WebP, GIF or AVIF, up to 4 MB by default
+  (`maxBytes` to raise it). Anything else throws with the reason.
+- `importRemoteMedia(url, storage)` does a single image; use one `mediaImporter` for a whole run.
+
+The example has a script for it: `pnpm media:import <url…>`.
+
 ## Extending the editor
 
 Add Tiptap extensions and toolbar buttons with one config file and a 3-line client file. The editor runs in
