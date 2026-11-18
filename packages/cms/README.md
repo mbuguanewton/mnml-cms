@@ -413,13 +413,18 @@ type EditorTool = {
   run: (editor: Editor, admin: ToolContext) => void; // admin: form(), confirm(), alert() (see below)
   isActive?: (editor: Editor) => boolean; // shows the button as pressed
   disabled?: (editor: Editor) => boolean;
+  visible?: (editor: Editor) => boolean; // shown only when true
+  context?: string; // a node name: shown in a small toolbar above that node while the cursor is in it
+  builtIn?: boolean; // set on the package's ready-made tools, which come first in their group
   group?: 'format' | 'block' | 'insert'; // toolbar group; left out, a group of its own at the end
 };
 ```
 
 The toolbar is grouped: undo and redo, the text style menu (paragraph, headings, quote), text formatting
 (bold, italic, code), blocks (lists) and inserts (link, image). A tool with a `group` joins that group;
-`tools.underline` and `tools.strike` go in `format`, `tools.horizontalRule` in `insert`.
+`tools.underline` and `tools.strike` go in `format`, `tools.horizontalRule` in `insert`. Within a group, the
+package's ready-made tools (`tools.underline`, `tables.tools`…) come before your own, which keep the order you list
+them in.
 
 **Example: code blocks with syntax highlighting.** StarterKit has a plain code block; swap it for
 [`CodeBlockLowlight`](https://tiptap.dev/docs/editor/extensions/nodes/code-block-lowlight) and add a button.
@@ -455,6 +460,30 @@ highlight on the site with any highlighter (or style as plain code).
 
 The config applies to every rich-text field. It can't be set per field, because extensions and functions can't
 be stored in the schema that is sent to the admin.
+
+### Tables
+
+Tables live in their own entry point, so a site without tables doesn't load the table code. Spread its extensions
+and tools into the editor config:
+
+```tsx
+import { defineEditor } from '@n3wtou/mnml-cms/editor';
+import { tables } from '@n3wtou/mnml-cms/table';
+
+export const editor = defineEditor({
+  extensions: [...tables.extensions],
+  tools: [...tables.tools],
+});
+```
+
+That adds an "Insert table" button (3×3 with a header row, before your own insert buttons). While the cursor is in a
+table, a small toolbar above the table's right end has buttons to add or delete a row or column, toggle the header
+row and delete the table; it hides when the cursor leaves the table or the editor. Row and column buttons act on the
+cell the cursor is in. `<RichText editor={editor}>` renders a plain `<table>` with `<th>` / `<td>` cells (no column
+widths); the admin styles it, and your site styles it like the rest of its prose.
+
+Your own tools can use the same floating toolbar: give a tool `context: 'callout'` and it shows above the nearest
+`callout` node while the cursor is inside it.
 
 ### Nodes with a form
 
@@ -754,6 +783,7 @@ const storage: EntryStorage = {
 | `@n3wtou/mnml-cms/proxy` | `adminProxy` |
 | `@n3wtou/mnml-cms/rich-text` | `RichText` server renderer, `collectReferences` |
 | `@n3wtou/mnml-cms/editor` | `defineEditor`, ready-made `tools` (including `tools.node`, `tools.reference`), `nodeAttributes`, `referenceNode`, `collectReferences`, `RichTextComponents` / `RichTextNodeProps` types (server-safe) |
+| `@n3wtou/mnml-cms/table` | `tables`: table extensions and toolbar buttons for rich text (server-safe) |
 | `@n3wtou/mnml-cms/admin` | UI pieces for extra admin pages, `editorProvider` |
 | `@n3wtou/mnml-cms/db` | Drizzle table for scripts and drizzle-kit |
 | `@n3wtou/mnml-cms/styles.css` | Admin styles and `--mnml-*` variables |

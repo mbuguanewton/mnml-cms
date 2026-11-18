@@ -59,6 +59,10 @@
       "types": "./dist/editor-entry.d.ts",
       "default": "./dist/editor-entry.js"
     },
+    "./table": {
+      "types": "./dist/table-entry.d.ts",
+      "default": "./dist/table-entry.js"
+    },
     "./styles.css": {
       "style": "./styles.css",
       "default": "./styles.css"
@@ -87,6 +91,7 @@
     "@neondatabase/serverless": "^1.2.0",
     "@tiptap/core": "^3.31.4",
     "@tiptap/extension-image": "^3.31.4",
+    "@tiptap/extension-table": "^3.31.4",
     "@tiptap/pm": "^3.31.4",
     "@tiptap/react": "^3.31.4",
     "@tiptap/starter-kit": "^3.31.4",
