@@ -12,6 +12,7 @@ const db = neonDatabase(process.env.DATABASE_URL);
 const text = (t: string) => ({ type: 'text', text: t });
 const p = (...t: string[]) => ({ type: 'paragraph', content: t.map(text) });
 const h2 = (t: string) => ({ type: 'heading', attrs: { level: 2 }, content: [text(t)] });
+const code = (language: string, t: string) => ({ type: 'codeBlock', attrs: { language }, content: [text(t)] });
 const quote = (t: string) => ({ type: 'blockquote', content: [p(t)] });
 const list = (...items: string[]) => ({ type: 'bulletList', content: items.map((i) => ({ type: 'listItem', content: [p(i)] })) });
 const doc = (...content: object[]) => ({ type: 'doc', content });
@@ -81,6 +82,8 @@ const rows = [
         h2('What a single table gives you'),
         list('No migrations when the content model changes.', 'One query shape for every type.', 'A schema that lives in code, next to the pages that use it.'),
         quote('The best schema is the one you can change on a Friday afternoon.'),
+        p('Adding a field is a one-line change to the config:'),
+        code('ts', "summary: fields.textarea('Summary'),"),
         h2('What you give up'),
         p('You cannot join across types in SQL, and you cannot index a field cheaply. For a blog or a brochure site, you will never notice.'),
       ),
