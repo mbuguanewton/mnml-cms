@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, use, useEffect, useRef, useState } from 'react';
+import { createContext, use, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
 import { initialValues, isVisible, type ArrayField, type Block, type BlocksField, type Field, type GroupField, type ImageValue } from '../define.js';
+import { fromLocalInput, toLocalInput } from '../datetime.js';
 import { displayText } from '../text.js';
 import { useMenu } from './action-menu.js';
 import { Button } from './button.js';
@@ -62,6 +63,8 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
           onChange={(e) => onChange(e.target.value || null)}
         />
       );
+    case 'datetime':
+      return <DatetimeInput id={id} value={value as string | null} onChange={onChange} invalid={invalid} />;
     case 'url':
       return (
         <input
@@ -255,6 +258,35 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
           value={value.alt}
           onChange={(e) => onChange({ ...value, alt: e.target.value })}
         />
+      )}
+    </div>
+  );
+}
+
+const noSubscribe = () => () => {};
+const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/** A date and time in the editor's time zone, saved as UTC. */
+function DatetimeInput({ id, value, onChange, invalid }: { id: string; value: string | null; onChange: (v: unknown) => void; invalid: boolean }) {
+  // Local time depends on the browser's time zone, which the server render doesn't know: null there and while
+  // hydrating, then the browser's zone.
+  const zone = useSyncExternalStore(noSubscribe, browserTimeZone, () => null);
+  return (
+    <div className="flex flex-col gap-1">
+      <input
+        id={id}
+        type="datetime-local"
+        className={`${inputClass} w-auto`}
+        aria-invalid={invalid}
+        aria-describedby={zone ? `${id}-zone` : undefined}
+        disabled={!zone}
+        value={zone ? toLocalInput(value) : ''}
+        onChange={(e) => onChange(fromLocalInput(e.target.value))}
+      />
+      {zone && (
+        <p id={`${id}-zone`} className="text-xs text-mnml-text-mute">
+          Times are in {zone}
+        </p>
       )}
     </div>
   );

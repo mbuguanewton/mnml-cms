@@ -93,6 +93,7 @@ Options for every field: `{ required, help }`.
 | --- | --- |
 | `text`, `textarea` | `string` |
 | `date` (`YYYY-MM-DD`), `url` | `string \| null` |
+| `datetime` | a moment in UTC, `string \| null` (`2026-11-18T14:30:00.000Z`); edited in the editor's time zone |
 | `number(label, { min, max, step })` | `number \| null` |
 | `boolean` | `boolean` (default `false`) |
 | `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null` |
@@ -127,6 +128,21 @@ reading narrows by it: `section.kind === 'hero'` gives `section.image`. `kind` i
 a field of that name. A stored item whose `kind` is no longer in the config is dropped on read, so removing
 a block from the config removes it from the entries the next time they are saved.
 
+### Dates and times
+
+`date` is a calendar day (`YYYY-MM-DD`) with no time zone. `datetime` is a moment: it is stored in UTC in one
+format (`2026-11-18T14:30:00.000Z`), so `listEntries({ orderBy })` sorts it in time. The admin shows and edits it in
+the editor's own time zone and names that zone under the input. Values saved through the API need a `Z` or an
+offset (`2026-11-18T17:30+03:00`); they are converted to UTC.
+
+Show it on the site in the zone you choose; the server's zone is usually UTC:
+
+```ts
+new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/London' }).format(new Date(post.publishedAt));
+```
+
+`showIf` can test a `datetime` for a value or `{ empty: true }`; range conditions (`gt`, `lt`…) are for numbers.
+
 ### Default values
 
 `default` sets the value a new entry, array item or block starts with. Pass a value, or a function that returns
@@ -144,7 +160,7 @@ count: fields.number('How many', { default: 3 }),
   missing from stored data still reads as its empty value.
 - A function default runs when the entry form opens. Items and blocks added later in that form start with the
   value from when it opened (functions can't be sent to the browser).
-- `text`, `textarea`, `number`, `boolean`, `select`, `date`, `url`, `reference` and `tags` take a
+- `text`, `textarea`, `number`, `boolean`, `select`, `date`, `datetime`, `url`, `reference` and `tags` take a
   `default`. For a `group`, give its fields defaults.
 
 ### Conditional fields

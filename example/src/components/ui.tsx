@@ -1,6 +1,13 @@
 import Link from 'next/link';
 import type { ImageValue } from '@n3wtou/mnml-cms';
 
+/** The site's time zone, for showing stored (UTC) datetimes. */
+export const SITE_TIME_ZONE = 'Europe/London';
+
+/** A stored datetime as e.g. "18 November 2026 at 14:30" in the site's time zone. */
+export const formatDateTime = (iso: string | null) =>
+  iso ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short', timeZone: SITE_TIME_ZONE }).format(new Date(iso)) : null;
+
 export const formatDate = (d: string | null) =>
   d ? new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : null;
 
