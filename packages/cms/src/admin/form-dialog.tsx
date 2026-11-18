@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { objectSchema, withDefaults } from '../define.js';
+import { initialValues, objectSchema, withDefaults } from '../define.js';
 import type { FormOptions, NodeFormFields, ToolContext } from '../editor.js';
 import { Button } from './button.js';
 import { useAdmin } from './context.js';
@@ -36,8 +36,8 @@ export function FormDialogProvider({ children }: { children: React.ReactNode }) 
       new Promise<Record<string, unknown> | null>((resolve) => {
         settle.current?.(null); // a form is already open: dismiss it
         settle.current = resolve;
-        // Only this form's fields, filled in from the given values.
-        setValues(withDefaults(o.fields, o.values ?? {}) as Record<string, unknown>);
+        // Editing fills in the given values; inserting starts from the fields' defaults.
+        setValues((o.values ? withDefaults(o.fields, o.values) : initialValues(o.fields)) as Record<string, unknown>);
         setErrors({});
         setOpts(o);
       }),

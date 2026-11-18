@@ -17,7 +17,14 @@ export type Condition =
 /** Show a field only while its sibling fields (same entry, group, item or block) match; every key must. */
 export type ShowIf = Record<string, Condition>;
 
-type Base = { label: string; required?: boolean; help?: string; showIf?: ShowIf };
+type Base = {
+  label: string;
+  required?: boolean;
+  help?: string;
+  showIf?: ShowIf;
+  /** The value a new entry, array item or block starts with (a function is called when it's created). Never applied on read. */
+  default?: unknown;
+};
 
 export type TextField = Base & { type: 'text' };
 export type TextareaField = Base & { type: 'textarea' };
@@ -98,7 +105,9 @@ type ValueOf<F> = F extends TextField | TextareaField
 
 export type EntryOf<F extends Fields> = { [K in keyof F]: ValueOf<F[K]> };
 
-type Opts = Omit<Base, 'label'>;
+type Opts = Omit<Base, 'label' | 'default'>;
+/** Options for a field that can start with a value: `default` is the value, or a function that returns it. */
+type WithDefault<V> = Opts & { default?: V | (() => V) };
 
 /** One kind of section for `fields.blocks()`. `description` is a one-line hint shown in the picker. */
 export const block = <F extends Fields>(label: string, fields: F, o: { description?: string } = {}): Block<F> => ({ label, fields, ...o });
@@ -106,20 +115,25 @@ export const block = <F extends Fields>(label: string, fields: F, o: { descripti
 export type SeoField = GroupField<{ title: TextField; description: TextareaField; image: ImageField }>;
 
 export const fields = {
-  text: (label: string, o: Opts = {}): TextField => ({ type: 'text', label, ...o }),
-  textarea: (label: string, o: Opts = {}): TextareaField => ({ type: 'textarea', label, ...o }),
-  date: (label: string, o: Opts = {}): DateField => ({ type: 'date', label, ...o }),
-  url: (label: string, o: Opts = {}): UrlField => ({ type: 'url', label, ...o }),
+  text: (label: string, o: WithDefault<string> = {}): TextField => ({ type: 'text', label, ...o }),
+  textarea: (label: string, o: WithDefault<string> = {}): TextareaField => ({ type: 'textarea', label, ...o }),
+  date: (label: string, o: WithDefault<string> = {}): DateField => ({ type: 'date', label, ...o }),
+  url: (label: string, o: WithDefault<string> = {}): UrlField => ({ type: 'url', label, ...o }),
   image: (label: string, o: Opts = {}): ImageField => ({ type: 'image', label, ...o }),
   richtext: (label: string, o: Opts = {}): RichTextField => ({ type: 'richtext', label, ...o }),
-  tags: (label: string, o: Opts = {}): TagsField => ({ type: 'tags', label, ...o }),
-  boolean: (label: string, o: Opts = {}): BooleanField => ({ type: 'boolean', label, ...o }),
-  number: (label: string, o: Opts & { min?: number; max?: number; step?: number } = {}): NumberField => ({ type: 'number', label, ...o }),
-  select: <const O extends readonly string[]>(label: string, options: O, o: Opts = {}): SelectField<O> => ({ type: 'select', label, options, ...o }),
+  tags: (label: string, o: WithDefault<string[]> = {}): TagsField => ({ type: 'tags', label, ...o }),
+  boolean: (label: string, o: WithDefault<boolean> = {}): BooleanField => ({ type: 'boolean', label, ...o }),
+  number: (label: string, o: WithDefault<number> & { min?: number; max?: number; step?: number } = {}): NumberField => ({ type: 'number', label, ...o }),
+  select: <const O extends readonly string[]>(label: string, options: O, o: WithDefault<NoInfer<O[number]>> = {}): SelectField<O> => ({
+    type: 'select',
+    label,
+    options,
+    ...o,
+  }),
   /** The slug of an entry in `collection` (a key of your config). Only published entries are offered. */
-  reference: (label: string, collection: string, o: Opts = {}): ReferenceField => ({ type: 'reference', label, collection, ...o }),
+  reference: (label: string, collection: string, o: WithDefault<string> = {}): ReferenceField => ({ type: 'reference', label, collection, ...o }),
   /** The slugs of entries in `collection`, in the editor's order. `min` / `max` limit how many; only published entries are offered. */
-  references: (label: string, collection: string, o: Opts & { min?: number; max?: number } = {}): ReferencesField => ({
+  references: (label: string, collection: string, o: WithDefault<string[]> & { min?: number; max?: number } = {}): ReferencesField => ({
     type: 'references',
     label,
     collection,
@@ -256,8 +270,40 @@ export function withDerived<E extends object>(def: Singleton | Collection, entry
 }
 
 /** The definition without its functions, safe to pass to Client Components. */
+/**
+ * The definition without functions, for the admin form in the browser: no `derived`, and function defaults
+ * replaced by their value now (so an item added later in the form starts with the value from when it opened).
+ */
 export function plainDef<T extends Singleton | Collection>(def: T): Omit<T, 'derived'> {
-  return Object.fromEntries(Object.entries(def).filter(([k]) => k !== 'derived')) as Omit<T, 'derived'>;
+  const rest = Object.fromEntries(Object.entries(def).filter(([k]) => k !== 'derived')) as Omit<T, 'derived'>;
+  return { ...rest, fields: resolveDefaults(def.fields) };
+}
+
+/** `fields` with each function `default` called, in groups, arrays and blocks too. */
+function resolveDefaults<F extends Fields>(fields: F): F {
+  const out: Record<string, Field> = {};
+  for (const [k, f] of Object.entries(fields)) {
+    let g: Field = typeof f.default === 'function' ? { ...f, default: (f.default as () => unknown)() } : f;
+    if (g.type === 'group' || g.type === 'array') g = { ...g, fields: resolveDefaults(g.fields) };
+    else if (g.type === 'blocks')
+      g = { ...g, blocks: Object.fromEntries(Object.entries(g.blocks).map(([kind, b]) => [kind, { ...b, fields: resolveDefaults(b.fields) }])) };
+    out[k] = g;
+  }
+  return out as F;
+}
+
+/**
+ * The values a new entry, array item or block starts with: each field's `default` (a function is called now), or
+ * its empty value. Only used when something is created; reads fill in missing fields with `withDefaults` instead.
+ */
+export function initialValues<F extends Fields>(fields: F): EntryOf<F> {
+  const out: Record<string, unknown> = {};
+  for (const [k, f] of Object.entries(fields)) {
+    if (f.type === 'group') out[k] = initialValues(f.fields);
+    else if (f.default !== undefined) out[k] = typeof f.default === 'function' ? (f.default as () => unknown)() : structuredClone(f.default);
+    else out[k] = emptyValue(f);
+  }
+  return out as EntryOf<F>;
 }
 
 /** The public path to preview an entry on, or null if preview is off for it. */

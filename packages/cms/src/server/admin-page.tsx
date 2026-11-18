@@ -2,7 +2,7 @@ import 'server-only';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ExternalLinkIcon, FileTextIcon, ImageIcon, PlusIcon, SettingsIcon } from 'lucide-react';
-import { plainDef, referenceTargets, withDefaults, type Collection, type CmsConfig, type Singleton } from '../define.js';
+import { initialValues, plainDef, referenceTargets, withDefaults, type Collection, type CmsConfig, type Singleton } from '../define.js';
 import { displayText } from '../text.js';
 import type { EntryStatus } from '../api.js';
 import type { RefOptions } from '../admin/fields.js';
@@ -218,7 +218,8 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       const stored = (await store.getSingleton(key as never, { drafts: false })) as AnyEntry | null;
       // With drafts on, the autosaved draft replaces the live version in the form.
       const pending = def.drafts ? ((await store.getPending(key, SINGLETON_SLUG)) as AnyEntry | undefined) : undefined;
-      const entry = pending ? (withDefaults(def.fields, pending) as AnyEntry) : (stored ?? withDefaults(def.fields, {}));
+      // A singleton that was never saved starts like a new entry: with the fields' defaults.
+      const entry = pending ? (withDefaults(def.fields, pending) as AnyEntry) : (stored ?? initialValues(def.fields));
       return (
         <EntryForm
           schemaKey={key}
@@ -240,7 +241,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         <EntryForm
           schemaKey={key}
           schema={plainDef(def)}
-          initial={withDefaults(def.fields, {})}
+          initial={initialValues(def.fields)}
           refOptions={await refOptions(def)}
           crumbs={[home, listCrumb, { label: 'New' }]}
         />
