@@ -127,6 +127,26 @@ reading narrows by it: `section.kind === 'hero'` gives `section.image`. `kind` i
 a field of that name. A stored item whose `kind` is no longer in the config is dropped on read, so removing
 a block from the config removes it from the entries the next time they are saved.
 
+### Default values
+
+`default` sets the value a new entry, array item or block starts with. Pass a value, or a function that returns
+one; it is type-checked against the field (a `select` default must be one of its options).
+
+```ts
+pageType: fields.select('Type', ['page', 'post'] as const, { default: 'page' }),
+featured: fields.boolean('Featured', { default: false }),
+date: fields.date('Date', { default: () => new Date().toISOString().slice(0, 10) }), // today
+count: fields.number('How many', { default: 3 }),
+```
+
+- Defaults only apply when something is created: a new collection entry, a singleton that was never saved, an item
+  added to an array, a block added to a `blocks` field. Reading an existing entry never applies them; a field
+  missing from stored data still reads as its empty value.
+- A function default runs when the entry form opens. Items and blocks added later in that form start with the
+  value from when it opened (functions can't be sent to the browser).
+- `text`, `textarea`, `number`, `boolean`, `select`, `date`, `url`, `reference` and `tags` take a
+  `default`. For a `group`, give its fields defaults.
+
 ### Conditional fields
 
 `showIf` on any field shows it only while its sibling fields (the ones next to it in the same entry, group,

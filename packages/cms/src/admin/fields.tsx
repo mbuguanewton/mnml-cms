@@ -3,7 +3,7 @@
 import { createContext, use, useEffect, useRef, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
-import { isVisible, withDefaults, type ArrayField, type Block, type BlocksField, type Field, type GroupField, type ImageValue } from '../define.js';
+import { initialValues, isVisible, type ArrayField, type Block, type BlocksField, type Field, type GroupField, type ImageValue } from '../define.js';
 import { displayText } from '../text.js';
 import { useMenu } from './action-menu.js';
 import { Button } from './button.js';
@@ -332,7 +332,7 @@ function ArrayInput({
 }) {
   const { open, setOpen, update, move, remove } = useListEditing(value, onChange);
   const add = () => {
-    onChange([...value, withDefaults(field.fields, {})]);
+    onChange([...value, initialValues(field.fields)]);
     setOpen(value.length);
   };
 
@@ -410,7 +410,7 @@ function BlocksInput({
 }) {
   const { open, setOpen, update, move, remove } = useListEditing(value, onChange);
   const add = (kind: string) => {
-    onChange([...value, { kind, ...withDefaults(field.blocks[kind].fields, {}) }]);
+    onChange([...value, { kind, ...initialValues(field.blocks[kind].fields) }]);
     setOpen(value.length);
   };
   // "Sections" → "Add section"

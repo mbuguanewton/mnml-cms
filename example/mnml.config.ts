@@ -79,7 +79,7 @@ export default config({
           text: block('Text', { content: fields.richtext('Content') }),
           latestPosts: block('Latest posts', {
             title: fields.text('Title'),
-            count: fields.number('How many', { min: 1, max: 12, step: 1 }),
+            count: fields.number('How many', { min: 1, max: 12, step: 1, default: 3 }),
           }),
           divider: block('Divider', {}),
         },
@@ -108,8 +108,9 @@ export default config({
     fields: {
       title: fields.text('Title', { required: true }),
       summary: fields.textarea('Summary'),
-      date: fields.date('Date'),
-      category: fields.select('Category', ['news', 'guide', 'opinion'] as const),
+      // New posts start dated today (worked out when the form opens) and filed under news.
+      date: fields.date('Date', { default: () => new Date().toISOString().slice(0, 10) }),
+      category: fields.select('Category', ['news', 'guide', 'opinion'] as const, { default: 'news' }),
       author: fields.reference('Author', 'authors'),
       cover: fields.image('Cover image'),
       content: fields.richtext('Content'),
