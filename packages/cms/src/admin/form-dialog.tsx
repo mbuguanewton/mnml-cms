@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { objectSchema, withDefaults } from '../define.js';
 import type { FormOptions, NodeFormFields, ToolContext } from '../editor.js';
 import { Button } from './button.js';
-import { FieldRenderer, type Errors } from './fields.js';
+import { useAdmin } from './context.js';
+import { FieldRenderer, RefOptionsProvider, type Errors, type RefOptions } from './fields.js';
 import { FormContext } from './form-context.js';
+import { fetchRefOptions } from './ref-options.js';
 
 /** Validates a form's values like an entry's; returns the parsed values, or the errors by field. */
 export function validateForm(
@@ -26,6 +28,8 @@ export function FormDialogProvider({ children }: { children: React.ReactNode }) 
   const [opts, setOpts] = useState<FormOptions<NodeFormFields> | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Errors>({});
+  const [refOptions, setRefOptions] = useState<RefOptions>({});
+  const { post } = useAdmin();
 
   const form = useCallback(
     (o: FormOptions<NodeFormFields>) =>
@@ -39,6 +43,17 @@ export function FormDialogProvider({ children }: { children: React.ReactNode }) 
       }),
     [],
   ) as ToolContext['form'];
+
+  // Reference fields offer published entries, fetched fresh each time a form opens.
+  useEffect(() => {
+    const collections = opts ? [...new Set(Object.values(opts.fields).flatMap((f) => (f.type === 'reference' ? [f.collection] : [])))] : [];
+    if (!collections.length) return;
+    let live = true;
+    void fetchRefOptions(post, collections, true).then((o) => live && setRefOptions(o));
+    return () => {
+      live = false;
+    };
+  }, [opts, post]);
 
   useEffect(() => {
     if (!opts) return;
@@ -92,17 +107,19 @@ export function FormDialogProvider({ children }: { children: React.ReactNode }) 
               </h2>
               {opts.description && <p className="text-mnml-text-soft">{opts.description}</p>}
             </div>
-            {Object.entries(opts.fields).map(([key, field]) => (
-              <FieldRenderer
-                key={key}
-                field={field}
-                value={values[key]}
-                onChange={(v) => setValues((prev) => ({ ...prev, [key]: v }))}
-                path={`mnml-form.${key}`}
-                errors={Object.fromEntries(Object.entries(errors).map(([k, m]) => [`mnml-form.${k}`, m]))}
-                siblings={values}
-              />
-            ))}
+            <RefOptionsProvider value={refOptions}>
+              {Object.entries(opts.fields).map(([key, field]) => (
+                <FieldRenderer
+                  key={key}
+                  field={field}
+                  value={values[key]}
+                  onChange={(v) => setValues((prev) => ({ ...prev, [key]: v }))}
+                  path={`mnml-form.${key}`}
+                  errors={Object.fromEntries(Object.entries(errors).map(([k, m]) => [`mnml-form.${k}`, m]))}
+                  siblings={values}
+                />
+              ))}
+            </RefOptionsProvider>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => close(null)}>
                 Cancel

@@ -19,6 +19,7 @@ import { LoginForm } from '../admin/login-form.js';
 import { AdminNav, type NavGroup } from '../admin/nav.js';
 import { bodyClass, cardClass } from '../admin/styles.js';
 import { isAdmin } from './auth.js';
+import { loadRefOptions } from './ref-options.js';
 import { revOf } from './rev.js';
 import { SINGLETON_SLUG } from './store.js';
 import type { Context } from './context.js';
@@ -167,15 +168,9 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
   };
 
   /** Published entries of every collection that `def`'s reference fields point at, for the pickers. */
-  async function refOptions(def: Singleton | Collection): Promise<RefOptions> {
-    const out: RefOptions = {};
-    for (const target of referenceTargets(def.fields)) {
-      const t = Object.hasOwn(config, target) ? config[target] : undefined;
-      if (t?.kind !== 'collection') continue;
-      const items = (await store.listEntries(target as never, { drafts: false, orderBy: t.titleField } as never)) as { slug: string; entry: AnyEntry }[];
-      out[target] = items.map(({ slug, entry }) => ({ slug, label: displayText(entry[t.titleField]) || slug }));
-    }
-    return out;
+  // A declaration, not a const: it is defined below the `return` above, and only function declarations are hoisted.
+  function refOptions(def: Singleton | Collection): Promise<RefOptions> {
+    return loadRefOptions(ctx, referenceTargets(def.fields));
   }
 
   async function brandName() {

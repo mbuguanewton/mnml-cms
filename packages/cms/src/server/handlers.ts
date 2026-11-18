@@ -7,6 +7,7 @@ import { objectSchema, previewPath, slugSchema } from '../define.js';
 import { checkPassword, clearFailures, clientIp, isAdmin, lockedFor, recordFailure, sessionVersion, signOutEverywhere, type PasswordAuth } from './auth.js';
 import type { Change, Context } from './context.js';
 import { SESSION_COOKIE, sessionCookieOptions } from './session.js';
+import { loadRefOptions } from './ref-options.js';
 import { revOf } from './rev.js';
 import { PREVIEW_COOKIE, SINGLETON_SLUG } from './store.js';
 
@@ -242,6 +243,14 @@ export function createHandlers(ctx: Context) {
     },
 
     /** Deletes a stored file. The admin warns first if entries still use it. */
+    /** Published entries to pick from, for reference pickers outside an entry's own fields (e.g. in rich text). */
+    async references(request) {
+      if (!(await isAdmin(ctx))) return unauthorized();
+      const { collections } = (await request.json().catch(() => ({}))) as { collections?: unknown };
+      if (!Array.isArray(collections) || !collections.every((c) => typeof c === 'string')) return json({ ok: false, message: 'Bad request.' }, 400);
+      return json({ ok: true, options: await loadRefOptions(ctx, collections as string[]) });
+    },
+
     async 'media/delete'(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
       const media = ctx.options.media;
