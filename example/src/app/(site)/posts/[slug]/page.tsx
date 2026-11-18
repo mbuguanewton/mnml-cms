@@ -2,10 +2,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { seoMetadata } from '@n3wtou/mnml-cms';
-import { RichText } from '@n3wtou/mnml-cms/rich-text';
+import { collectReferences, RichText } from '@n3wtou/mnml-cms/rich-text';
 import { cms } from '@/mnml';
 import { editor } from '@/mnml-editor';
-import { Category, Picture, formatDate, formatDateTime } from '@/components/ui';
+import { PostLink } from '@/components/post-link';
+import { Category, Picture, PostCard, formatDate, formatDateTime } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,11 @@ export default async function PostPage({ params }: Props) {
   const post = await cms.getEntry('posts', slug);
   if (!post) notFound();
   const author = post.author ? await cms.getEntry('authors', post.author) : null;
+  // Posts linked from the body (blockLink nodes) and the related posts, each in one query.
+  const linkedSlugs = collectReferences(post.content, ['blockLink']).find((r) => r.collection === 'posts')?.slugs ?? [];
+  const linked = new Map((await cms.getEntries('posts', linkedSlugs)).map((p) => [p.slug, p.entry]));
+  // In the editor's order; unpublished ones are left out.
+  const related = await cms.getEntries('posts', post.related);
   const meta = [formatDate(post.date), post.readingTime && `${post.readingTime} min read`].filter(Boolean).join(' · ');
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
@@ -50,7 +56,24 @@ export default async function PostPage({ params }: Props) {
         )}
       </header>
       {post.cover && <Picture image={post.cover} className="my-10 aspect-[16/9] w-full rounded-xl" />}
-      <RichText content={post.content} editor={editor} className="article mt-10" />
+      <RichText
+        content={post.content}
+        editor={editor}
+        components={{ blockLink: ({ attrs }) => <PostLink slug={String(attrs.slug)} post={linked.get(String(attrs.slug))} /> }}
+        className="article mt-10"
+      />
+      {related.length > 0 && (
+        <section aria-labelledby="related" className="mt-16 border-t border-line pt-10">
+          <h2 id="related" className="font-serif text-2xl font-semibold">
+            Related posts
+          </h2>
+          <div className="mt-6 grid gap-8 sm:grid-cols-2">
+            {related.map((p) => (
+              <PostCard key={p.slug} slug={p.slug} entry={p.entry} />
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, use } from 'react';
+import { createContext, use, useCallback } from 'react';
 import { DialogProvider, useDialogs } from './confirm.js';
 
 type AdminContextValue = { adminPath: string; apiPath: string };
@@ -19,15 +19,19 @@ export function AdminProvider({ value, children }: { value: AdminContextValue; c
 export function useAdmin() {
   const ctx = use(AdminContext);
   const dialogs = useDialogs();
-  async function post<T>(route: string, body: unknown): Promise<T> {
-    const res = await fetch(`${ctx.apiPath}/${route}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok && json.ok === undefined) throw new Error(json.error ?? json.message ?? `Request failed (${res.status})`);
-    return json as T;
-  }
+  // Stable across renders, so effects can depend on it.
+  const post = useCallback(
+    async <T,>(route: string, body: unknown): Promise<T> => {
+      const res = await fetch(`${ctx.apiPath}/${route}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok && json.ok === undefined) throw new Error(json.error ?? json.message ?? `Request failed (${res.status})`);
+      return json as T;
+    },
+    [ctx.apiPath],
+  );
   return { ...ctx, ...dialogs, post };
 }
