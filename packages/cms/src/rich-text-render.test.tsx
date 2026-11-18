@@ -68,6 +68,13 @@ describe('RichText components', () => {
     );
   });
 
+  it('gives leaf nodes no children', () => {
+    let seen: unknown = 'unset';
+    const Img = ({ children }: RichTextNodeProps) => ((seen = children), null);
+    html(<RichText content={doc({ type: 'image', attrs: { src: '/a.png' } })} components={{ image: Img }} />);
+    expect(seen).toBeUndefined();
+  });
+
   it('ignores components for nodes the content does not use or the schema does not have', () => {
     expect(html(<RichText content={doc(p('Hi'))} components={{ youtube: () => <iframe /> }} />)).toBe('<div><p>Hi</p></div>');
   });
