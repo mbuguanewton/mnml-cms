@@ -88,8 +88,9 @@ export default defineConfig({
   run: {
     tasks: {
       // The full check: pre-push (.vite-hooks/pre-push) and GitHub CI both run `vp run ci`.
+      // Build first: the example imports @n3wtou/mnml-cms from its dist, which `vp check` type-checks.
       ci: {
-        command: ['vp check --deny-warnings', 'pnpm build', 'pnpm typecheck', 'vp test run', 'pnpm --filter example build'],
+        command: ['pnpm build', 'vp check --deny-warnings', 'pnpm typecheck', 'vp test run', 'pnpm --filter example build'],
         cache: false,
       },
     },
