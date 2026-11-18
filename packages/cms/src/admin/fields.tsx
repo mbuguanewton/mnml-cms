@@ -598,7 +598,6 @@ function BlocksInput({
 // More than this many blocks and the picker gets a search box.
 const SEARCH_FROM = 8;
 
-/** One "Add" button that opens the list of block kinds, so the form doesn't grow with them. */
 /** An Add control, disabled with the reason once a list field has `max` items. */
 function AddRow({ field, count, children }: { field: Limits; count: number; children: (full: boolean) => React.ReactNode }) {
   const full = field.max !== undefined && count >= field.max;
@@ -610,6 +609,7 @@ function AddRow({ field, count, children }: { field: Limits; count: number; chil
   );
 }
 
+/** One "Add" button that opens the list of block kinds, so the form doesn't grow with them. */
 function BlockPicker({
   blocks,
   label,
