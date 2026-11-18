@@ -356,6 +356,47 @@ highlight on the site with any highlighter (or style as plain code).
 The config applies to every rich-text field. It can't be set per field, because extensions and functions can't
 be stored in the schema that is sent to the admin.
 
+### Custom node rendering
+
+By default `<RichText>` renders every node with its extension's `renderHTML`. To render a node with your own React
+component (an embed, a highlighted code block, a callout, a card for another entry), map its name to a component.
+The component gets the node as Tiptap JSON, its `attrs`, and its rendered content as `children` (none for leaf
+nodes such as images):
+
+```tsx
+// src/components/code-block.tsx
+import type { RichTextNodeProps } from '@n3wtou/mnml-cms/editor';
+
+export function CodeBlock({ attrs, children }: RichTextNodeProps) {
+  return (
+    <figure>
+      <figcaption>{String(attrs.language ?? '')}</figcaption>
+      <pre><code>{children}</code></pre>
+    </figure>
+  );
+}
+```
+
+Set it once in the editor config, so every `<RichText editor={editor}>` uses it:
+
+```ts
+// src/mnml-editor.ts
+export const editor = defineEditor({
+  components: { codeBlock: CodeBlock }, // keyed by node name: codeBlock, image, blockquote, your own node's name…
+});
+```
+
+Or pass `components` to one `<RichText>`. It is merged over the editor config's, and wins for the same node:
+
+```tsx
+<RichText content={post.content} editor={editor} components={{ blockLink: PostCard }} />
+```
+
+The editor config is also loaded by the admin's editor in the browser, so components set there are part of the
+client bundle. Keep those to plain components, and put async server components (ones that load data, such as a
+card that fetches the linked entry) in the `components` prop. Nodes without a component render as before, and a
+component for a node the schema doesn't have is ignored.
+
 ## Options
 
 | Option | Purpose |
@@ -511,7 +552,7 @@ const storage: EntryStorage = {
 | `@n3wtou/mnml-cms/next` | `createCms`, `neonDatabase`, `drizzleStorage`, `vercelBlobMedia`, `localMedia` |
 | `@n3wtou/mnml-cms/proxy` | `adminProxy` |
 | `@n3wtou/mnml-cms/rich-text` | `RichText` server renderer |
-| `@n3wtou/mnml-cms/editor` | `defineEditor`, ready-made `tools` (server-safe) |
+| `@n3wtou/mnml-cms/editor` | `defineEditor`, ready-made `tools`, `RichTextComponents` / `RichTextNodeProps` types (server-safe) |
 | `@n3wtou/mnml-cms/admin` | UI pieces for extra admin pages, `editorProvider` |
 | `@n3wtou/mnml-cms/db` | Drizzle table for scripts and drizzle-kit |
 | `@n3wtou/mnml-cms/styles.css` | Admin styles and `--mnml-*` variables |
