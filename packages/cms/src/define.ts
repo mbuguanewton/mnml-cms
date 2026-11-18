@@ -37,6 +37,8 @@ export type NumberField = Base & { type: 'number'; min?: number; max?: number; s
 export type SelectField<O extends readonly string[] = readonly string[]> = Base & { type: 'select'; options: O };
 /** Points at an entry of another collection; the value is that entry's slug. */
 export type ReferenceField = Base & { type: 'reference'; collection: string };
+/** Points at several entries of another collection, in order; the value is their slugs. `required` means at least one. */
+export type ReferencesField = Base & { type: 'references'; collection: string; min?: number; max?: number };
 export type RichTextField = Base & { type: 'richtext' };
 export type TagsField = Base & { type: 'tags' };
 /** A repeatable group of fields. `itemLabel` names the field shown as each row's title in the admin. */
@@ -63,6 +65,7 @@ export type Field =
   | NumberField
   | SelectField
   | ReferenceField
+  | ReferencesField
   | RichTextField
   | TagsField
   | ArrayField
@@ -90,7 +93,7 @@ type ValueOf<F> = F extends TextField | TextareaField
             ? O[number] | null
             : F extends RichTextField
               ? JSONContent
-              : F extends TagsField
+              : F extends TagsField | ReferencesField
                 ? string[]
                 : F extends ArrayField<infer S>
                   ? EntryOf<S>[]
@@ -129,6 +132,13 @@ export const fields = {
   }),
   /** The slug of an entry in `collection` (a key of your config). Only published entries are offered. */
   reference: (label: string, collection: string, o: WithDefault<string> = {}): ReferenceField => ({ type: 'reference', label, collection, ...o }),
+  /** The slugs of entries in `collection`, in the editor's order. `min` / `max` limit how many; only published entries are offered. */
+  references: (label: string, collection: string, o: WithDefault<string[]> & { min?: number; max?: number } = {}): ReferencesField => ({
+    type: 'references',
+    label,
+    collection,
+    ...o,
+  }),
   group: <F extends Fields>(label: string, fields: F, o: Opts = {}): GroupField<F> => ({ type: 'group', label, fields, ...o }),
   /** A ready-made search/social group; read it back with `seoMetadata()`. */
   seo: (label = 'SEO', o: Opts = {}): SeoField => ({
@@ -348,6 +358,7 @@ export function emptyValue(f: Field): unknown {
     case 'richtext':
       return emptyDoc;
     case 'tags':
+    case 'references':
     case 'array':
     case 'blocks':
       return [];
@@ -432,6 +443,19 @@ function fieldSchema(f: Field): z.ZodType {
       const s = z.array(z.string().trim().min(1));
       return f.required ? s.min(1, 'Add at least one') : s;
     }
+    case 'references': {
+      const min = Math.max(f.min ?? 0, f.required ? 1 : 0);
+      const max = f.max;
+      const count = (n: number) => (n === 1 ? '1 entry' : `${n} entries`);
+      // Trimmed, without blanks or repeats; then counted.
+      return z
+        .array(z.string().trim().max(100))
+        .transform((v) => [...new Set(v.filter(Boolean))])
+        .superRefine((v, ctx) => {
+          if (v.length < min) ctx.addIssue({ code: 'custom', message: `Pick at least ${count(min)}` });
+          if (max !== undefined && v.length > max) ctx.addIssue({ code: 'custom', message: `Pick at most ${count(max)}` });
+        });
+    }
     case 'array':
       return z.array(objectSchema(f.fields));
     case 'group':
@@ -448,7 +472,7 @@ function fieldSchema(f: Field): z.ZodType {
 export function referenceTargets(fields: Fields): string[] {
   const out = new Set<string>();
   for (const f of Object.values(fields)) {
-    if (f.type === 'reference') out.add(f.collection);
+    if (f.type === 'reference' || f.type === 'references') out.add(f.collection);
     else if (f.type === 'group' || f.type === 'array') for (const t of referenceTargets(f.fields)) out.add(t);
     else if (f.type === 'blocks') for (const b of Object.values(f.blocks)) for (const t of referenceTargets(b.fields)) out.add(t);
   }

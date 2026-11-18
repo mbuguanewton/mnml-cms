@@ -3,7 +3,17 @@
 import { createContext, use, useEffect, useRef, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
-import { initialValues, isVisible, type ArrayField, type Block, type BlocksField, type Field, type GroupField, type ImageValue } from '../define.js';
+import {
+  initialValues,
+  isVisible,
+  type ArrayField,
+  type Block,
+  type BlocksField,
+  type Field,
+  type GroupField,
+  type ImageValue,
+  type ReferencesField,
+} from '../define.js';
 import { displayText } from '../text.js';
 import { useMenu } from './action-menu.js';
 import { Button } from './button.js';
@@ -119,6 +129,8 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
       );
     case 'reference':
       return <ReferenceInput id={id} collection={field.collection} value={value as string | null} onChange={onChange} invalid={invalid} />;
+    case 'references':
+      return <ReferencesInput id={id} field={field} value={(value as string[]) ?? []} onChange={onChange} invalid={invalid} />;
     case 'group':
       return null; // rendered by FieldRenderer as a section
     case 'richtext':
@@ -256,6 +268,74 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
           onChange={(e) => onChange({ ...value, alt: e.target.value })}
         />
       )}
+    </div>
+  );
+}
+
+/** Several entries of one collection, in order: the picked ones (reorder, remove), then a select to add more. */
+function ReferencesInput({
+  id,
+  field,
+  value,
+  onChange,
+  invalid,
+}: {
+  id: string;
+  field: ReferencesField;
+  value: string[];
+  onChange: (v: unknown) => void;
+  invalid: boolean;
+}) {
+  const options = use(RefOptionsContext)[field.collection] ?? [];
+  const label = (slug: string) => options.find((o) => o.slug === slug)?.label;
+  const { move, remove } = useListEditing(value, onChange);
+  const remaining = options.filter((o) => !value.includes(o.slug));
+  const full = field.max !== undefined && value.length >= field.max;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {value.length > 0 && (
+        <ol aria-label={`${field.label}: picked`} className="flex flex-col divide-y divide-mnml-line rounded-[6px] border border-mnml-line bg-mnml-bg">
+          {value.map((slug, i) => (
+            <li key={slug} className="flex items-center gap-2 px-3 py-1.5">
+              <span className="min-w-0 flex-1 truncate">
+                {/* Keep an entry that is no longer offered (e.g. since unpublished) visible instead of silently dropping it. */}
+                {label(slug) ?? `${slug} (unavailable)`}
+              </span>
+              <Button type="button" variant="ghost" size="icon-xs" aria-label={`Move ${label(slug) ?? slug} up`} disabled={i === 0} onClick={() => move(i, -1)}>
+                <ArrowUpIcon />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Move ${label(slug) ?? slug} down`}
+                disabled={i === value.length - 1}
+                onClick={() => move(i, 1)}
+              >
+                <ArrowDownIcon />
+              </Button>
+              <Button type="button" variant="ghost" size="icon-xs" aria-label={`Remove ${label(slug) ?? slug}`} onClick={() => remove(i)}>
+                <XIcon />
+              </Button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <select
+        id={id}
+        className={`${inputClass} w-auto`}
+        aria-invalid={invalid}
+        disabled={full || remaining.length === 0}
+        value=""
+        onChange={(e) => e.target.value && onChange([...value, e.target.value])}
+      >
+        <option value="">{full ? `Maximum of ${field.max} reached` : remaining.length ? 'Add…' : 'Nothing more to add'}</option>
+        {remaining.map((o) => (
+          <option key={o.slug} value={o.slug}>
+            {o.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

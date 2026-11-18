@@ -26,12 +26,13 @@ export { localMedia, vercelBlobMedia, type MediaFile, type MediaStorage } from '
  */
 export function createCms<C extends CmsConfig>(config: C, options: CmsOptions<C>) {
   const ctx = createContext(config, options);
-  const { getSingleton, listEntries, getEntry, listSlugs } = ctx.store;
+  const { getSingleton, listEntries, getEntry, getEntries, listSlugs } = ctx.store;
   return {
     config,
     getSingleton,
     listEntries,
     getEntry,
+    getEntries,
     listSlugs,
     /** Whether the current request has a valid admin session (for your own routes). */
     isAdmin: () => isAdmin(ctx),
