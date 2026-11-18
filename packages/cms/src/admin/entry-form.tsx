@@ -142,7 +142,7 @@ export function EntryForm({
     }, AUTOSAVE_MS);
     return () => clearTimeout(t);
     // `input` and `post` are recreated every render; the edit itself (`current`) is what should restart the timer.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [autosave, auto.kind, current, baseline, rev]);
 
   // Edits that aren't saved yet are lost on leaving.

@@ -65,7 +65,7 @@ export function LivePreview({
     );
     return () => clearTimeout(t);
     // `url` is read for the current value only; re-running on it would loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [key]);
 
   useEffect(() => {

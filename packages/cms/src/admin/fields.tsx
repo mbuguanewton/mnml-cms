@@ -4,6 +4,7 @@ import { createContext, use, useEffect, useRef, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
 import { isVisible, withDefaults, type ArrayField, type Block, type BlocksField, type Field, type GroupField, type ImageValue } from '../define.js';
+import { displayText } from '../text.js';
 import { useMenu } from './action-menu.js';
 import { Button } from './button.js';
 import { useAdmin } from './context.js';
@@ -215,7 +216,7 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
       <div className="flex items-center gap-3">
         {value ? (
           // Plain <img>: previews may be any uploaded URL, no need for next/image here.
-          // eslint-disable-next-line @next/next/no-img-element
+          // oxlint-disable-next-line nextjs/no-img-element
           <img src={value.url} alt="" className="size-16 rounded-[6px] border border-mnml-line object-cover" />
         ) : (
           <div className="flex size-16 items-center justify-center rounded-[6px] border border-dashed border-mnml-line text-xs text-mnml-text-mute">None</div>
@@ -240,7 +241,7 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
           onChange={(e) => {
             const f = e.target.files?.[0];
             e.target.value = '';
-            if (f) upload(f);
+            if (f) void upload(f);
           }}
         />
       </div>
@@ -352,7 +353,7 @@ function ArrayInput({
                   className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
                 >
                   <ChevronRightIcon className={`size-4 shrink-0 text-mnml-text-mute transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                  <span className="truncate">{(field.itemLabel && String(item[field.itemLabel] ?? '')) || `Item ${i + 1}`}</span>
+                  <span className="truncate">{(field.itemLabel && displayText(item[field.itemLabel])) || `Item ${i + 1}`}</span>
                   {hasError && <span className="shrink-0 text-xs text-mnml-danger">Needs attention</span>}
                 </button>
                 <Button type="button" variant="ghost" size="icon-xs" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
@@ -424,7 +425,7 @@ function BlocksInput({
           if (!def) return null;
           const isOpen = open === i;
           const hasError = Object.keys(errors).some((k) => k.startsWith(`${path}.${i}.`));
-          const title = field.itemLabel && field.itemLabel in def.fields ? String(item[field.itemLabel] ?? '') : '';
+          const title = field.itemLabel && field.itemLabel in def.fields ? displayText(item[field.itemLabel]) : '';
           return (
             <li key={i}>
               <div className={`flex items-center gap-1 pr-1.5 ${isOpen ? 'bg-mnml-panel' : 'hover:bg-mnml-panel'}`}>
