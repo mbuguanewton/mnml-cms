@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import type { JSONContent } from '@tiptap/core';
 import {
@@ -91,9 +91,7 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
       undo: editor.can().undo(),
       redo: editor.can().redo(),
       // The site's own tools, by name.
-      extra: Object.fromEntries(
-        extra.map((t) => [t.name, { active: t.isActive?.(editor) ?? false, disabled: t.disabled?.(editor) ?? false, visible: t.visible?.(editor) ?? true }]),
-      ),
+      extra: toolStates(extra, editor),
     }),
   });
   const chain = () => editor.chain().focus();
@@ -206,6 +204,30 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
   );
 }
 
+/** What the toolbars show for each site tool: pressed, disabled, shown. */
+function toolStates(tools: EditorTool[], editor: Editor) {
+  return Object.fromEntries(
+    tools.map((t) => [t.name, { active: t.isActive?.(editor) ?? false, disabled: t.disabled?.(editor) ?? false, visible: t.visible?.(editor) ?? true }]),
+  );
+}
+
+/** Re-renders when the element's size changes (images loading, the window resizing), so positions stay right. */
+function useElementSize(el: React.RefObject<HTMLElement | null>) {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const observer = new ResizeObserver(onChange);
+      if (el.current) observer.observe(el.current);
+      return () => observer.disconnect();
+    },
+    [el],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => (el.current ? `${el.current.offsetWidth}x${el.current.offsetHeight}` : ''),
+    () => '',
+  );
+}
+
 /**
  * A small toolbar above the nearest `node` (e.g. a table) around the cursor, while the editor has focus: the tools
  * whose `context` is that node.
@@ -223,32 +245,25 @@ function ContextToolbar({
 }) {
   const { alert, confirm } = useAdmin();
   const form = useForm();
+  // Where the node starts in the document (it doesn't move while typing inside it), and the tools' states.
   const s = useEditorState({
     editor,
     selector: ({ editor }) => {
       if (!editor.isFocused) return null;
       const { $from } = editor.state.selection;
-      let pos = -1;
       for (let d = $from.depth; d > 0; d--) {
-        if ($from.node(d).type.name === node) {
-          pos = $from.before(d);
-          break;
-        }
+        if ($from.node(d).type.name === node) return { pos: $from.before(d), tools: toolStates(tools, editor) };
       }
-      const dom = pos >= 0 ? editor.view.nodeDOM(pos) : null;
-      const box = container.current?.getBoundingClientRect();
-      if (!(dom instanceof HTMLElement) || !box) return null;
-      const r = dom.getBoundingClientRect();
-      return {
-        top: r.top - box.top,
-        right: box.right - r.right,
-        tools: Object.fromEntries(
-          tools.map((t) => [t.name, { active: t.isActive?.(editor) ?? false, disabled: t.disabled?.(editor) ?? false, visible: t.visible?.(editor) ?? true }]),
-        ),
-      };
+      return null;
     },
   });
-  if (!s) return null;
+  // Measured on render; the size subscription re-renders when layout shifts without an edit.
+  useElementSize(container);
+  const shown = s ? tools.filter((t) => s.tools[t.name]?.visible !== false) : [];
+  const dom = s ? editor.view.nodeDOM(s.pos) : null;
+  const box = container.current?.getBoundingClientRect();
+  if (!s || shown.length === 0 || !(dom instanceof HTMLElement) || !box) return null;
+  const r = dom.getBoundingClientRect();
   return (
     <div
       role="toolbar"
@@ -258,21 +273,19 @@ function ContextToolbar({
       className="absolute z-10 flex items-center gap-0.5 rounded-[8px] border border-mnml-line bg-mnml-panel p-0.5 shadow-md"
       // Just above the node's right end, where a line of text above it usually ends before. At the very top it
       // overlaps the node's first line instead of the main toolbar.
-      style={{ top: Math.max(2, s.top - 36), right: Math.max(2, s.right) }}
+      style={{ top: Math.max(2, r.top - box.top - 36), right: Math.max(2, box.right - r.right) }}
     >
-      {tools
-        .filter((t) => s.tools[t.name]?.visible !== false)
-        .map((t) => (
-          <ToolButton
-            key={t.name}
-            name={t.name}
-            icon={t.icon}
-            label={t.label}
-            active={s.tools[t.name]?.active}
-            disabled={s.tools[t.name]?.disabled}
-            run={() => t.run(editor, { form, confirm, alert })}
-          />
-        ))}
+      {shown.map((t) => (
+        <ToolButton
+          key={t.name}
+          name={t.name}
+          icon={t.icon}
+          label={t.label}
+          active={s.tools[t.name]?.active}
+          disabled={s.tools[t.name]?.disabled}
+          run={() => t.run(editor, { form, confirm, alert })}
+        />
+      ))}
     </div>
   );
 }
