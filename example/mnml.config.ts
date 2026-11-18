@@ -113,6 +113,8 @@ export default config({
       author: fields.reference('Author', 'authors'),
       cover: fields.image('Cover image'),
       content: fields.richtext('Content'),
+      // Several entries, in the editor's order (up to 3).
+      related: fields.references('Related posts', 'posts', { max: 3, help: 'Shown under the post, in this order' }),
       seo: fields.seo(),
     },
     // Worked out on every read; never stored or edited.
