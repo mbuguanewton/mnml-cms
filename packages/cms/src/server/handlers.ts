@@ -13,10 +13,9 @@ import { revOf } from './rev.js';
 import { PREVIEW_COOKIE, SINGLETON_SLUG } from './store.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
-//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · upload · media/delete
+//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · references · upload · media/delete
 //   GET:  media/<key> (uploaded images, public)
 
-// No SVG: it can carry scripts. Vercel caps function request bodies at 4.5 MB.
 const MEDIA_KEY = /^[\w.\-/]+$/;
 
 const json = (data: unknown, status = 200) => Response.json(data, { status });
