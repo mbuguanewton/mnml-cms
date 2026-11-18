@@ -10,4 +10,6 @@ export {
   type RichTextNodeProps,
   type ToolContext,
 } from './editor.js';
-export { nodeAttributes, tools, type NodeTool, type NodeToolOptions } from './editor-tools.js';
+export { nodeAttributes, tools, type NodeTool, type NodeToolOptions, type ReferenceToolOptions } from './editor-tools.js';
+export { referenceNode } from './reference-node.js';
+export { collectReferences, type RichTextReferences } from './references.js';

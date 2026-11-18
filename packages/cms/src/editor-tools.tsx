@@ -1,7 +1,7 @@
 import type { Attribute } from '@tiptap/core';
 import { MinusIcon, StrikethroughIcon, UnderlineIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { emptyValue, type EntryOf } from './define.js';
+import { emptyValue, fields as f, type EntryOf } from './define.js';
 import { displayText } from './text.js';
 import type { Editor } from '@tiptap/core';
 import type { EditorTool, NodeFormConfig, NodeFormField, NodeFormFields, ToolContext } from './editor.js';
@@ -76,7 +76,46 @@ function node<F extends NodeFormFields>(o: NodeToolOptions<F>): NodeTool {
   };
 }
 
-export const tools = { ...builtins, node };
+export type ReferenceToolOptions = {
+  /** The node's name, as in its extension (`referenceNode({ name })`). */
+  name: string;
+  label: string;
+  icon: ReactNode;
+  /** The collection to pick from (published entries only). */
+  collection: string;
+  group?: EditorTool['group'];
+  /** Dialog title. Default: the label. */
+  title?: string;
+};
+
+/**
+ * A button that picks a published entry of `collection` and inserts `{ type: name, attrs: { collection, slug } }`.
+ * Use with a `referenceNode({ name })` extension. In the admin the node shows as a card with the entry's title.
+ */
+function reference(o: ReferenceToolOptions): NodeTool {
+  const tool = node({
+    name: o.name,
+    label: o.label,
+    icon: o.icon,
+    group: o.group,
+    title: o.title,
+    fields: { slug: f.reference(o.label, o.collection, { required: true }) },
+  });
+  return {
+    ...tool,
+    run: async (editor, { form }) => {
+      const picked = await form({ title: tool.nodeForm.title, fields: tool.nodeForm.fields, submitLabel: 'Insert' });
+      if (picked)
+        editor
+          .chain()
+          .focus()
+          .insertContent({ type: o.name, attrs: { collection: o.collection, slug: picked.slug } })
+          .run();
+    },
+  };
+}
+
+export const tools = { ...builtins, node, reference };
 
 const dataName = (key: string) => `data-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
 

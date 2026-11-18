@@ -2,10 +2,10 @@
 /// <reference types="@tiptap/starter-kit" preserve="true" />
 import type { ReactNode } from 'react';
 import type { Editor, Extensions, JSONContent } from '@tiptap/core';
-import type { BooleanField, DateField, EntryOf, NumberField, SelectField, TextareaField, TextField, UrlField } from './define.js';
+import type { BooleanField, DateField, EntryOf, NumberField, ReferenceField, SelectField, TextareaField, TextField, UrlField } from './define.js';
 
-/** Fields a node form can have: simple values that fit in a node's attributes. */
-export type NodeFormField = TextField | TextareaField | UrlField | NumberField | BooleanField | SelectField<readonly string[]> | DateField;
+/** Fields a node form can have: simple values that fit in a node's attributes (a `reference` stores the slug). */
+export type NodeFormField = TextField | TextareaField | UrlField | NumberField | BooleanField | SelectField<readonly string[]> | DateField | ReferenceField;
 export type NodeFormFields = Record<string, NodeFormField>;
 
 /** A form in the admin's dialog. Resolves to the validated values, or `null` if the editor cancels. */

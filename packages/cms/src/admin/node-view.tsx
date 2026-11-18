@@ -5,13 +5,19 @@ import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tip
 import { PencilIcon } from 'lucide-react';
 import { useRef } from 'react';
 import type { EditorTool, NodeFormConfig } from '../editor.js';
+import { useAdmin } from './context.js';
 import { useForm } from './form-context.js';
+import { useRefLabel } from './ref-options.js';
 
 /** The editor's card for a node from `tools.node()`: its icon, label and preview; double-click or Edit to change it. */
 function NodeFormView({ node, updateAttributes, selected, config }: NodeViewProps & { config: NodeFormConfig }) {
   const form = useForm();
+  const { post } = useAdmin();
   const attrs = node.attrs as Record<string, unknown>;
-  const preview = config.preview?.(attrs);
+  // A reference node (`tools.reference()`) previews the linked entry's title.
+  const ref = Object.entries(config.fields).find(([, f]) => f.type === 'reference');
+  const refLabel = useRefLabel(post, ref?.[1].type === 'reference' ? ref[1].collection : undefined, ref ? attrs[ref[0]] : undefined);
+  const preview = config.preview?.(attrs) ?? (ref ? refLabel : undefined);
   // One form at a time: a double-click on the Edit button also clicks it twice.
   const open = useRef(false);
   const edit = async () => {

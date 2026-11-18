@@ -6,6 +6,7 @@ import type { EditorConfig, RichTextComponents } from './editor.js';
 import { resolveExtensions } from './rich-text.js';
 
 export type { RichTextComponents, RichTextNodeProps } from './editor.js';
+export { collectReferences, type RichTextReferences } from './references.js';
 
 type NodeRenderer = (props: { node: PMNode; children?: ReactNode | ReactNode[] }) => ReactNode;
 

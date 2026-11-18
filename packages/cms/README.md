@@ -405,8 +405,8 @@ export const editor = defineEditor({
 });
 ```
 
-Form fields can be `text`, `textarea`, `url`, `number`, `boolean`, `select` and `date`: values that fit in a node's
-attributes. `required`, `help` and `showIf` work as in entries.
+Form fields can be `text`, `textarea`, `url`, `number`, `boolean`, `select`, `date` and `reference` (the slug): values
+that fit in a node's attributes. `required`, `help` and `showIf` work as in entries.
 
 The form is available to any tool: `run` gets the editor and the admin's dialogs.
 
@@ -416,6 +416,42 @@ run: async (editor, { form, confirm, alert }) => {
   if (values) editor.chain().focus().insertContent({ type: 'callout', attrs: values }).run();
 };
 ```
+
+### Linking entries from rich text
+
+`tools.reference()` is a button that picks a published entry of a collection and inserts a node that links to it:
+`{ type: name, attrs: { collection, slug } }`. `referenceNode({ name })` is a ready-made node for it. In the editor it
+shows as a card with the entry's title; double-click it to pick another entry.
+
+```tsx
+// src/mnml-editor.tsx
+import { defineEditor, referenceNode, tools } from '@n3wtou/mnml-cms/editor';
+
+export const editor = defineEditor({
+  extensions: [referenceNode({ name: 'blockLink' })],
+  tools: [tools.reference({ name: 'blockLink', label: 'Link a post', icon: <FileSymlinkIcon />, collection: 'posts', group: 'insert' })],
+});
+```
+
+The node stores the slug only, so the site loads the linked entries itself. `collectReferences(doc)` lists every entry a
+document links to, as `{ collection, slugs }[]` (deduplicated, found anywhere in the document), so you can load them
+in one go before rendering, then render the node with a component:
+
+```tsx
+import { collectReferences, RichText } from '@n3wtou/mnml-cms/rich-text';
+
+const slugs = collectReferences(post.content, ['blockLink']).find((r) => r.collection === 'posts')?.slugs ?? [];
+const linked = new Map(await Promise.all(slugs.map(async (s) => [s, await cms.getEntry('posts', s)] as const)));
+
+<RichText
+  content={post.content}
+  editor={editor}
+  components={{ blockLink: ({ attrs }) => <PostCard slug={String(attrs.slug)} post={linked.get(String(attrs.slug))} /> }}
+/>;
+```
+
+A linked entry can be unpublished or deleted later, so the component should handle a missing entry (the example
+renders nothing). Node forms (`tools.node`) can also use a `reference` field; the picker offers published entries.
 
 ### Custom node rendering
 
@@ -612,8 +648,8 @@ const storage: EntryStorage = {
 | `@n3wtou/mnml-cms` | Schema builders, validation, types, `seoMetadata` (framework-free) |
 | `@n3wtou/mnml-cms/next` | `createCms`, `neonDatabase`, `drizzleStorage`, `vercelBlobMedia`, `localMedia` |
 | `@n3wtou/mnml-cms/proxy` | `adminProxy` |
-| `@n3wtou/mnml-cms/rich-text` | `RichText` server renderer |
-| `@n3wtou/mnml-cms/editor` | `defineEditor`, ready-made `tools` (including `tools.node`), `nodeAttributes`, `RichTextComponents` / `RichTextNodeProps` types (server-safe) |
+| `@n3wtou/mnml-cms/rich-text` | `RichText` server renderer, `collectReferences` |
+| `@n3wtou/mnml-cms/editor` | `defineEditor`, ready-made `tools` (including `tools.node`, `tools.reference`), `nodeAttributes`, `referenceNode`, `collectReferences`, `RichTextComponents` / `RichTextNodeProps` types (server-safe) |
 | `@n3wtou/mnml-cms/admin` | UI pieces for extra admin pages, `editorProvider` |
 | `@n3wtou/mnml-cms/db` | Drizzle table for scripts and drizzle-kit |
 | `@n3wtou/mnml-cms/styles.css` | Admin styles and `--mnml-*` variables |
