@@ -38,9 +38,18 @@ export type EditorTool = {
   /** Shows the button as pressed, e.g. `(e) => e.isActive('highlight')`. */
   isActive?: (editor: Editor) => boolean;
   disabled?: (editor: Editor) => boolean;
+  /** Shows the button only when this is true. Default: always shown. */
+  visible?: (editor: Editor) => boolean;
+  /**
+   * A node name (e.g. 'table'): the button shows in a small toolbar above that node while the cursor is inside it,
+   * instead of in the main toolbar.
+   */
+  context?: string;
   /** Where it goes in the toolbar: with the text formatting (bold, italic…), the blocks (lists…) or the inserts
    *  (link, image…). Left out, it goes in a group of its own at the end. */
   group?: 'format' | 'block' | 'insert';
+  /** Set on the package's ready-made tools (tables, underline…): they come before your own tools in their group. */
+  builtIn?: boolean;
   /** Set by `tools.node()`: the admin shows that node as a card that opens this form to edit it. */
   nodeForm?: NodeFormConfig;
 };
@@ -81,6 +90,11 @@ export type EditorConfig = {
    */
   components?: RichTextComponents;
 };
+
+/** The tools of one toolbar group, in order: ready-made ones first, then the site's own, each in config order. */
+export function orderTools(tools: EditorTool[]): EditorTool[] {
+  return [...tools.filter((t) => t.builtIn), ...tools.filter((t) => !t.builtIn)];
+}
 
 /** Types the editor config. Import the result in both the client provider and `<RichText editor>`. */
 export const defineEditor = (config: EditorConfig) => config;

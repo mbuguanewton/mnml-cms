@@ -10,6 +10,7 @@ import type { EditorTool, NodeFormConfig, NodeFormField, NodeFormFields, ToolCon
 const builtins = {
   underline: {
     name: 'underline',
+    builtIn: true,
     label: 'Underline',
     group: 'format',
     icon: <UnderlineIcon />,
@@ -18,6 +19,7 @@ const builtins = {
   },
   strike: {
     name: 'strike',
+    builtIn: true,
     label: 'Strikethrough',
     group: 'format',
     icon: <StrikethroughIcon />,
@@ -26,6 +28,7 @@ const builtins = {
   },
   horizontalRule: {
     name: 'horizontalRule',
+    builtIn: true,
     label: 'Horizontal rule',
     group: 'insert',
     icon: <MinusIcon />,
