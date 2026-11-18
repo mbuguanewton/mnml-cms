@@ -29,11 +29,13 @@ import type { EditorTool } from '../editor.js';
 import { menuItemClass, useMenu } from './action-menu.js';
 import { useAdmin } from './context.js';
 import { useEditorConfig } from './editor-context.js';
+import { useForm } from './form-context.js';
+import { withNodeForms } from './node-view.js';
 import { uploadImage } from './upload.js';
 
 export function RichTextEditor({ value, onChange, invalid }: { value: JSONContent; onChange: (v: JSONContent) => void; invalid?: boolean }) {
   const config = useEditorConfig();
-  const extensions = useMemo(() => resolveExtensions(config), [config]);
+  const extensions = useMemo(() => withNodeForms(resolveExtensions(config), config?.tools ?? noTools), [config]);
   const editor = useEditor({
     extensions,
     content: value,
@@ -57,7 +59,8 @@ export function RichTextEditor({ value, onChange, invalid }: { value: JSONConten
 const noTools: EditorTool[] = [];
 
 function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
-  const { apiPath, alert } = useAdmin();
+  const { apiPath, alert, confirm } = useAdmin();
+  const form = useForm();
   // The heading extension's levels (1–4 by default; a site can change them), or none if it was removed.
   const levels = useMemo(() => (editor.extensionManager.extensions.find((e) => e.name === 'heading')?.options.levels as Level[] | undefined) ?? [], [editor]);
   const hasQuote = useMemo(() => editor.extensionManager.extensions.some((e) => e.name === 'blockquote'), [editor]);
@@ -104,7 +107,7 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
   const own = (group?: EditorTool['group']): Tool[] =>
     extra
       .filter((t) => t.group === group)
-      .map((t) => ({ name: `extra:${t.name}`, icon: t.icon, label: t.label, ...s.extra[t.name], run: () => t.run(editor) }));
+      .map((t) => ({ name: `extra:${t.name}`, icon: t.icon, label: t.label, ...s.extra[t.name], run: () => t.run(editor, { form, confirm, alert }) }));
   const buttons = (tools: Tool[]) => tools.map((t) => <ToolButton key={t.name} {...t} />);
 
   const history: Tool[] = [
