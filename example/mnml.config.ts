@@ -17,7 +17,8 @@ export default config({
             label: fields.text('Label', { required: true }),
             url: fields.url('URL', { required: true }),
           },
-          { itemLabel: 'label' },
+          // Up to four links; Add is disabled after that.
+          { itemLabel: 'label', max: 4 },
         ),
       }),
     },
@@ -83,7 +84,8 @@ export default config({
           }),
           divider: block('Divider', {}),
         },
-        { itemLabel: 'title' },
+        // A page needs at least one section to publish.
+        { itemLabel: 'title', min: 1 },
       ),
       seo: fields.seo(),
     },

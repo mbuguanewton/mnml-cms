@@ -12,10 +12,12 @@ import {
   type Field,
   type GroupField,
   type ImageValue,
+  type Limits,
   type ReferencesField,
 } from '../define.js';
 import { fromLocalInput, toLocalInput } from '../datetime.js';
 import { displayText } from '../text.js';
+import { EntryCombobox } from './entry-combobox.js';
 import { useMenu } from './action-menu.js';
 import { Button } from './button.js';
 import { useAdmin } from './context.js';
@@ -193,17 +195,25 @@ function ReferenceInput({
 }) {
   const options = use(RefOptionsContext)[collection] ?? [];
   // Keep a current value that is no longer offered (e.g. since unpublished) visible instead of silently dropping it.
-  const missing = value && !options.some((o) => o.slug === value);
+  const label = value ? (options.find((o) => o.slug === value)?.label ?? `${value} (unavailable)`) : null;
   return (
-    <select id={id} className={`${inputClass} w-auto`} aria-invalid={invalid} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
-      <option value="">—</option>
-      {missing && <option value={value}>{value} (unavailable)</option>}
-      {options.map((o) => (
-        <option key={o.slug} value={o.slug}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+    <div className="flex flex-col gap-1.5">
+      {label && (
+        <div className="flex items-center gap-2 rounded-[6px] border border-mnml-line bg-mnml-bg px-3 py-1.5">
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          <Button type="button" variant="ghost" size="icon-xs" aria-label={`Clear ${label}`} onClick={() => onChange(null)}>
+            <XIcon />
+          </Button>
+        </div>
+      )}
+      <EntryCombobox
+        id={id}
+        options={options.filter((o) => o.slug !== value)}
+        onPick={onChange}
+        placeholder={value ? 'Search to replace…' : 'Search…'}
+        invalid={invalid}
+      />
+    </div>
   );
 }
 
@@ -352,21 +362,14 @@ function ReferencesInput({
           ))}
         </ol>
       )}
-      <select
+      <EntryCombobox
         id={id}
-        className={`${inputClass} w-auto`}
-        aria-invalid={invalid}
+        options={remaining}
+        onPick={(slug) => onChange([...value, slug])}
         disabled={full || remaining.length === 0}
-        value=""
-        onChange={(e) => e.target.value && onChange([...value, e.target.value])}
-      >
-        <option value="">{full ? `Maximum of ${field.max} reached` : remaining.length ? 'Add…' : 'Nothing more to add'}</option>
-        {remaining.map((o) => (
-          <option key={o.slug} value={o.slug}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        placeholder={full ? `Maximum of ${field.max} reached` : remaining.length ? 'Search to add…' : 'Nothing more to add'}
+        invalid={invalid}
+      />
     </div>
   );
 }
@@ -496,9 +499,13 @@ function ArrayInput({
           );
         })}
       </ul>
-      <Button type="button" variant="outline" size="sm" onClick={add}>
-        <PlusIcon /> Add
-      </Button>
+      <AddRow field={field} count={value.length}>
+        {(full) => (
+          <Button type="button" variant="outline" size="sm" onClick={add} disabled={full}>
+            <PlusIcon /> Add
+          </Button>
+        )}
+      </AddRow>
     </div>
   );
 }
@@ -581,7 +588,9 @@ function BlocksInput({
           );
         })}
       </ul>
-      <BlockPicker blocks={field.blocks} label={addLabel} onPick={add} />
+      <AddRow field={field} count={value.length}>
+        {(full) => <BlockPicker blocks={field.blocks} label={addLabel} onPick={add} disabled={full} />}
+      </AddRow>
     </div>
   );
 }
@@ -590,7 +599,28 @@ function BlocksInput({
 const SEARCH_FROM = 8;
 
 /** One "Add" button that opens the list of block kinds, so the form doesn't grow with them. */
-function BlockPicker({ blocks, label, onPick }: { blocks: Record<string, Block>; label: string; onPick: (kind: string) => void }) {
+/** An Add control, disabled with the reason once a list field has `max` items. */
+function AddRow({ field, count, children }: { field: Limits; count: number; children: (full: boolean) => React.ReactNode }) {
+  const full = field.max !== undefined && count >= field.max;
+  return (
+    <div className="flex items-center gap-3">
+      {children(full)}
+      {full && <span className="text-xs text-mnml-text-mute">Maximum of {field.max} reached</span>}
+    </div>
+  );
+}
+
+function BlockPicker({
+  blocks,
+  label,
+  onPick,
+  disabled,
+}: {
+  blocks: Record<string, Block>;
+  label: string;
+  onPick: (kind: string) => void;
+  disabled?: boolean;
+}) {
   const { open, setOpen, root } = useMenu();
   const [q, setQ] = useState('');
   const popup = useRef<HTMLDivElement>(null);
@@ -624,6 +654,7 @@ function BlockPicker({ blocks, label, onPick }: { blocks: Record<string, Block>;
         size="sm"
         aria-haspopup="menu"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => {
           setQ('');
           setOpen(!open);

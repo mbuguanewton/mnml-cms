@@ -44,11 +44,13 @@ type OptionValue<T> = T extends string ? T : T extends { value: infer V extends 
 /** Points at an entry of another collection; the value is that entry's slug. */
 export type ReferenceField = Base & { type: 'reference'; collection: string };
 /** Points at several entries of another collection, in order; the value is their slugs. `required` means at least one. */
-export type ReferencesField = Base & { type: 'references'; collection: string; min?: number; max?: number };
+export type ReferencesField = Base & { type: 'references'; collection: string } & Limits;
 export type RichTextField = Base & { type: 'richtext' };
 export type TagsField = Base & { type: 'tags' };
 /** A repeatable group of fields. `itemLabel` names the field shown as each row's title in the admin. */
-export type ArrayField<F extends Fields = Fields> = Base & { type: 'array'; fields: F; itemLabel?: keyof F & string };
+export type ArrayField<F extends Fields = Fields> = Base & { type: 'array'; fields: F; itemLabel?: keyof F & string } & Limits;
+/** How many items a list field may have. `required` also means at least one. */
+export type Limits = { min?: number; max?: number };
 
 /** Fields stored together under one key, shown as a section of the form: `page.hero.headline`. */
 export type GroupField<F extends Fields = Fields> = Base & { type: 'group'; fields: F };
@@ -59,7 +61,12 @@ export type Block<F extends Fields = Fields> = { label: string; fields: F; descr
  * A list where each item is one of several kinds of block, each with its own fields. Items are stored
  * as `{ kind: 'hero', …fields }`, so reading one narrows by `kind`. `itemLabel` names the field shown as a row's title; `addLabel` is the text of the add button (default: "Add" and the field's label, singular).
  */
-export type BlocksField<B extends Record<string, Block> = Record<string, Block>> = Base & { type: 'blocks'; blocks: B; itemLabel?: string; addLabel?: string };
+export type BlocksField<B extends Record<string, Block> = Record<string, Block>> = Base & {
+  type: 'blocks';
+  blocks: B;
+  itemLabel?: string;
+  addLabel?: string;
+} & Limits;
 
 export type Field =
   | TextField
@@ -176,14 +183,18 @@ export const fields = {
     ...o,
   }),
   /** A list of sections, each one of the `blocks` (made with `block()`), keyed by the `kind` stored with it. */
-  blocks: <const B extends Record<string, Block>>(label: string, blocks: B, o: Opts & { itemLabel?: string; addLabel?: string } = {}): BlocksField<B> => {
+  blocks: <const B extends Record<string, Block>>(
+    label: string,
+    blocks: B,
+    o: Opts & Limits & { itemLabel?: string; addLabel?: string } = {},
+  ): BlocksField<B> => {
     if (Object.keys(blocks).length === 0) throw new Error(`"${label}": blocks needs at least one block.`);
     for (const [k, b] of Object.entries(blocks)) {
       if ('kind' in b.fields) throw new Error(`"${label}": block "${k}" has a field named "kind", which is reserved.`);
     }
     return { type: 'blocks', label, blocks, ...o };
   },
-  array: <F extends Fields>(label: string, fields: F, o: Opts & { itemLabel?: NoInfer<keyof F & string> } = {}): ArrayField<F> => ({
+  array: <F extends Fields>(label: string, fields: F, o: Opts & Limits & { itemLabel?: NoInfer<keyof F & string> } = {}): ArrayField<F> => ({
     type: 'array',
     label,
     fields,
@@ -476,28 +487,33 @@ function fieldSchema(f: Field): z.ZodType {
       return f.required ? s.min(1, 'Add at least one') : s;
     }
     case 'references': {
-      const min = Math.max(f.min ?? 0, f.required ? 1 : 0);
-      const max = f.max;
-      const count = (n: number) => (n === 1 ? '1 entry' : `${n} entries`);
       // Trimmed, without blanks or repeats; then counted.
       return z
         .array(z.string().trim().max(100))
         .transform((v) => [...new Set(v.filter(Boolean))])
-        .superRefine((v, ctx) => {
-          if (v.length < min) ctx.addIssue({ code: 'custom', message: `Pick at least ${count(min)}` });
-          if (max !== undefined && v.length > max) ctx.addIssue({ code: 'custom', message: `Pick at most ${count(max)}` });
-        });
+        .superRefine(countCheck(f, 'Pick', ['entry', 'entries']));
     }
     case 'array':
-      return z.array(objectSchema(f.fields));
+      return z.array(objectSchema(f.fields)).superRefine(countCheck(f, 'Add', ['item', 'items']));
     case 'group':
       return objectSchema(f.fields);
     case 'blocks': {
       const options = Object.entries(f.blocks).map(([kind, b]) => objectOf(b.fields, { kind: z.literal(kind) }));
       const item = z.discriminatedUnion('kind', options as unknown as [(typeof options)[number], ...(typeof options)[number][]]);
-      return z.array(item);
+      return z.array(item).superRefine(countCheck(f, 'Add', ['item', 'items']));
     }
   }
+}
+
+/** Checks a list's length against `min` / `max` (and `required`, which means at least one), on the field itself. */
+function countCheck(f: Base & Limits, verb: string, [one, many]: [string, string]) {
+  const min = Math.max(f.min ?? 0, f.required ? 1 : 0);
+  const max = f.max;
+  const count = (n: number) => `${n} ${n === 1 ? one : many}`;
+  return (v: unknown[], ctx: z.RefinementCtx) => {
+    if (v.length < min) ctx.addIssue({ code: 'custom', message: `${verb} at least ${count(min)}` });
+    if (max !== undefined && v.length > max) ctx.addIssue({ code: 'custom', message: `${verb} at most ${count(max)}` });
+  };
 }
 
 /** The collections that reference fields (including inside groups and arrays) point at. */
