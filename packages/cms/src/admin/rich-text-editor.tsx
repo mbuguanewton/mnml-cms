@@ -158,7 +158,7 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
           onChange={(e) => {
             const f = e.target.files?.[0];
             e.target.value = '';
-            if (f) addImage(f);
+            if (f) void addImage(f);
           }}
         />
       </label>

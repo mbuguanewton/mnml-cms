@@ -13,8 +13,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm format:check
-      - run: pnpm lint
-      - run: pnpm build
-      - run: pnpm typecheck
-      - run: pnpm --filter example build
+        env:
+          VP_GIT_HOOKS: '0'
+      # The task is defined in vite.config.ts (run.tasks.ci); the pre-push hook runs the same one.
+      - run: pnpm exec vp run ci

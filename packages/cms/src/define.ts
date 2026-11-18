@@ -10,7 +10,10 @@ type Scalar = string | number | boolean | null;
  * a comparison (`gt`, `gte`, `lt`, `lte`, numbers only) or `{ empty }` (no value, text or items).
  */
 export type Condition =
-  Scalar | readonly Scalar[] | { not: Scalar | readonly Scalar[] } | { gt?: number; gte?: number; lt?: number; lte?: number; empty?: boolean };
+  | Scalar
+  | readonly Scalar[]
+  | { not: Scalar | readonly Scalar[] }
+  | { gt?: number; gte?: number; lt?: number; lte?: number; empty?: boolean };
 /** Show a field only while its sibling fields (same entry, group, item or block) match; every key must. */
 export type ShowIf = Record<string, Condition>;
 

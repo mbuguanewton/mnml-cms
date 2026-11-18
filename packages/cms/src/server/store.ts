@@ -92,12 +92,13 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
   const remove = (collection: string, slug: string) => storage.remove(collection, slug);
 
   return {
-    async getSingleton<K extends SingletonKey<C>>(key: K, o?: ReadOptions): Promise<EntryFor<C, K> | null> {
+    async getSingleton<K extends SingletonKey<C>>(this: void, key: K, o?: ReadOptions): Promise<EntryFor<C, K> | null> {
       const data = await readWithDraft(key, SINGLETON_SLUG, o);
       return data === undefined ? null : (withDerived(config[key], withDefaults(config[key].fields, data)) as EntryFor<C, K>);
     },
 
     async listEntries<K extends CollectionKey<C>>(
+      this: void,
       key: K,
       o: ListOptions<EntryFor<C, K>> = {},
     ): Promise<{ slug: string; entry: EntryFor<C, K>; status: EntryStatus }[]> {
@@ -127,13 +128,13 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
       return arrange(withData, o).map(({ slug, entry, status }) => ({ slug, entry, status }));
     },
 
-    async getEntry<K extends CollectionKey<C>>(key: K, slug: string, o?: ReadOptions): Promise<EntryFor<C, K> | null> {
+    async getEntry<K extends CollectionKey<C>>(this: void, key: K, slug: string, o?: ReadOptions): Promise<EntryFor<C, K> | null> {
       const data = await readWithDraft(key, slug, o);
       return data === undefined ? null : (withDerived(config[key], withDefaults(config[key].fields, data)) as EntryFor<C, K>);
     },
 
     /** Published slugs (all of them with `all: true`). Also fine in generateStaticParams, which runs outside a request. */
-    async listSlugs(key: CollectionKey<C>, o?: Pick<ReadOptions, 'all'>) {
+    async listSlugs(this: void, key: CollectionKey<C>, o?: Pick<ReadOptions, 'all'>) {
       return (await readRows(key)).filter((r) => r.status === 'published' || o?.all).map((r) => r.slug);
     },
 

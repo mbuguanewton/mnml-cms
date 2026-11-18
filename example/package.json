@@ -7,10 +7,10 @@
     "build": "next build",
     "typecheck": "tsc --noEmit",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx scripts/seed.ts",
-    "db:export": "tsx scripts/content.ts export",
-    "db:import": "tsx scripts/content.ts import",
-    "db:sync": "tsx scripts/content.ts sync"
+    "db:seed": "vpx scripts/seed.ts",
+    "db:export": "vpx scripts/content.ts export",
+    "db:import": "vpx scripts/content.ts import",
+    "db:sync": "vpx scripts/content.ts sync"
   },
   "dependencies": {
     "@n3wtou/mnml-cms": "workspace:*",
@@ -22,12 +22,11 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.0",
     "tailwindcss": "^4",
-    "tsx": "^4",
     "typescript": "^5"
   }
 }

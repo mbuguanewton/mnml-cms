@@ -7,7 +7,7 @@ export const formatDate = (d: string | null) =>
 /** A CMS image, or a soft gradient placeholder when there is none. */
 export function Picture({ image, className = '' }: { image: ImageValue | null; className?: string }) {
   if (!image) return <div className={`bg-gradient-to-br from-[#efe3d3] to-[#e2c9b0] ${className}`} aria-hidden />;
-  // eslint-disable-next-line @next/next/no-img-element
+  // oxlint-disable-next-line nextjs/no-img-element
   return <img src={image.url} alt={image.alt} className={`object-cover ${className}`} />;
 }
 

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ExternalLinkIcon, FileTextIcon, ImageIcon, PlusIcon, SettingsIcon } from 'lucide-react';
 import { plainDef, referenceTargets, withDefaults, type Collection, type CmsConfig, type Singleton } from '../define.js';
+import { displayText } from '../text.js';
 import type { EntryStatus } from '../api.js';
 import type { RefOptions } from '../admin/fields.js';
 import { buttonVariants } from '../admin/button.js';
@@ -28,7 +29,7 @@ type AnyEntry = Record<string, unknown>;
 function derivedRows(def: Singleton | Collection, entry: AnyEntry | null) {
   if (!entry) return [];
   const show = (v: unknown) =>
-    v == null || v === '' ? '—' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : typeof v === 'object' ? JSON.stringify(v) : String(v);
+    v == null || v === '' ? '—' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : typeof v === 'object' ? JSON.stringify(v) : displayText(v);
   const spaced = (k: string) =>
     k
       .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -169,7 +170,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       const t = Object.hasOwn(config, target) ? config[target] : undefined;
       if (t?.kind !== 'collection') continue;
       const items = (await store.listEntries(target as never, { drafts: false, orderBy: t.titleField } as never)) as { slug: string; entry: AnyEntry }[];
-      out[target] = items.map(({ slug, entry }) => ({ slug, label: String(entry[t.titleField] || slug) }));
+      out[target] = items.map(({ slug, entry }) => ({ slug, label: displayText(entry[t.titleField]) || slug }));
     }
     return out;
   }
@@ -253,7 +254,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const status = (await store.getStatus(key, sub)) ?? 'published';
     // Saved edits that aren't published yet replace the live version in the form.
     const pending = (await store.getPending(key, sub)) as AnyEntry | undefined;
-    const title = String(entry[def.titleField] || sub);
+    const title = displayText(entry[def.titleField]) || sub;
     return (
       // key: remount with fresh state after a create redirect
       <EntryForm
@@ -305,7 +306,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       }
       const items = (await store.listEntries(key as never, { drafts: false, all: true } as never)) as { slug: string; entry: AnyEntry }[];
       for (const { slug, entry } of items) {
-        const use = { group: key, entry: String(entry[def.titleField] || slug), href: `${adminPath}/${key}/${slug}` };
+        const use = { group: key, entry: displayText(entry[def.titleField]) || slug, href: `${adminPath}/${key}/${slug}` };
         scan(fieldsOnly(def, entry), use);
         const pending = await store.getPending(key, slug);
         if (pending !== undefined) scan(pending, { ...use, pending: true });
@@ -472,7 +473,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                   <tr key={slug} className="relative hover:bg-mnml-panel">
                     <td className="px-4 py-2.5">
                       <Link href={`${adminPath}/${key}/${slug}`} className="font-medium no-underline after:absolute after:inset-0">
-                        {String(entry[def.titleField] || slug)}
+                        {displayText(entry[def.titleField]) || slug}
                       </Link>
                     </td>
                     <td className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs text-mnml-text-mute max-sm:hidden">{slug}</td>
@@ -482,7 +483,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                         {status === 'draft' ? 'Draft' : pending.has(slug) ? 'Changes' : 'Published'}
                       </span>
                     </td>
-                    {dateField && <td className="px-4 py-2.5 tabular-nums text-mnml-text-soft">{String(entry[dateField] ?? '—')}</td>}
+                    {dateField && <td className="px-4 py-2.5 tabular-nums text-mnml-text-soft">{displayText(entry[dateField]) || '—'}</td>}
                   </tr>
                 ))}
               </tbody>
