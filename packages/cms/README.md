@@ -310,7 +310,7 @@ type EditorTool = {
   name: string; // unique; the React key
   label: string; // tooltip and accessible name
   icon: ReactNode;
-  run: (editor: Editor) => void;
+  run: (editor: Editor, admin: ToolContext) => void; // admin: form(), confirm(), alert() (see below)
   isActive?: (editor: Editor) => boolean; // shows the button as pressed
   disabled?: (editor: Editor) => boolean;
   group?: 'format' | 'block' | 'insert'; // toolbar group; left out, a group of its own at the end
@@ -355,6 +355,67 @@ highlight on the site with any highlighter (or style as plain code).
 
 The config applies to every rich-text field. It can't be set per field, because extensions and functions can't
 be stored in the schema that is sent to the admin.
+
+### Nodes with a form
+
+For a node whose values the editor fills in (an embed's URL, a callout's tone), `tools.node()` makes a button that
+opens a form in the admin's dialog, validates it like an entry, then inserts the node. In the editor the node shows
+as a card with a one-line preview; double-click it (or its Edit button) to change the values.
+
+Define the node once, with its form fields, in a plain module that both the editor config and the site import.
+`nodeAttributes(fields)` gives it one attribute per field, starting at the field's empty value and kept in HTML as
+`data-<name>`:
+
+```ts
+// src/youtube.ts
+import { Node } from '@tiptap/core';
+import { fields } from '@n3wtou/mnml-cms';
+import { nodeAttributes } from '@n3wtou/mnml-cms/editor';
+
+export const youtubeFields = {
+  url: fields.url('YouTube URL', { required: true }),
+  title: fields.text('Title'),
+};
+
+export const YouTube = Node.create({
+  name: 'youtube',
+  group: 'block',
+  atom: true, // a form node has no editable content of its own
+  addAttributes: () => nodeAttributes(youtubeFields),
+  parseHTML: () => [{ tag: 'div[data-youtube]' }],
+  renderHTML: ({ HTMLAttributes }) => ['div', { 'data-youtube': '', ...HTMLAttributes }],
+});
+```
+
+```tsx
+// src/mnml-editor.tsx
+export const editor = defineEditor({
+  extensions: [YouTube],
+  tools: [
+    tools.node({
+      name: 'youtube', // the node's name
+      label: 'YouTube video',
+      icon: <CirclePlayIcon />,
+      group: 'insert',
+      fields: youtubeFields,
+      preview: (attrs) => attrs.url ?? '', // optional: the card's one-line preview
+    }),
+  ],
+  components: { youtube: YouTubeEmbed }, // how <RichText> renders it on the site (see below)
+});
+```
+
+Form fields can be `text`, `textarea`, `url`, `number`, `boolean`, `select` and `date`: values that fit in a node's
+attributes. `required`, `help` and `showIf` work as in entries.
+
+The form is available to any tool: `run` gets the editor and the admin's dialogs.
+
+```ts
+run: async (editor, { form, confirm, alert }) => {
+  const values = await form({ title: 'Callout', fields: calloutFields, submitLabel: 'Insert' }); // null if cancelled
+  if (values) editor.chain().focus().insertContent({ type: 'callout', attrs: values }).run();
+};
+```
 
 ### Custom node rendering
 
@@ -552,7 +613,7 @@ const storage: EntryStorage = {
 | `@n3wtou/mnml-cms/next` | `createCms`, `neonDatabase`, `drizzleStorage`, `vercelBlobMedia`, `localMedia` |
 | `@n3wtou/mnml-cms/proxy` | `adminProxy` |
 | `@n3wtou/mnml-cms/rich-text` | `RichText` server renderer |
-| `@n3wtou/mnml-cms/editor` | `defineEditor`, ready-made `tools`, `RichTextComponents` / `RichTextNodeProps` types (server-safe) |
+| `@n3wtou/mnml-cms/editor` | `defineEditor`, ready-made `tools` (including `tools.node`), `nodeAttributes`, `RichTextComponents` / `RichTextNodeProps` types (server-safe) |
 | `@n3wtou/mnml-cms/admin` | UI pieces for extra admin pages, `editorProvider` |
 | `@n3wtou/mnml-cms/db` | Drizzle table for scripts and drizzle-kit |
 | `@n3wtou/mnml-cms/styles.css` | Admin styles and `--mnml-*` variables |

@@ -10,6 +10,7 @@ import { buttonVariants } from '../admin/button.js';
 import { menuItemClass } from '../admin/action-menu.js';
 import { StatusDot } from '../admin/status-dot.js';
 import { AdminProvider } from '../admin/context.js';
+import { FormDialogProvider } from '../admin/form-dialog.js';
 import { DeleteButton } from '../admin/delete-button.js';
 import { MediaDeleteButton } from '../admin/media-delete-button.js';
 import { EntryForm } from '../admin/entry-form.js';
@@ -58,7 +59,9 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const path = (await params).path ?? [];
     const Editor = options.editor;
     const provider = (children: React.ReactNode) => (
-      <AdminProvider value={{ adminPath, apiPath }}>{Editor ? <Editor>{children}</Editor> : children}</AdminProvider>
+      <AdminProvider value={{ adminPath, apiPath }}>
+        <FormDialogProvider>{Editor ? <Editor>{children}</Editor> : children}</FormDialogProvider>
+      </AdminProvider>
     );
 
     if (path.length === 1 && path[0] === 'login') {

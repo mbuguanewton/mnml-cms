@@ -2,6 +2,29 @@
 /// <reference types="@tiptap/starter-kit" preserve="true" />
 import type { ReactNode } from 'react';
 import type { Editor, Extensions, JSONContent } from '@tiptap/core';
+import type { BooleanField, DateField, EntryOf, NumberField, SelectField, TextareaField, TextField, UrlField } from './define.js';
+
+/** Fields a node form can have: simple values that fit in a node's attributes. */
+export type NodeFormField = TextField | TextareaField | UrlField | NumberField | BooleanField | SelectField<readonly string[]> | DateField;
+export type NodeFormFields = Record<string, NodeFormField>;
+
+/** A form in the admin's dialog. Resolves to the validated values, or `null` if the editor cancels. */
+export type FormOptions<F extends NodeFormFields> = {
+  title: string;
+  description?: string;
+  fields: F;
+  /** Starting values (e.g. the node's current attributes); missing ones start empty. */
+  values?: Partial<EntryOf<F>> | Record<string, unknown>;
+  /** Default 'Save'. */
+  submitLabel?: string;
+};
+
+/** The admin UI a tool's `run` can use. */
+export type ToolContext = {
+  form: <F extends NodeFormFields>(options: FormOptions<F>) => Promise<EntryOf<F> | null>;
+  confirm: (options: { title: string; description?: ReactNode; confirmLabel?: string; cancelLabel?: string; danger?: boolean }) => Promise<boolean>;
+  alert: (options: { title: string; description?: ReactNode; confirmLabel?: string }) => Promise<void>;
+};
 
 /** A toolbar button. `run` and the checks get the live Tiptap editor. */
 export type EditorTool = {
@@ -10,13 +33,28 @@ export type EditorTool = {
   /** Tooltip and accessible name. */
   label: string;
   icon: ReactNode;
-  run: (editor: Editor) => void;
+  /** Runs on click. The second argument opens the admin's dialogs, e.g. `form()` to ask for values first. */
+  run: (editor: Editor, admin: ToolContext) => void;
   /** Shows the button as pressed, e.g. `(e) => e.isActive('highlight')`. */
   isActive?: (editor: Editor) => boolean;
   disabled?: (editor: Editor) => boolean;
   /** Where it goes in the toolbar: with the text formatting (bold, italic…), the blocks (lists…) or the inserts
    *  (link, image…). Left out, it goes in a group of its own at the end. */
   group?: 'format' | 'block' | 'insert';
+  /** Set by `tools.node()`: the admin shows that node as a card that opens this form to edit it. */
+  nodeForm?: NodeFormConfig;
+};
+
+export type NodeFormConfig = {
+  /** The node's name, as in its extension. */
+  name: string;
+  label: string;
+  icon: ReactNode;
+  /** Dialog title. */
+  title: string;
+  fields: NodeFormFields;
+  /** One line about the node for its card in the editor, e.g. its URL. */
+  preview?: (attrs: Record<string, unknown>) => string;
 };
 
 /** What a custom node renderer gets: the node as Tiptap JSON, its attributes, and its rendered content. */
