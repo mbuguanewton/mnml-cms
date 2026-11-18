@@ -98,6 +98,7 @@ Options for every field: `{ required, help }`.
 | `boolean` | `boolean` (default `false`) |
 | `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null`; options can have labels (below) |
 | `reference(label, 'authors')` | slug of a published entry in that collection, `string \| null`; resolve with `cms.getEntry` |
+| `references(label, 'posts', { min, max })` | slugs of published entries, in the editor's order, `string[]`; resolve with `cms.getEntries` |
 | `image` | `{ url, alt } \| null` |
 | `richtext` | Tiptap JSON; render with `<RichText>` |
 | `tags` | `string[]` |
@@ -105,6 +106,16 @@ Options for every field: `{ required, help }`.
 | `group(label, fields)` | a nested object shown as one section: `page.hero.headline` |
 | `blocks(label, { hero: block('Hero', fields), … }, { itemLabel })` | a list of sections, each one of the blocks: `{ kind: 'hero', …its fields }[]` |
 | `seo(label?)` | a `group` of `title`, `description` and `image` |
+
+**Several references.** `references` stores an ordered list of slugs. The admin shows the picked entries (move up
+or down, remove) and a select to add more, limited by `max`. Validation trims slugs, drops blanks and repeats, then
+checks `min` / `max`; `required` means at least one. A picked entry that is later unpublished stays in the list,
+marked "(unavailable)", and readers leave it out.
+
+```ts
+related: fields.references('Related posts', 'posts', { max: 3 }),
+authors: fields.references('Authors', 'authors', { required: true }),
+```
 
 Entries with groups get tabs above the form: **All fields**, **General** (fields outside any group) and one
 tab per group. Use one singleton per page with groups as sections, or a collection when editors add pages.
@@ -173,7 +184,7 @@ count: fields.number('How many', { default: 3 }),
   missing from stored data still reads as its empty value.
 - A function default runs when the entry form opens. Items and blocks added later in that form start with the
   value from when it opened (functions can't be sent to the browser).
-- `text`, `textarea`, `number`, `boolean`, `select`, `date`, `datetime`, `url`, `reference` and `tags` take a
+- `text`, `textarea`, `number`, `boolean`, `select`, `date`, `datetime`, `url`, `reference`, `references` and `tags` take a
   `default`. For a `group`, give its fields defaults.
 
 ### Conditional fields
@@ -234,10 +245,14 @@ const settings = await cms.getSingleton('settings');
 const posts = await cms.listEntries('posts'); // [{ slug, entry, status }], fully typed
 const latest = await cms.listEntries('posts', { orderBy: 'date', order: 'desc', limit: 3 });
 const post = await cms.getEntry('posts', slug);
+const related = await cms.getEntries('posts', post.related); // [{ slug, entry }], in the order given
 export const generateStaticParams = async () => (await cms.listSlugs('posts')).map((slug) => ({ slug }));
 
 <RichText content={post.content} className="prose" />
 ```
+
+`getEntries(collection, slugs)` reads several entries in one query: published ones only, in the order of `slugs`,
+leaving out missing, unpublished and repeated slugs. Use it to resolve a `references` field.
 
 `listEntries` options: `orderBy` (a field, a derived value, `'slug'`, `'createdAt'` or `'updatedAt'`; default `'slug'`,
 empty values last), `order` (`'asc'` | `'desc'`), `filter(entry)`, `limit`, `offset`.
@@ -268,7 +283,7 @@ page warns first). Publish can therefore never fail on a stored draft.
 If someone else changed the entry since you opened it, autosave stops and asks you to reload instead of
 overwriting their version.
 
-The public readers (`listEntries`, `getEntry`, `listSlugs`) only return published entries, so a draft is a 404
+The public readers (`listEntries`, `getEntry`, `getEntries`, `listSlugs`) only return published entries, so a draft is a 404
 on your site; editors see their autosaved draft in live preview, and anywhere on the site while Draft Mode is on
 for that entry (until they press "Exit preview").
 
@@ -359,7 +374,7 @@ type EditorTool = {
   name: string; // unique; the React key
   label: string; // tooltip and accessible name
   icon: ReactNode;
-  run: (editor: Editor) => void;
+  run: (editor: Editor, admin: ToolContext) => void; // admin: form(), confirm(), alert() (see below)
   isActive?: (editor: Editor) => boolean; // shows the button as pressed
   disabled?: (editor: Editor) => boolean;
   group?: 'format' | 'block' | 'insert'; // toolbar group; left out, a group of its own at the end
@@ -404,6 +419,144 @@ highlight on the site with any highlighter (or style as plain code).
 
 The config applies to every rich-text field. It can't be set per field, because extensions and functions can't
 be stored in the schema that is sent to the admin.
+
+### Nodes with a form
+
+For a node whose values the editor fills in (an embed's URL, a callout's tone), `tools.node()` makes a button that
+opens a form in the admin's dialog, validates it like an entry, then inserts the node. In the editor the node shows
+as a card with a one-line preview; double-click it (or its Edit button) to change the values.
+
+Define the node once, with its form fields, in a plain module that both the editor config and the site import.
+`nodeAttributes(fields)` gives it one attribute per field, starting at the field's empty value and kept in HTML as
+`data-<name>`:
+
+```ts
+// src/youtube.ts
+import { Node } from '@tiptap/core';
+import { fields } from '@n3wtou/mnml-cms';
+import { nodeAttributes } from '@n3wtou/mnml-cms/editor';
+
+export const youtubeFields = {
+  url: fields.url('YouTube URL', { required: true }),
+  title: fields.text('Title'),
+};
+
+export const YouTube = Node.create({
+  name: 'youtube',
+  group: 'block',
+  atom: true, // a form node has no editable content of its own
+  addAttributes: () => nodeAttributes(youtubeFields),
+  parseHTML: () => [{ tag: 'div[data-youtube]' }],
+  renderHTML: ({ HTMLAttributes }) => ['div', { 'data-youtube': '', ...HTMLAttributes }],
+});
+```
+
+```tsx
+// src/mnml-editor.tsx
+export const editor = defineEditor({
+  extensions: [YouTube],
+  tools: [
+    tools.node({
+      name: 'youtube', // the node's name
+      label: 'YouTube video',
+      icon: <CirclePlayIcon />,
+      group: 'insert',
+      fields: youtubeFields,
+      preview: (attrs) => attrs.url ?? '', // optional: the card's one-line preview
+    }),
+  ],
+  components: { youtube: YouTubeEmbed }, // how <RichText> renders it on the site (see below)
+});
+```
+
+Form fields can be `text`, `textarea`, `url`, `number`, `boolean`, `select`, `date` and `reference` (the slug): values
+that fit in a node's attributes. `required`, `help` and `showIf` work as in entries.
+
+The form is available to any tool: `run` gets the editor and the admin's dialogs.
+
+```ts
+run: async (editor, { form, confirm, alert }) => {
+  const values = await form({ title: 'Callout', fields: calloutFields, submitLabel: 'Insert' }); // null if cancelled
+  if (values) editor.chain().focus().insertContent({ type: 'callout', attrs: values }).run();
+};
+```
+
+### Linking entries from rich text
+
+`tools.reference()` is a button that picks a published entry of a collection and inserts a node that links to it:
+`{ type: name, attrs: { collection, slug } }`. `referenceNode({ name })` is a ready-made node for it. In the editor it
+shows as a card with the entry's title; double-click it to pick another entry.
+
+```tsx
+// src/mnml-editor.tsx
+import { defineEditor, referenceNode, tools } from '@n3wtou/mnml-cms/editor';
+
+export const editor = defineEditor({
+  extensions: [referenceNode({ name: 'blockLink' })],
+  tools: [tools.reference({ name: 'blockLink', label: 'Link a post', icon: <FileSymlinkIcon />, collection: 'posts', group: 'insert' })],
+});
+```
+
+The node stores the slug only, so the site loads the linked entries itself. `collectReferences(doc)` lists every entry a
+document links to, as `{ collection, slugs }[]` (deduplicated, found anywhere in the document), so you can load them
+in one go before rendering, then render the node with a component:
+
+```tsx
+import { collectReferences, RichText } from '@n3wtou/mnml-cms/rich-text';
+
+const slugs = collectReferences(post.content, ['blockLink']).find((r) => r.collection === 'posts')?.slugs ?? [];
+const linked = new Map((await cms.getEntries('posts', slugs)).map((p) => [p.slug, p.entry]));
+
+<RichText
+  content={post.content}
+  editor={editor}
+  components={{ blockLink: ({ attrs }) => <PostCard slug={String(attrs.slug)} post={linked.get(String(attrs.slug))} /> }}
+/>;
+```
+
+A linked entry can be unpublished or deleted later, so the component should handle a missing entry (the example
+renders nothing). Node forms (`tools.node`) can also use a `reference` field; the picker offers published entries.
+
+### Custom node rendering
+
+By default `<RichText>` renders every node with its extension's `renderHTML`. To render a node with your own React
+component (an embed, a highlighted code block, a callout, a card for another entry), map its name to a component.
+The component gets the node as Tiptap JSON, its `attrs`, and its rendered content as `children` (none for leaf
+nodes such as images):
+
+```tsx
+// src/components/code-block.tsx
+import type { RichTextNodeProps } from '@n3wtou/mnml-cms/editor';
+
+export function CodeBlock({ attrs, children }: RichTextNodeProps) {
+  return (
+    <figure>
+      <figcaption>{String(attrs.language ?? '')}</figcaption>
+      <pre><code>{children}</code></pre>
+    </figure>
+  );
+}
+```
+
+Set it once in the editor config, so every `<RichText editor={editor}>` uses it:
+
+```ts
+// src/mnml-editor.ts
+export const editor = defineEditor({
+  components: { codeBlock: CodeBlock }, // keyed by node name: codeBlock, image, blockquote, your own node's name…
+});
+```
+
+Or pass `components` to one `<RichText>`. It is merged over the editor config's, and wins for the same node:
+
+```tsx
+<RichText content={post.content} editor={editor} components={{ blockLink: PostCard }} />
+```
+
+The editor config is also loaded by the admin's editor in the browser, so components set there are part of the
+client bundle. Keep those to plain components, and put async server components (ones that load data, such as a
+card that fetches the linked entry) in the `components` prop. Nodes without a component render as before, and a
+component for a node the schema doesn't have is ignored.
 
 ## Options
 
@@ -489,6 +642,8 @@ type EntryStorage = {
   upsert(collection: string, slug: string, data: unknown, status: string): Promise<void>; // set updatedAt = now
   insertIfAbsent(collection: string, slug: string, data: unknown, status: string): Promise<boolean>; // false if the slug exists
   remove(collection: string, slug: string): Promise<void>;
+  // Optional: these slugs' rows in one query (any order). Without it, getEntries reads the collection with readRows.
+  readRowsBySlug?(collection: string, slugs: string[]): Promise<{ slug: string; data: unknown; status: string }[]>;
 };
 ```
 
@@ -547,6 +702,8 @@ const storage: EntryStorage = {
   async remove(collection, slug) {
     await prisma.entry.deleteMany({ where: { collection, slug } });
   },
+  readRowsBySlug: (collection, slugs) =>
+    prisma.entry.findMany({ where: { collection, slug: { in: slugs } }, select: { slug: true, data: true, status: true } }),
 };
 ```
 
@@ -559,8 +716,8 @@ const storage: EntryStorage = {
 | `@n3wtou/mnml-cms` | Schema builders, validation, types, `seoMetadata` (framework-free) |
 | `@n3wtou/mnml-cms/next` | `createCms`, `neonDatabase`, `drizzleStorage`, `vercelBlobMedia`, `localMedia` |
 | `@n3wtou/mnml-cms/proxy` | `adminProxy` |
-| `@n3wtou/mnml-cms/rich-text` | `RichText` server renderer |
-| `@n3wtou/mnml-cms/editor` | `defineEditor`, ready-made `tools` (server-safe) |
+| `@n3wtou/mnml-cms/rich-text` | `RichText` server renderer, `collectReferences` |
+| `@n3wtou/mnml-cms/editor` | `defineEditor`, ready-made `tools` (including `tools.node`, `tools.reference`), `nodeAttributes`, `referenceNode`, `collectReferences`, `RichTextComponents` / `RichTextNodeProps` types (server-safe) |
 | `@n3wtou/mnml-cms/admin` | UI pieces for extra admin pages, `editorProvider` |
 | `@n3wtou/mnml-cms/db` | Drizzle table for scripts and drizzle-kit |
 | `@n3wtou/mnml-cms/styles.css` | Admin styles and `--mnml-*` variables |

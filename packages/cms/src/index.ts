@@ -3,3 +3,4 @@ export * from './define.js';
 export type { JSONContent } from '@tiptap/core';
 export { seoMetadata } from './seo.js';
 export { plainText, readingTime } from './derive.js';
+export { collectReferences, type RichTextReferences } from './references.js';
