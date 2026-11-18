@@ -147,3 +147,56 @@ describe('displayText', () => {
     expect(displayText({ url: '/a.png' })).toBe('');
   });
 });
+
+describe('references field', () => {
+  const related = fields.references('Related', 'posts', { max: 2 });
+
+  it('is empty as [] and filled in from stored data', () => {
+    expect(emptyValue(related)).toEqual([]);
+    expect(withDefaults({ related }, {})).toEqual({ related: [] });
+    expect(withDefaults({ related }, { related: ['a', 'b'] })).toEqual({ related: ['a', 'b'] });
+  });
+
+  it('counts as a reference target, including in groups, arrays and blocks', () => {
+    expect(referenceTargets({ related })).toEqual(['posts']);
+    expect(
+      referenceTargets({
+        g: fields.group('G', { team: fields.references('Team', 'people') }),
+        body: fields.blocks('Body', { cards: block('Cards', { items: fields.references('Items', 'products') }) }),
+      }).sort(),
+    ).toEqual(['people', 'products']);
+  });
+
+  it('trims slugs and drops blanks and repeats, keeping order', () => {
+    expect(objectSchema({ related: fields.references('R', 'posts') }).parse({ related: [' b ', '', 'a', 'b'] })).toEqual({ related: ['b', 'a'] });
+  });
+
+  it('checks min and max after cleaning up', () => {
+    const s = objectSchema({ related: fields.references('R', 'posts', { min: 2, max: 3 }) });
+    expect(s.safeParse({ related: ['a', 'a'] }).success).toBe(false);
+    expect(s.safeParse({ related: ['a', 'b'] }).success).toBe(true);
+    expect(s.safeParse({ related: ['a', 'b', 'c', 'd'] }).success).toBe(false);
+    const r = s.safeParse({ related: ['a'] });
+    expect(!r.success && r.error.issues[0].message).toBe('Pick at least 2 entries');
+  });
+
+  it('treats required as at least one', () => {
+    const s = objectSchema({ authors: fields.references('Authors', 'authors', { required: true }) });
+    const r = s.safeParse({ authors: [] });
+    expect(!r.success && r.error.issues[0].message).toBe('Pick at least 1 entry');
+    expect(s.safeParse({ authors: ['ada'] }).success).toBe(true);
+  });
+
+  it('skips min while hidden by showIf', () => {
+    const s = objectSchema({
+      kind: fields.select('Kind', ['list', 'none']),
+      items: fields.references('Items', 'posts', { min: 1, showIf: { kind: 'list' } }),
+    });
+    expect(s.safeParse({ kind: 'none', items: [] }).success).toBe(true);
+    expect(s.safeParse({ kind: 'list', items: [] }).success).toBe(false);
+  });
+
+  it('rejects non-string slugs', () => {
+    expect(objectSchema({ related }).safeParse({ related: [1] }).success).toBe(false);
+  });
+});

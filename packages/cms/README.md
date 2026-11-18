@@ -97,6 +97,7 @@ Options for every field: `{ required, help }`.
 | `boolean` | `boolean` (default `false`) |
 | `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null` |
 | `reference(label, 'authors')` | slug of a published entry in that collection, `string \| null`; resolve with `cms.getEntry` |
+| `references(label, 'posts', { min, max })` | slugs of published entries, in the editor's order, `string[]`; resolve with `cms.getEntries` |
 | `image` | `{ url, alt } \| null` |
 | `richtext` | Tiptap JSON; render with `<RichText>` |
 | `tags` | `string[]` |
@@ -104,6 +105,16 @@ Options for every field: `{ required, help }`.
 | `group(label, fields)` | a nested object shown as one section: `page.hero.headline` |
 | `blocks(label, { hero: block('Hero', fields), … }, { itemLabel })` | a list of sections, each one of the blocks: `{ kind: 'hero', …its fields }[]` |
 | `seo(label?)` | a `group` of `title`, `description` and `image` |
+
+**Several references.** `references` stores an ordered list of slugs. The admin shows the picked entries (move up
+or down, remove) and a select to add more, limited by `max`. Validation trims slugs, drops blanks and repeats, then
+checks `min` / `max`; `required` means at least one. A picked entry that is later unpublished stays in the list,
+marked "(unavailable)", and readers leave it out.
+
+```ts
+related: fields.references('Related posts', 'posts', { max: 3 }),
+authors: fields.references('Authors', 'authors', { required: true }),
+```
 
 Entries with groups get tabs above the form: **All fields**, **General** (fields outside any group) and one
 tab per group. Use one singleton per page with groups as sections, or a collection when editors add pages.
@@ -185,10 +196,14 @@ const settings = await cms.getSingleton('settings');
 const posts = await cms.listEntries('posts'); // [{ slug, entry, status }], fully typed
 const latest = await cms.listEntries('posts', { orderBy: 'date', order: 'desc', limit: 3 });
 const post = await cms.getEntry('posts', slug);
+const related = await cms.getEntries('posts', post.related); // [{ slug, entry }], in the order given
 export const generateStaticParams = async () => (await cms.listSlugs('posts')).map((slug) => ({ slug }));
 
 <RichText content={post.content} className="prose" />
 ```
+
+`getEntries(collection, slugs)` reads several entries in one query: published ones only, in the order of `slugs`,
+leaving out missing, unpublished and repeated slugs. Use it to resolve a `references` field.
 
 `listEntries` options: `orderBy` (a field, a derived value, `'slug'`, `'createdAt'` or `'updatedAt'`; default `'slug'`,
 empty values last), `order` (`'asc'` | `'desc'`), `filter(entry)`, `limit`, `offset`.
@@ -219,7 +234,7 @@ page warns first). Publish can therefore never fail on a stored draft.
 If someone else changed the entry since you opened it, autosave stops and asks you to reload instead of
 overwriting their version.
 
-The public readers (`listEntries`, `getEntry`, `listSlugs`) only return published entries, so a draft is a 404
+The public readers (`listEntries`, `getEntry`, `getEntries`, `listSlugs`) only return published entries, so a draft is a 404
 on your site; editors see their autosaved draft in live preview, and anywhere on the site while Draft Mode is on
 for that entry (until they press "Exit preview").
 
@@ -441,7 +456,7 @@ in one go before rendering, then render the node with a component:
 import { collectReferences, RichText } from '@n3wtou/mnml-cms/rich-text';
 
 const slugs = collectReferences(post.content, ['blockLink']).find((r) => r.collection === 'posts')?.slugs ?? [];
-const linked = new Map(await Promise.all(slugs.map(async (s) => [s, await cms.getEntry('posts', s)] as const)));
+const linked = new Map((await cms.getEntries('posts', slugs)).map((p) => [p.slug, p.entry]));
 
 <RichText
   content={post.content}
@@ -578,6 +593,8 @@ type EntryStorage = {
   upsert(collection: string, slug: string, data: unknown, status: string): Promise<void>; // set updatedAt = now
   insertIfAbsent(collection: string, slug: string, data: unknown, status: string): Promise<boolean>; // false if the slug exists
   remove(collection: string, slug: string): Promise<void>;
+  // Optional: these slugs' rows in one query (any order). Without it, getEntries reads the collection with readRows.
+  readRowsBySlug?(collection: string, slugs: string[]): Promise<{ slug: string; data: unknown; status: string }[]>;
 };
 ```
 
@@ -636,6 +653,8 @@ const storage: EntryStorage = {
   async remove(collection, slug) {
     await prisma.entry.deleteMany({ where: { collection, slug } });
   },
+  readRowsBySlug: (collection, slugs) =>
+    prisma.entry.findMany({ where: { collection, slug: { in: slugs } }, select: { slug: true, data: true, status: true } }),
 };
 ```
 
