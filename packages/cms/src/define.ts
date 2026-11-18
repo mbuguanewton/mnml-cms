@@ -36,8 +36,11 @@ export type UrlField = Base & { type: 'url' };
 export type ImageField = Base & { type: 'image' };
 export type BooleanField = Base & { type: 'boolean' };
 export type NumberField = Base & { type: 'number'; min?: number; max?: number; step?: number };
-/** One of a fixed list of values. */
-export type SelectField<O extends readonly string[] = readonly string[]> = Base & { type: 'select'; options: O };
+/** One of a fixed list of values. `optionLabels` holds the labels the admin shows instead of the raw values. */
+export type SelectField<O extends readonly string[] = readonly string[]> = Base & { type: 'select'; options: O; optionLabels?: Record<string, string> };
+/** A select option: a value, or a value with the label the admin shows for it. */
+export type SelectOption = string | { value: string; label: string };
+type OptionValue<T> = T extends string ? T : T extends { value: infer V extends string } ? V : never;
 /** Points at an entry of another collection; the value is that entry's slug. */
 export type ReferenceField = Base & { type: 'reference'; collection: string };
 /** Points at several entries of another collection, in order; the value is their slugs. `required` means at least one. */
@@ -130,12 +133,27 @@ export const fields = {
   tags: (label: string, o: WithDefault<string[]> = {}): TagsField => ({ type: 'tags', label, ...o }),
   boolean: (label: string, o: WithDefault<boolean> = {}): BooleanField => ({ type: 'boolean', label, ...o }),
   number: (label: string, o: WithDefault<number> & { min?: number; max?: number; step?: number } = {}): NumberField => ({ type: 'number', label, ...o }),
-  select: <const O extends readonly string[]>(label: string, options: O, o: WithDefault<NoInfer<O[number]>> = {}): SelectField<O> => ({
-    type: 'select',
-    label,
-    options,
-    ...o,
-  }),
+  /**
+   * One of `options`: values (`['news', 'guide']`) or values with labels (`[{ value: 'blog', label: 'Blog Post' }]`),
+   * or a mix. The admin shows the labels; entries store the values.
+   */
+  select: <const O extends readonly SelectOption[]>(
+    label: string,
+    options: O,
+    o: WithDefault<NoInfer<OptionValue<O[number]>>> = {},
+  ): SelectField<readonly OptionValue<O[number]>[]> => {
+    const values = options.map((x) => (typeof x === 'string' ? x : x.value));
+    const repeated = values.find((v, i) => values.indexOf(v) !== i);
+    if (repeated !== undefined) throw new Error(`fields.select('${label}'): the value '${repeated}' is listed twice.`);
+    const optionLabels = Object.fromEntries(options.flatMap((x) => (typeof x === 'string' ? [] : [[x.value, x.label]])));
+    return {
+      type: 'select',
+      label,
+      options: values as unknown as readonly OptionValue<O[number]>[],
+      ...(Object.keys(optionLabels).length ? { optionLabels } : {}),
+      ...o,
+    };
+  },
   /** The slug of an entry in `collection` (a key of your config). Only published entries are offered. */
   reference: (label: string, collection: string, o: WithDefault<string> = {}): ReferenceField => ({ type: 'reference', label, collection, ...o }),
   /** The slugs of entries in `collection`, in the editor's order. `min` / `max` limit how many; only published entries are offered. */
@@ -523,6 +541,12 @@ function objectOf(fields: Fields, extra: Record<string, z.core.$ZodType> = {}) {
 
 export function objectSchema(fields: Fields) {
   return objectOf(fields);
+}
+
+/** The label a select shows for `value` (the value itself if it has none); null for no value. For showing it on the site. */
+export function selectLabel(field: SelectField, value: string | null | undefined): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  return field.optionLabels?.[value] ?? value;
 }
 
 export const slugSchema = z

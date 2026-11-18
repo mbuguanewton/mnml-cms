@@ -113,23 +113,22 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
           onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
         />
       );
-    case 'select':
+    case 'select': {
+      const current = (value as string | null) ?? '';
+      // Keep a stored value that is no longer an option visible instead of silently dropping it.
+      const missing = current !== '' && !field.options.includes(current);
       return (
-        <select
-          id={id}
-          className={`${inputClass} w-auto`}
-          aria-invalid={invalid}
-          value={(value as string | null) ?? ''}
-          onChange={(e) => onChange(e.target.value || null)}
-        >
+        <select id={id} className={`${inputClass} w-auto`} aria-invalid={invalid} value={current} onChange={(e) => onChange(e.target.value || null)}>
           <option value="">—</option>
+          {missing && <option value={current}>{current} (unavailable)</option>}
           {field.options.map((o) => (
             <option key={o} value={o}>
-              {o}
+              {field.optionLabels?.[o] ?? o}
             </option>
           ))}
         </select>
       );
+    }
     case 'reference':
       return <ReferenceInput id={id} collection={field.collection} value={value as string | null} onChange={onChange} invalid={invalid} />;
     case 'references':
