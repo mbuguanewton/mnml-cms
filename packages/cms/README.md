@@ -102,13 +102,16 @@ Options for every field: `{ required, help }`.
 | `image` | `{ url, alt } \| null` |
 | `richtext` | Tiptap JSON; render with `<RichText>` |
 | `tags` | `string[]` |
-| `array(label, fields, { itemLabel })` | a repeatable list of `fields` |
+| `array(label, fields, { itemLabel, min, max })` | a repeatable list of `fields` |
 | `group(label, fields)` | a nested object shown as one section: `page.hero.headline` |
-| `blocks(label, { hero: block('Hero', fields), … }, { itemLabel })` | a list of sections, each one of the blocks: `{ kind: 'hero', …its fields }[]` |
+| `blocks(label, { hero: block('Hero', fields), … }, { itemLabel, min, max })` | a list of sections, each one of the blocks: `{ kind: 'hero', …its fields }[]` |
 | `seo(label?)` | a `group` of `title`, `description` and `image` |
 
+**Picking entries.** `reference` and `references` pick published entries with a search box: type to filter by title
+or slug, use ↓/↑ and Enter, or click. A single `reference` shows the picked entry with a clear (×) button.
+
 **Several references.** `references` stores an ordered list of slugs. The admin shows the picked entries (move up
-or down, remove) and a select to add more, limited by `max`. Validation trims slugs, drops blanks and repeats, then
+or down, remove) and the search box to add more, limited by `max`. Validation trims slugs, drops blanks and repeats, then
 checks `min` / `max`; `required` means at least one. A picked entry that is later unpublished stays in the list,
 marked "(unavailable)", and readers leave it out.
 
@@ -119,6 +122,17 @@ authors: fields.references('Authors', 'authors', { required: true }),
 
 Entries with groups get tabs above the form: **All fields**, **General** (fields outside any group) and one
 tab per group. Use one singleton per page with groups as sections, or a collection when editors add pages.
+
+### Limits
+
+`array`, `blocks` and `references` take `min` and `max`: how many items they may have. `required` means at least
+one. Saving with too few or too many fails with an error on the field ("Add at least 1 item"), and autosave pauses
+with the same reason. At `max` the admin disables Add and says so. A field hidden by `showIf` skips the check.
+
+```ts
+links: fields.array('Links', { label: fields.text('Label'), url: fields.url('URL') }, { max: 4 }),
+sections: fields.blocks('Sections', { hero, text }, { min: 1 }),
+```
 
 ### Blocks
 
