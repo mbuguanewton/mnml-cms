@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeDatetime } from './datetime.js';
 import type { JSONContent } from '@tiptap/core';
 
 // The building blocks for a mnml.config.ts. One definition there drives the admin forms,
@@ -29,6 +30,8 @@ type Base = {
 export type TextField = Base & { type: 'text' };
 export type TextareaField = Base & { type: 'textarea' };
 export type DateField = Base & { type: 'date' };
+/** A moment in time, stored as a UTC ISO string (`2026-11-18T14:30:00.000Z`), so it sorts as a string. */
+export type DatetimeField = Base & { type: 'datetime' };
 export type UrlField = Base & { type: 'url' };
 export type ImageField = Base & { type: 'image' };
 export type BooleanField = Base & { type: 'boolean' };
@@ -59,6 +62,7 @@ export type Field =
   | TextField
   | TextareaField
   | DateField
+  | DatetimeField
   | UrlField
   | ImageField
   | BooleanField
@@ -81,7 +85,7 @@ export type ImageValue = { url: string; alt: string };
 
 type ValueOf<F> = F extends TextField | TextareaField
   ? string
-  : F extends DateField | UrlField | ReferenceField
+  : F extends DateField | DatetimeField | UrlField | ReferenceField
     ? string | null
     : F extends ImageField
       ? ImageValue | null
@@ -118,6 +122,8 @@ export const fields = {
   text: (label: string, o: WithDefault<string> = {}): TextField => ({ type: 'text', label, ...o }),
   textarea: (label: string, o: WithDefault<string> = {}): TextareaField => ({ type: 'textarea', label, ...o }),
   date: (label: string, o: WithDefault<string> = {}): DateField => ({ type: 'date', label, ...o }),
+  /** A date and time, stored in UTC; the admin shows it in the editor's time zone. A default is an ISO string (`() => new Date().toISOString()`). */
+  datetime: (label: string, o: WithDefault<string> = {}): DatetimeField => ({ type: 'datetime', label, ...o }),
   url: (label: string, o: WithDefault<string> = {}): UrlField => ({ type: 'url', label, ...o }),
   image: (label: string, o: Opts = {}): ImageField => ({ type: 'image', label, ...o }),
   richtext: (label: string, o: Opts = {}): RichTextField => ({ type: 'richtext', label, ...o }),
@@ -347,6 +353,7 @@ export function emptyValue(f: Field): unknown {
     case 'textarea':
       return '';
     case 'date':
+    case 'datetime':
     case 'url':
     case 'image':
     case 'number':
@@ -408,6 +415,13 @@ function fieldSchema(f: Field): z.ZodType {
       return f.required ? z.string().trim().min(1, 'Required') : z.string().trim();
     case 'date': {
       const s = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
+      return z.preprocess(blankToNull, f.required ? s : s.nullable());
+    }
+    case 'datetime': {
+      const s = z
+        .string()
+        .refine((v) => normalizeDatetime(v) !== null, 'Use a date and time like 2026-11-18T14:30:00Z')
+        .transform((v) => normalizeDatetime(v) as string);
       return z.preprocess(blankToNull, f.required ? s : s.nullable());
     }
     case 'url': {

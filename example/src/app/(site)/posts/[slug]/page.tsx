@@ -6,7 +6,7 @@ import { collectReferences, RichText } from '@n3wtou/mnml-cms/rich-text';
 import { cms } from '@/mnml';
 import { editor } from '@/mnml-editor';
 import { PostLink } from '@/components/post-link';
-import { Category, Picture, PostCard, formatDate } from '@/components/ui';
+import { Category, Picture, PostCard, formatDate, formatDateTime } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +49,11 @@ export default async function PostPage({ params }: Props) {
           )}
           {meta}
         </p>
+        {post.publishedAt && (
+          <p className="text-sm text-mute">
+            Published <time dateTime={post.publishedAt}>{formatDateTime(post.publishedAt)}</time>
+          </p>
+        )}
       </header>
       {post.cover && <Picture image={post.cover} className="my-10 aspect-[16/9] w-full rounded-xl" />}
       <RichText

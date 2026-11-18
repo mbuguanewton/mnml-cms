@@ -93,6 +93,7 @@
     "@tiptap/static-renderer": "^3.31.4",
     "@vercel/blob": "^2.8.1",
     "class-variance-authority": "^0.7.1",
+    "date-fns": "^4.4.0",
     "lucide-react": "^1.48.0",
     "server-only": "^0.0.1",
     "zod": "^4.6.5"

@@ -111,6 +111,8 @@ export default config({
       // New posts start dated today (worked out when the form opens) and filed under news.
       date: fields.date('Date', { default: () => new Date().toISOString().slice(0, 10) }),
       category: fields.select('Category', ['news', 'guide', 'opinion'] as const, { default: 'news' }),
+      // A moment in time, stored in UTC; editors see it in their own time zone.
+      publishedAt: fields.datetime('Published at', { default: () => new Date().toISOString() }),
       author: fields.reference('Author', 'authors'),
       cover: fields.image('Cover image'),
       content: fields.richtext('Content'),
