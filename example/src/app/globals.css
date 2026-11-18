@@ -34,3 +34,7 @@ body {
 .article blockquote { border-left: 3px solid var(--color-accent); padding-left: 1.25rem; font-style: italic; color: var(--color-soft); }
 .article code { font-family: ui-monospace, monospace; font-size: 0.9em; background: #efeae0; padding: 0.1em 0.35em; border-radius: 4px; }
 .article img { max-width: 100%; border-radius: 8px; }
+.article .code-block { border-radius: 8px; overflow: hidden; background: #2b2722; color: #f3eee6; }
+.article .code-block figcaption { font-family: ui-monospace, monospace; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; padding: 0.5rem 1rem; color: #c9bba8; border-bottom: 1px solid #3d3731; }
+.article .code-block pre { padding: 1rem; overflow-x: auto; font-size: 0.875rem; line-height: 1.6; }
+.article .code-block code { background: none; padding: 0; font-size: inherit; color: inherit; }
