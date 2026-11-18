@@ -28,6 +28,12 @@ describe('initialValues', () => {
     expect(initialValues(f)).toEqual({ hero: { eyebrow: 'New', title: '' } });
   });
 
+  it('works on references', () => {
+    expect(initialValues({ related: fields.references('Related', 'posts', { default: ['intro'] }) })).toEqual({ related: ['intro'] });
+    // @ts-expect-error a references default is a list of slugs
+    fields.references('Related', 'posts', { default: 'intro' });
+  });
+
   it('gives each creation its own copy of a list default', () => {
     const f = { tags: fields.tags('Tags', { default: ['a'] }) };
     const one = initialValues(f);
