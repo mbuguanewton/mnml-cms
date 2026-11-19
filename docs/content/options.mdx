@@ -1,0 +1,29 @@
+# Options
+
+The second argument of `createCms(config, options)`.
+
+| Option | Purpose |
+| --- | --- |
+| `database` | A Drizzle Postgres database, or a function that returns one. The function is called on first use. |
+| `table` | Table name, used with `database`. Default `entries`. |
+| `storage` | Your own `EntryStorage`, instead of `database` ([Other ORMs](/other-orms)) |
+| `auth` | `{ password, secret }` for the built-in login, or an `AuthAdapter` ([Authentication](/authentication)) |
+| `media` | Storage for uploaded images ([Image storage](/image-storage)) |
+| `adminPath`, `apiPath` | Default `/admin` and `/api/mnml`. Must match where the files live. |
+| `brand` | Sidebar title: a string, or a function (can be async) |
+| `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
+| `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build them with `@n3wtou/mnml-cms/admin`. |
+| `editor` | The component from `editorProvider()`: extra editor extensions and buttons ([Extending the editor](/editor)) |
+| `revalidate` | Called after each save or delete |
+| `onChange` | Runs after the response on each save or delete (via `after()`), e.g. to update a search index |
+
+## In your own code
+
+`cms.isAdmin()` checks the session in your own routes. It works with the built-in login and with your adapter.
+
+Custom admin pages can open the admin's dialogs from client components. `useAdmin()` comes from `@n3wtou/mnml-cms/admin`:
+
+```ts
+const { confirm, alert } = useAdmin();
+await confirm({ title: 'Delete?', description: '…', confirmLabel: 'Delete', danger: true }); // true or false
+```

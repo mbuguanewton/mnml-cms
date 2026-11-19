@@ -1,0 +1,42 @@
+# Reading content
+
+```tsx
+import { cms } from '@/mnml';
+import { RichText } from '@n3wtou/mnml-cms/rich-text';
+
+const settings = await cms.getSingleton('settings');
+const posts = await cms.listEntries('posts'); // [{ slug, entry, status }]
+const latest = await cms.listEntries('posts', { orderBy: 'date', order: 'desc', limit: 3 });
+const post = await cms.getEntry('posts', slug);
+const related = await cms.getEntries('posts', post.related); // [{ slug, entry }]
+export const generateStaticParams = async () => (await cms.listSlugs('posts')).map((slug) => ({ slug }));
+
+<RichText content={post.content} className="prose" />
+```
+
+Every result is fully typed from your config.
+
+## `listEntries` options
+
+| Option | Value |
+| --- | --- |
+| `orderBy` | A field, a derived value, `'slug'`, `'createdAt'` or `'updatedAt'`. Default `'slug'`. Empty values sort last. |
+| `order` | `'asc'` or `'desc'` |
+| `filter` | `(entry) => boolean` |
+| `limit`, `offset` | Numbers |
+
+## `getEntries`
+
+`getEntries(collection, slugs)` reads several entries in one query. Use it to read a `references` field.
+
+- Returns published entries only, in the order of `slugs`.
+- Leaves out missing, unpublished and repeated slugs.
+
+## Live preview
+
+Render `<cms.PreviewBanner />` in your site layout.
+
+- It only appears for editors who are previewing.
+- Pages stay static for everyone else.
+
+Saving revalidates the whole site by default (`revalidatePath('/', 'layout')`). Pass `revalidate` to change that.

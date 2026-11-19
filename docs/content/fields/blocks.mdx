@@ -1,0 +1,25 @@
+# Blocks
+
+Use `blocks` for a page made of different kinds of sections. Each kind has its own fields.
+
+```ts
+sections: fields.blocks('Sections', {
+  hero: block('Hero', { title: fields.text('Title'), image: fields.image('Image') }),
+  posts: block('Posts', { count: fields.number('How many') }),
+  divider: block('Divider', {}),
+}),
+```
+
+## In the admin
+
+- One "Add section" button opens a list of the blocks. The list gets a search box when there are more than eight.
+- Editors see only the fields of the block they picked.
+- `block(label, fields, { description })` adds a one-line hint to the list.
+- `fields.blocks(…, { addLabel })` renames the button.
+
+## Reading
+
+Each item stores its block's key as `kind`. Check `kind` to narrow the type: after `section.kind === 'hero'`, `section.image` is typed.
+
+- `kind` is reserved. No block can have a field named `kind`.
+- An item whose `kind` is no longer in the config is dropped on read. Remove a block from the config, and it's removed from each entry the next time it's saved.

@@ -1,0 +1,94 @@
+# Getting started
+
+## Install
+
+```sh
+pnpm add @n3wtou/mnml-cms drizzle-orm
+```
+
+## Environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Postgres connection string |
+| `ADMIN_PASSWORD` | The shared admin password |
+| `ADMIN_SESSION_SECRET` | Signs the session cookie. 32+ random characters. |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token. Only needed for image uploads ([Image storage](/image-storage)). |
+
+## 1. Define your content
+
+Plain data, safe to import anywhere.
+
+```ts filename="mnml.config.ts"
+import { collection, config, fields, singleton } from '@n3wtou/mnml-cms';
+
+export default config({
+  settings: singleton({ label: 'Settings', preview: '/', fields: { name: fields.text('Name', { required: true }) } }),
+  posts: collection({
+    label: 'Posts',
+    titleField: 'title',
+    basePath: '/blog', // served at /blog/<slug>
+    preview: true, // live preview next to the editor
+    fields: {
+      title: fields.text('Title', { required: true }),
+      date: fields.date('Date'),
+      content: fields.richtext('Content'),
+    },
+  }),
+});
+```
+
+## 2. Create the CMS
+
+Server only.
+
+```ts filename="src/mnml.ts"
+import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next';
+import config from '../mnml.config';
+
+export const cms = createCms(config, {
+  database: neonDatabase(process.env.DATABASE_URL), // or any Drizzle Postgres database
+  auth: { password: process.env.ADMIN_PASSWORD, secret: process.env.ADMIN_SESSION_SECRET },
+  media: vercelBlobMedia(), // optional
+});
+```
+
+## 3. Mount the admin
+
+```ts filename="app/admin/[[...path]]/page.tsx"
+import { cms } from '@/mnml';
+export default cms.AdminPage;
+```
+
+```ts filename="app/api/mnml/[...route]/route.ts"
+import { cms } from '@/mnml';
+export const { GET, POST } = cms.handlers;
+```
+
+```ts filename="proxy.ts"
+import { adminProxy } from '@n3wtou/mnml-cms/proxy';
+export const proxy = adminProxy({ secret: process.env.ADMIN_SESSION_SECRET });
+export const config = { matcher: ['/admin', '/admin/:path*'] };
+```
+
+Put your site's header and footer in a route group layout (e.g. `app/(site)/layout.tsx`). That keeps them out of the admin.
+
+## 4. Add the styles
+
+In your global CSS:
+
+```css
+@import "@n3wtou/mnml-cms/styles.css";
+```
+
+To restyle the admin, override the `--mnml-*` variables (see `styles.css`).
+
+## 5. Create the table
+
+Point drizzle-kit at the package's schema:
+
+```ts filename="drizzle.config.ts"
+export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3wtou/mnml-cms/dist/server/db.js', dbCredentials: { url: process.env.DATABASE_URL! } });
+```
+
+Then run `drizzle-kit push`. Scripts can import the same table from `@n3wtou/mnml-cms/schema`.

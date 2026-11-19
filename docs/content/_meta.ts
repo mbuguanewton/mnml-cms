@@ -1,0 +1,14 @@
+export default {
+  index: 'Introduction',
+  'getting-started': 'Getting started',
+  fields: 'Fields',
+  'reading-content': 'Reading content',
+  'drafts-and-publishing': 'Drafts and publishing',
+  'moving-content': 'Moving content',
+  editor: 'Editor',
+  options: 'Options',
+  authentication: 'Authentication',
+  'image-storage': 'Image storage',
+  'other-orms': 'Other ORMs',
+  'entry-points': 'Entry points',
+};
