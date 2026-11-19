@@ -15,7 +15,7 @@ pnpm add @n3wtou/mnml-cms drizzle-orm
 | `DATABASE_URL` | Postgres connection string |
 | `ADMIN_PASSWORD` | The single admin password |
 | `ADMIN_SESSION_SECRET` | Signs the session cookie; 32+ random characters |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token, only for image uploads (see [Image storage](https://DOCS_URL/image-storage)) |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token, only for image uploads (see [Image storage](https://mnml-cms.vercel.app/image-storage)) |
 
 ## Set up
 
@@ -97,23 +97,23 @@ const post = await cms.getEntry('posts', slug); // fully typed from mnml.config.
 ```
 
 More readers (`listEntries`, `getEntries`, `getSingleton`, ordering and filters) are in
-[Reading content](https://DOCS_URL/reading-content).
+[Reading content](https://mnml-cms.vercel.app/reading-content).
 
 ## Documentation
 
-Everything else is in the docs at **https://DOCS_URL**:
+Everything else is in the docs at **https://mnml-cms.vercel.app**:
 
-- [Fields](https://DOCS_URL/fields): every field type, [limits](https://DOCS_URL/fields/limits), [blocks](https://DOCS_URL/fields/blocks),
-  [select labels](https://DOCS_URL/fields/select-labels), [dates and times](https://DOCS_URL/fields/dates-and-times),
-  [focal point](https://DOCS_URL/fields/focal-point), [default values](https://DOCS_URL/fields/default-values),
-  [conditional fields](https://DOCS_URL/fields/conditional-fields), [derived values](https://DOCS_URL/fields/derived-values), [SEO](https://DOCS_URL/fields/seo)
-- [Reading content](https://DOCS_URL/reading-content)
-- [Drafts and publishing](https://DOCS_URL/drafts-and-publishing)
-- [Moving content between databases](https://DOCS_URL/moving-content), including rehosting images
-- [Extending the editor](https://DOCS_URL/editor): [tables](https://DOCS_URL/editor/tables), [nodes with a form](https://DOCS_URL/editor/nodes-with-a-form),
-  [linking entries](https://DOCS_URL/editor/linking-entries), [custom node rendering](https://DOCS_URL/editor/custom-rendering)
-- [Options](https://DOCS_URL/options)
-- [Authentication](https://DOCS_URL/authentication)
-- [Image storage](https://DOCS_URL/image-storage)
-- [Other ORMs](https://DOCS_URL/other-orms)
-- [Entry points](https://DOCS_URL/entry-points)
+- [Fields](https://mnml-cms.vercel.app/fields): every field type, [limits](https://mnml-cms.vercel.app/fields/limits), [blocks](https://mnml-cms.vercel.app/fields/blocks),
+  [select labels](https://mnml-cms.vercel.app/fields/select-labels), [dates and times](https://mnml-cms.vercel.app/fields/dates-and-times),
+  [focal point](https://mnml-cms.vercel.app/fields/focal-point), [default values](https://mnml-cms.vercel.app/fields/default-values),
+  [conditional fields](https://mnml-cms.vercel.app/fields/conditional-fields), [derived values](https://mnml-cms.vercel.app/fields/derived-values), [SEO](https://mnml-cms.vercel.app/fields/seo)
+- [Reading content](https://mnml-cms.vercel.app/reading-content)
+- [Drafts and publishing](https://mnml-cms.vercel.app/drafts-and-publishing)
+- [Moving content between databases](https://mnml-cms.vercel.app/moving-content), including rehosting images
+- [Extending the editor](https://mnml-cms.vercel.app/editor): [tables](https://mnml-cms.vercel.app/editor/tables), [nodes with a form](https://mnml-cms.vercel.app/editor/nodes-with-a-form),
+  [linking entries](https://mnml-cms.vercel.app/editor/linking-entries), [custom node rendering](https://mnml-cms.vercel.app/editor/custom-rendering)
+- [Options](https://mnml-cms.vercel.app/options)
+- [Authentication](https://mnml-cms.vercel.app/authentication)
+- [Image storage](https://mnml-cms.vercel.app/image-storage)
+- [Other ORMs](https://mnml-cms.vercel.app/other-orms)
+- [Entry points](https://mnml-cms.vercel.app/entry-points)
