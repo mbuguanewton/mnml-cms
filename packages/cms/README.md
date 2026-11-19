@@ -199,6 +199,9 @@ import { focalPosition } from '@n3wtou/mnml-cms';
 <Image src={post.cover.url} alt={post.cover.alt} fill className="object-cover" style={{ objectPosition: focalPosition(post.cover) }} />;
 ```
 
+Without the helper, it's `object-position: ${focalX * 100}% ${focalY * 100}%`, and `50% 50%` (the CSS default) when
+there's no point.
+
 ### Default values
 
 `default` sets the value a new entry, array item or block starts with. Pass a value, or a function that returns
