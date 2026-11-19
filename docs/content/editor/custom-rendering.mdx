@@ -1,0 +1,49 @@
+# Custom node rendering
+
+By default, `<RichText>` renders each node with its extension's `renderHTML`. To use your own React component instead (an embed, a highlighted code block, a callout, a card for another entry), map the node's name to it.
+
+The component gets:
+
+- `node`: the node as Tiptap JSON
+- `attrs`: its attributes
+- `children`: its rendered content (none for leaf nodes, such as images)
+
+```tsx filename="src/components/code-block.tsx"
+import type { RichTextNodeProps } from '@n3wtou/mnml-cms/editor';
+
+export function CodeBlock({ attrs, children }: RichTextNodeProps) {
+  return (
+    <figure>
+      <figcaption>{String(attrs.language ?? '')}</figcaption>
+      <pre><code>{children}</code></pre>
+    </figure>
+  );
+}
+```
+
+## For every `<RichText>`
+
+Set it in the editor config. Keys are node names: `codeBlock`, `image`, `blockquote`, your own nodes…
+
+```ts filename="src/mnml-editor.ts"
+export const editor = defineEditor({
+  components: { codeBlock: CodeBlock },
+});
+```
+
+The admin's editor also loads this config in the browser. So these components are in the client bundle: keep them plain.
+
+## For one `<RichText>`
+
+Pass `components`. It's merged over the editor config's, and wins for the same node.
+
+```tsx
+<RichText content={post.content} editor={editor} components={{ blockLink: PostCard }} />
+```
+
+Put async server components here, e.g. a card that fetches the linked entry.
+
+## Good to know
+
+- Nodes without a component render as before.
+- A component for a node the schema doesn't have is ignored.

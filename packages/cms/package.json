@@ -13,6 +13,7 @@
   ],
   "license": "MIT",
   "author": "Newton",
+  "homepage": "https://mnml-cms.vercel.app",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mbuguanewton/mnml-cms.git",

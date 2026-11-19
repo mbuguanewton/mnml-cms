@@ -1,0 +1,19 @@
+# Dates and times
+
+| Field | What it stores |
+| --- | --- |
+| `date` | A calendar day (`YYYY-MM-DD`), with no time zone |
+| `datetime` | A moment, in UTC, in one format: `2026-11-18T14:30:00.000Z` |
+
+About `datetime`:
+
+- One format means `listEntries({ orderBy })` sorts it in time order.
+- The admin shows and edits it in the editor's time zone, and names that zone under the input.
+- Values saved through the API need a `Z` or an offset (`2026-11-18T17:30+03:00`). They are converted to UTC.
+- `showIf` can test it for a value or `{ empty: true }`. Range conditions (`gt`, `lt`…) are for numbers only.
+
+On your site, show it in the time zone you choose. The server's zone is usually UTC.
+
+```ts
+new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/London' }).format(new Date(post.publishedAt));
+```

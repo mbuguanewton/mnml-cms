@@ -1,0 +1,39 @@
+# Linking entries from rich text
+
+Link to another entry from inside rich text, e.g. a card for another post.
+
+- `tools.reference()` is a button. It picks a published entry of a collection and inserts a node: `{ type: name, attrs: { collection, slug } }`.
+- `referenceNode({ name })` is a ready-made node for it.
+- In the editor, the node shows as a card with the entry's title. Double-click it to pick another entry.
+
+```tsx filename="src/mnml-editor.tsx"
+import { defineEditor, referenceNode, tools } from '@n3wtou/mnml-cms/editor';
+
+export const editor = defineEditor({
+  extensions: [referenceNode({ name: 'blockLink' })],
+  tools: [tools.reference({ name: 'blockLink', label: 'Link a post', icon: <FileSymlinkIcon />, collection: 'posts', group: 'insert' })],
+});
+```
+
+## On your site
+
+The node stores only the slug, so your site loads the linked entries.
+
+`collectReferences(doc)` lists every entry a document links to, as `{ collection, slugs }[]`. It finds them anywhere in the document and removes repeats. Load them in one go, then render the node with a component:
+
+```tsx
+import { collectReferences, RichText } from '@n3wtou/mnml-cms/rich-text';
+
+const slugs = collectReferences(post.content, ['blockLink']).find((r) => r.collection === 'posts')?.slugs ?? [];
+const linked = new Map((await cms.getEntries('posts', slugs)).map((p) => [p.slug, p.entry]));
+
+<RichText
+  content={post.content}
+  editor={editor}
+  components={{ blockLink: ({ attrs }) => <PostCard slug={String(attrs.slug)} post={linked.get(String(attrs.slug))} /> }}
+/>;
+```
+
+A linked entry can be unpublished or deleted later. Your component must handle a missing entry. The example renders nothing.
+
+Node forms (`tools.node`) can also use a `reference` field. The picker offers published entries.

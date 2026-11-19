@@ -1,0 +1,77 @@
+# Nodes with a form
+
+Some nodes need values from the editor: an embed's URL, a callout's tone. `tools.node()` makes a button that:
+
+1. opens a form in the admin's dialog
+2. validates it like an entry
+3. inserts the node
+
+In the editor, the node shows as a card with a one-line preview. Double-click it, or press its Edit button, to change the values.
+
+## 1. Define the node
+
+Define it once, with its form fields. Use a plain module that both the editor config and the site import.
+
+`nodeAttributes(fields)` gives the node one attribute per field:
+
+- It starts at the field's empty value.
+- It's kept in HTML as `data-<name>`.
+
+```ts filename="src/youtube.ts"
+import { Node } from '@tiptap/core';
+import { fields } from '@n3wtou/mnml-cms';
+import { nodeAttributes } from '@n3wtou/mnml-cms/editor';
+
+export const youtubeFields = {
+  url: fields.url('YouTube URL', { required: true }),
+  title: fields.text('Title'),
+};
+
+export const YouTube = Node.create({
+  name: 'youtube',
+  group: 'block',
+  atom: true, // a form node has no editable content of its own
+  addAttributes: () => nodeAttributes(youtubeFields),
+  parseHTML: () => [{ tag: 'div[data-youtube]' }],
+  renderHTML: ({ HTMLAttributes }) => ['div', { 'data-youtube': '', ...HTMLAttributes }],
+});
+```
+
+## 2. Add the button
+
+```tsx filename="src/mnml-editor.tsx"
+export const editor = defineEditor({
+  extensions: [YouTube],
+  tools: [
+    tools.node({
+      name: 'youtube',
+      label: 'YouTube video',
+      icon: <CirclePlayIcon />,
+      group: 'insert',
+      fields: youtubeFields,
+      preview: (attrs) => attrs.url ?? '',
+    }),
+  ],
+  components: { youtube: YouTubeEmbed },
+});
+```
+
+- `name` is the node's name.
+- `preview` is optional. It's the card's one-line preview.
+- `components` sets how `<RichText>` renders the node on the site ([Custom node rendering](/editor/custom-rendering)).
+
+## Form fields
+
+- Allowed: `text`, `textarea`, `url`, `number`, `boolean`, `select`, `date` and `reference` (the slug). These are values that fit in a node's attributes.
+- `required`, `help` and `showIf` work as in entries.
+
+## Dialogs in any tool
+
+Any tool can use the form. `run` gets the editor and the admin's dialogs: `form`, `confirm` and `alert`.
+
+```ts
+run: async (editor, { form, confirm, alert }) => {
+  const values = await form({ title: 'Callout', fields: calloutFields, submitLabel: 'Insert' }); // null if cancelled
+  if (values) editor.chain().focus().insertContent({ type: 'callout', attrs: values }).run();
+};
+```

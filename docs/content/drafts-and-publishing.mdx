@@ -1,0 +1,46 @@
+# Drafts and publishing
+
+A collection entry is a draft or published. The admin shows a dot:
+
+- **Green:** published
+- **Grey:** draft
+- **Orange over green:** published, with changes that aren't live yet
+
+## Autosave
+
+Edits to an existing entry save about 1.5 seconds after you stop typing. The header shows "Saving…", then "Saved". There's no save button for drafts.
+
+| Action | What it does |
+| --- | --- |
+| **Publish** | Makes the draft the live version. |
+| **Discard changes** (⋮ menu) | Throws away unpublished changes and brings back the live version. |
+| **Unpublish** (⋮ menu) | Takes a published entry off the site. Its content becomes a draft. |
+
+A new entry has nothing to autosave into yet. **Create draft** stores it, or **Publish** puts it live straight away. It autosaves from then on.
+
+### Only valid data is saved
+
+- While a field is invalid, or a required field is empty, the header says "Not saved: \<field\>: \<problem\>".
+- Edits since the last good state are only in the browser. Leaving the page warns first.
+- So Publish can never fail on a stored draft.
+
+### Someone else edited it
+
+If the entry changed since you opened it, autosave stops and asks you to reload. It never overwrites their version.
+
+## On your site
+
+The public readers (`listEntries`, `getEntry`, `getEntries`, `listSlugs`) only return published entries. A draft is a 404.
+
+Editors see their autosaved draft:
+
+- in live preview
+- anywhere on the site while Draft Mode is on for that entry, until they press "Exit preview"
+
+## Singletons
+
+A singleton is live by default: Save publishes straight away. Add `drafts: true` to give it autosave, Publish and Discard changes, like a collection entry.
+
+```ts
+settings: singleton({ label: 'Settings', drafts: true, fields: { /* … */ } }),
+```

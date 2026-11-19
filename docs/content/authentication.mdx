@@ -1,0 +1,35 @@
+# Authentication
+
+## Built-in login
+
+`auth: { password, secret }`: one shared password.
+
+- After 5 failed sign-ins, the client's IP is locked out for 15 minutes. Attempts are counted in the entries table, so this works on serverless.
+- Sessions last 24 hours from the last visit. The proxy renews the cookie while you're active.
+- Changing `ADMIN_PASSWORD` or `ADMIN_SESSION_SECRET` signs everyone out.
+- **Sign out everywhere** in the sidebar does the same, on demand.
+
+## Your own login
+
+For Auth.js, Better Auth, Clerk and others, pass an adapter instead. Give it a `login` UI or a `loginUrl`.
+
+```tsx
+export const cms = createCms(config, {
+  // …
+  auth: {
+    isAdmin: async () => (await auth.api.getSession({ headers: await headers() }))?.user.role === 'admin',
+    login: <SignInWithSso />,
+    signOut: async () => { await auth.api.signOut({ headers: await headers() }); },
+  },
+});
+```
+
+| Adapter field | What it does |
+| --- | --- |
+| `isAdmin` | Says if the visitor is an admin. The admin page and every API route call it. |
+| `login` | Shown in the admin's login card at `/admin/login`. A server or client component. |
+| `loginUrl` | Instead of `login`: sends signed-out visitors to your own page, e.g. `'/sign-in'` |
+| `signOut` | Optional |
+
+- Build `login` with `Button`, `inputClass` and friends from `@n3wtou/mnml-cms/admin` to match the admin.
+- Leave out `adminProxy`. It only understands the built-in session cookie.
