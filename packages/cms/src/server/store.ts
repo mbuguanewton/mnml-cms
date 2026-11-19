@@ -92,12 +92,13 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
   const remove = (collection: string, slug: string) => storage.remove(collection, slug);
 
   return {
-    async getSingleton<K extends SingletonKey<C>>(key: K, o?: ReadOptions): Promise<EntryFor<C, K> | null> {
+    async getSingleton<K extends SingletonKey<C>>(this: void, key: K, o?: ReadOptions): Promise<EntryFor<C, K> | null> {
       const data = await readWithDraft(key, SINGLETON_SLUG, o);
       return data === undefined ? null : (withDerived(config[key], withDefaults(config[key].fields, data)) as EntryFor<C, K>);
     },
 
     async listEntries<K extends CollectionKey<C>>(
+      this: void,
       key: K,
       o: ListOptions<EntryFor<C, K>> = {},
     ): Promise<{ slug: string; entry: EntryFor<C, K>; status: EntryStatus }[]> {
@@ -127,13 +128,39 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
       return arrange(withData, o).map(({ slug, entry, status }) => ({ slug, entry, status }));
     },
 
-    async getEntry<K extends CollectionKey<C>>(key: K, slug: string, o?: ReadOptions): Promise<EntryFor<C, K> | null> {
+    async getEntry<K extends CollectionKey<C>>(this: void, key: K, slug: string, o?: ReadOptions): Promise<EntryFor<C, K> | null> {
       const data = await readWithDraft(key, slug, o);
       return data === undefined ? null : (withDerived(config[key], withDefaults(config[key].fields, data)) as EntryFor<C, K>);
     },
 
+    /**
+     * Several entries by slug, in the order given: `{ slug, entry }[]`. Like `getEntry`, only published ones
+     * (plus the previewed draft in Draft Mode); missing, hidden and repeated slugs are left out. One storage call
+     * when the storage has `readRowsBySlug` (the built-in one does).
+     */
+    async getEntries<K extends CollectionKey<C>>(
+      this: void,
+      key: K,
+      slugs: readonly string[],
+      o?: ReadOptions,
+    ): Promise<{ slug: string; entry: EntryFor<C, K> }[]> {
+      const wanted = [...new Set(slugs.filter((s) => typeof s === 'string' && s !== ''))];
+      if (wanted.length === 0) return [];
+      const rows = storage.readRowsBySlug ? await storage.readRowsBySlug(key, wanted) : (await readRows(key)).filter((r) => wanted.includes(r.slug));
+      const bySlug = new Map(rows.map((r) => [r.slug, r]));
+      const p = await previewing(o);
+      const out: { slug: string; entry: EntryFor<C, K> }[] = [];
+      for (const slug of wanted) {
+        const row = bySlug.get(slug);
+        const data =
+          p?.key === key && p.slug === slug ? await readWithDraft(key, slug, o) : row && (row.status === 'published' || o?.all) ? row.data : undefined;
+        if (data !== undefined) out.push({ slug, entry: withDerived(config[key], withDefaults(config[key].fields, data)) as EntryFor<C, K> });
+      }
+      return out;
+    },
+
     /** Published slugs (all of them with `all: true`). Also fine in generateStaticParams, which runs outside a request. */
-    async listSlugs(key: CollectionKey<C>, o?: Pick<ReadOptions, 'all'>) {
+    async listSlugs(this: void, key: CollectionKey<C>, o?: Pick<ReadOptions, 'all'>) {
       return (await readRows(key)).filter((r) => r.status === 'published' || o?.all).map((r) => r.slug);
     },
 

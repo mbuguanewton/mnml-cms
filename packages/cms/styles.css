@@ -133,4 +133,29 @@
     height: auto;
     border-radius: 0.5rem;
   }
+  /* Tables (@n3wtou/mnml-cms/table). */
+  .mnml-prose table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .mnml-prose th,
+  .mnml-prose td {
+    border: 1px solid var(--mnml-line);
+    padding: 0.35rem 0.6rem;
+    vertical-align: top;
+    text-align: left;
+  }
+  .mnml-prose th {
+    background: var(--mnml-panel);
+    font-weight: 600;
+  }
+  .mnml-prose th > p,
+  .mnml-prose td > p {
+    margin: 0;
+  }
+  /* The cells selected by dragging across them. */
+  .mnml-prose .selectedCell {
+    background: color-mix(in srgb, var(--mnml-primary) 12%, transparent);
+  }
 }

@@ -1,18 +1,28 @@
 import Link from 'next/link';
-import type { ImageValue } from '@n3wtou/mnml-cms';
+import { focalPosition, selectLabel, type ImageValue } from '@n3wtou/mnml-cms';
+import config from '../../mnml.config';
+
+/** The site's time zone, for showing stored (UTC) datetimes. */
+export const SITE_TIME_ZONE = 'Europe/London';
+
+/** A stored datetime as e.g. "18 November 2026 at 14:30" in the site's time zone. */
+export const formatDateTime = (iso: string | null) =>
+  iso ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short', timeZone: SITE_TIME_ZONE }).format(new Date(iso)) : null;
 
 export const formatDate = (d: string | null) =>
   d ? new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : null;
 
-/** A CMS image, or a soft gradient placeholder when there is none. */
+/** A CMS image, cropped around its focal point, or a soft gradient placeholder when there is none. */
 export function Picture({ image, className = '' }: { image: ImageValue | null; className?: string }) {
   if (!image) return <div className={`bg-gradient-to-br from-[#efe3d3] to-[#e2c9b0] ${className}`} aria-hidden />;
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={image.url} alt={image.alt} className={`object-cover ${className}`} />;
+  // oxlint-disable-next-line nextjs/no-img-element
+  return <img src={image.url} alt={image.alt} className={`object-cover ${className}`} style={{ objectPosition: focalPosition(image) }} />;
 }
 
+/** A post's category, shown by its label from the config. */
 export function Category({ children }: { children: string | null }) {
-  return children ? <span className="text-xs font-semibold uppercase tracking-widest text-accent">{children}</span> : null;
+  const label = selectLabel(config.posts.fields.category, children);
+  return label ? <span className="text-xs font-semibold uppercase tracking-widest text-accent">{label}</span> : null;
 }
 
 type PostItem = {

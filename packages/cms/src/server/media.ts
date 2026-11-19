@@ -5,13 +5,19 @@ import { extname, join, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { del, get, list, put } from '@vercel/blob';
 
+// No SVG: it can carry scripts. Vercel caps function request bodies at 4.5 MB.
+/** Image types the CMS stores, with their file extension. Shared by uploads and remote imports. */
+export const IMAGE_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
+/** The largest image an editor can upload. */
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+export type MediaFile = { key: string; size?: number; uploadedAt?: Date };
+
 /**
  * Where uploaded images live. The store can be private: the CMS serves files itself at
  * <apiPath>/media/<key>, so pages never need direct access to the storage.
  * Implement this for any backend (S3, R2, a disk…).
  */
-export type MediaFile = { key: string; size?: number; uploadedAt?: Date };
-
 export type MediaStorage = {
   /** Store an uploaded file and return its key (unique, e.g. with a random suffix). */
   put(file: File, name: string): Promise<string>;

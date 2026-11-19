@@ -1,9 +1,23 @@
 'use client';
 
-import { createContext, use, useEffect, useRef, useState } from 'react';
+import { createContext, use, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
-import { isVisible, withDefaults, type ArrayField, type Block, type BlocksField, type Field, type GroupField, type ImageValue } from '../define.js';
+import {
+  initialValues,
+  isVisible,
+  type ArrayField,
+  type Block,
+  type BlocksField,
+  type Field,
+  type GroupField,
+  type ImageValue,
+  type Limits,
+  type ReferencesField,
+} from '../define.js';
+import { fromLocalInput, toLocalInput } from '../datetime.js';
+import { displayText } from '../text.js';
+import { EntryCombobox } from './entry-combobox.js';
 import { useMenu } from './action-menu.js';
 import { Button } from './button.js';
 import { useAdmin } from './context.js';
@@ -61,6 +75,8 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
           onChange={(e) => onChange(e.target.value || null)}
         />
       );
+    case 'datetime':
+      return <DatetimeInput id={id} value={value as string | null} onChange={onChange} invalid={invalid} />;
     case 'url':
       return (
         <input
@@ -99,25 +115,26 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
           onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
         />
       );
-    case 'select':
+    case 'select': {
+      const current = (value as string | null) ?? '';
+      // Keep a stored value that is no longer an option visible instead of silently dropping it.
+      const missing = current !== '' && !field.options.includes(current);
       return (
-        <select
-          id={id}
-          className={`${inputClass} w-auto`}
-          aria-invalid={invalid}
-          value={(value as string | null) ?? ''}
-          onChange={(e) => onChange(e.target.value || null)}
-        >
+        <select id={id} className={`${inputClass} w-auto`} aria-invalid={invalid} value={current} onChange={(e) => onChange(e.target.value || null)}>
           <option value="">—</option>
+          {missing && <option value={current}>{current} (unavailable)</option>}
           {field.options.map((o) => (
             <option key={o} value={o}>
-              {o}
+              {field.optionLabels?.[o] ?? o}
             </option>
           ))}
         </select>
       );
+    }
     case 'reference':
       return <ReferenceInput id={id} collection={field.collection} value={value as string | null} onChange={onChange} invalid={invalid} />;
+    case 'references':
+      return <ReferencesInput id={id} field={field} value={(value as string[]) ?? []} onChange={onChange} invalid={invalid} />;
     case 'group':
       return null; // rendered by FieldRenderer as a section
     case 'richtext':
@@ -178,17 +195,25 @@ function ReferenceInput({
 }) {
   const options = use(RefOptionsContext)[collection] ?? [];
   // Keep a current value that is no longer offered (e.g. since unpublished) visible instead of silently dropping it.
-  const missing = value && !options.some((o) => o.slug === value);
+  const label = value ? (options.find((o) => o.slug === value)?.label ?? `${value} (unavailable)`) : null;
   return (
-    <select id={id} className={`${inputClass} w-auto`} aria-invalid={invalid} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
-      <option value="">—</option>
-      {missing && <option value={value}>{value} (unavailable)</option>}
-      {options.map((o) => (
-        <option key={o.slug} value={o.slug}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+    <div className="flex flex-col gap-1.5">
+      {label && (
+        <div className="flex items-center gap-2 rounded-[6px] border border-mnml-line bg-mnml-bg px-3 py-1.5">
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          <Button type="button" variant="ghost" size="icon-xs" aria-label={`Clear ${label}`} onClick={() => onChange(null)}>
+            <XIcon />
+          </Button>
+        </div>
+      )}
+      <EntryCombobox
+        id={id}
+        options={options.filter((o) => o.slug !== value)}
+        onPick={onChange}
+        placeholder={value ? 'Search to replace…' : 'Search…'}
+        invalid={invalid}
+      />
+    </div>
   );
 }
 
@@ -197,11 +222,13 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
   const file = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
 
   const upload = async (f: File) => {
     setBusy(true);
     setError(null);
     try {
+      // A new image starts without a focal point: the old one belonged to the old image.
       onChange({ url: await uploadImage(apiPath, f), alt: '' });
     } catch (e) {
       setError((e as Error).message);
@@ -215,7 +242,7 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
       <div className="flex items-center gap-3">
         {value ? (
           // Plain <img>: previews may be any uploaded URL, no need for next/image here.
-          // eslint-disable-next-line @next/next/no-img-element
+          // oxlint-disable-next-line nextjs/no-img-element
           <img src={value.url} alt="" className="size-16 rounded-[6px] border border-mnml-line object-cover" />
         ) : (
           <div className="flex size-16 items-center justify-center rounded-[6px] border border-dashed border-mnml-line text-xs text-mnml-text-mute">None</div>
@@ -225,6 +252,11 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
             <Button id={id} type="button" variant="outline" size="sm" disabled={busy} onClick={() => file.current?.click()}>
               <UploadIcon /> {busy ? 'Uploading…' : value ? 'Replace' : 'Upload'}
             </Button>
+            {value && (
+              <Button type="button" variant="outline" size="sm" aria-expanded={picking} aria-controls={`${id}-focal`} onClick={() => setPicking(!picking)}>
+                Focal point
+              </Button>
+            )}
             {value && (
               <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
                 Remove
@@ -240,11 +272,12 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
           onChange={(e) => {
             const f = e.target.files?.[0];
             e.target.value = '';
-            if (f) upload(f);
+            if (f) void upload(f);
           }}
         />
       </div>
       {error && <p className="break-words text-mnml-danger">{error}</p>}
+      {value && picking && <FocalPointPicker id={`${id}-focal`} value={value} onChange={onChange} />}
       {value && (
         <input
           aria-label="Alt text"
@@ -255,6 +288,155 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
           onChange={(e) => onChange({ ...value, alt: e.target.value })}
         />
       )}
+    </div>
+  );
+}
+
+const clamp01 = (n: number) => Math.round(Math.min(1, Math.max(0, n)) * 1000) / 1000;
+const pct = (n: number) => `${Math.round(n * 1000) / 10}%`;
+
+/** The whole image, larger: click (or use the arrow keys) to set the point that stays in frame when it's cropped. */
+function FocalPointPicker({ id, value, onChange }: { id: string; value: ImageValue; onChange: (v: ImageValue | null) => void }) {
+  const has = typeof value.focalX === 'number' && typeof value.focalY === 'number';
+  const x = has ? (value.focalX as number) : 0.5;
+  const y = has ? (value.focalY as number) : 0.5;
+  const set = (fx: number, fy: number) => onChange({ ...value, focalX: clamp01(fx), focalY: clamp01(fy) });
+  const reset = () => {
+    const { focalX: _x, focalY: _y, ...rest } = value;
+    onChange(rest);
+  };
+  const label = has ? `Focal point: ${pct(x)} across, ${pct(y)} down` : 'Focal point: not set, the centre is used';
+
+  return (
+    <div id={id} className="flex flex-col items-start gap-2">
+      <div
+        tabIndex={0}
+        role="application"
+        aria-roledescription="focal point picker"
+        aria-label={label}
+        aria-describedby={`${id}-hint`}
+        className="relative inline-block max-w-full cursor-crosshair overflow-hidden rounded-[6px] border border-mnml-line outline-none focus-visible:ring-2 focus-visible:ring-mnml-primary/40"
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          set((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+        }}
+        onKeyDown={(e) => {
+          const step = e.shiftKey ? 0.01 : 0.05;
+          const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+          const m = moves[e.key];
+          if (!m) return;
+          e.preventDefault();
+          set(x + m[0], y + m[1]);
+        }}
+      >
+        {/* oxlint-disable-next-line nextjs/no-img-element */}
+        <img src={value.url} alt="" draggable={false} className="block max-h-80 max-w-full select-none" />
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)] ${has ? 'bg-black/30' : 'border-dashed opacity-70'}`}
+          style={{ left: pct(x), top: pct(y) }}
+        />
+      </div>
+      <div className="flex items-center gap-3">
+        <p id={`${id}-hint`} className="text-xs text-mnml-text-mute">
+          Click the point to keep in frame when the image is cropped, or use the arrow keys (Shift for smaller steps).
+        </p>
+        {has && (
+          <Button type="button" variant="ghost" size="sm" onClick={reset}>
+            Reset
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const noSubscribe = () => () => {};
+const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/** A date and time in the editor's time zone, saved as UTC. */
+function DatetimeInput({ id, value, onChange, invalid }: { id: string; value: string | null; onChange: (v: unknown) => void; invalid: boolean }) {
+  // Local time depends on the browser's time zone, which the server render doesn't know: null there and while
+  // hydrating, then the browser's zone.
+  const zone = useSyncExternalStore(noSubscribe, browserTimeZone, () => null);
+  return (
+    <div className="flex flex-col gap-1">
+      <input
+        id={id}
+        type="datetime-local"
+        className={`${inputClass} w-auto`}
+        aria-invalid={invalid}
+        aria-describedby={zone ? `${id}-zone` : undefined}
+        disabled={!zone}
+        value={zone ? toLocalInput(value) : ''}
+        onChange={(e) => onChange(fromLocalInput(e.target.value))}
+      />
+      {zone && (
+        <p id={`${id}-zone`} className="text-xs text-mnml-text-mute">
+          Times are in {zone}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Several entries of one collection, in order: the picked ones (reorder, remove), then a select to add more. */
+function ReferencesInput({
+  id,
+  field,
+  value,
+  onChange,
+  invalid,
+}: {
+  id: string;
+  field: ReferencesField;
+  value: string[];
+  onChange: (v: unknown) => void;
+  invalid: boolean;
+}) {
+  const options = use(RefOptionsContext)[field.collection] ?? [];
+  const label = (slug: string) => options.find((o) => o.slug === slug)?.label;
+  const { move, remove } = useListEditing(value, onChange);
+  const remaining = options.filter((o) => !value.includes(o.slug));
+  const full = field.max !== undefined && value.length >= field.max;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {value.length > 0 && (
+        <ol aria-label={`${field.label}: picked`} className="flex flex-col divide-y divide-mnml-line rounded-[6px] border border-mnml-line bg-mnml-bg">
+          {value.map((slug, i) => (
+            <li key={slug} className="flex items-center gap-2 px-3 py-1.5">
+              <span className="min-w-0 flex-1 truncate">
+                {/* Keep an entry that is no longer offered (e.g. since unpublished) visible instead of silently dropping it. */}
+                {label(slug) ?? `${slug} (unavailable)`}
+              </span>
+              <Button type="button" variant="ghost" size="icon-xs" aria-label={`Move ${label(slug) ?? slug} up`} disabled={i === 0} onClick={() => move(i, -1)}>
+                <ArrowUpIcon />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Move ${label(slug) ?? slug} down`}
+                disabled={i === value.length - 1}
+                onClick={() => move(i, 1)}
+              >
+                <ArrowDownIcon />
+              </Button>
+              <Button type="button" variant="ghost" size="icon-xs" aria-label={`Remove ${label(slug) ?? slug}`} onClick={() => remove(i)}>
+                <XIcon />
+              </Button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <EntryCombobox
+        id={id}
+        options={remaining}
+        onPick={(slug) => onChange([...value, slug])}
+        disabled={full || remaining.length === 0}
+        placeholder={full ? `Maximum of ${field.max} reached` : remaining.length ? 'Search to add…' : 'Nothing more to add'}
+        invalid={invalid}
+      />
     </div>
   );
 }
@@ -331,7 +513,7 @@ function ArrayInput({
 }) {
   const { open, setOpen, update, move, remove } = useListEditing(value, onChange);
   const add = () => {
-    onChange([...value, withDefaults(field.fields, {})]);
+    onChange([...value, initialValues(field.fields)]);
     setOpen(value.length);
   };
 
@@ -352,7 +534,7 @@ function ArrayInput({
                   className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
                 >
                   <ChevronRightIcon className={`size-4 shrink-0 text-mnml-text-mute transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                  <span className="truncate">{(field.itemLabel && String(item[field.itemLabel] ?? '')) || `Item ${i + 1}`}</span>
+                  <span className="truncate">{(field.itemLabel && displayText(item[field.itemLabel])) || `Item ${i + 1}`}</span>
                   {hasError && <span className="shrink-0 text-xs text-mnml-danger">Needs attention</span>}
                 </button>
                 <Button type="button" variant="ghost" size="icon-xs" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
@@ -384,9 +566,13 @@ function ArrayInput({
           );
         })}
       </ul>
-      <Button type="button" variant="outline" size="sm" onClick={add}>
-        <PlusIcon /> Add
-      </Button>
+      <AddRow field={field} count={value.length}>
+        {(full) => (
+          <Button type="button" variant="outline" size="sm" onClick={add} disabled={full}>
+            <PlusIcon /> Add
+          </Button>
+        )}
+      </AddRow>
     </div>
   );
 }
@@ -409,7 +595,7 @@ function BlocksInput({
 }) {
   const { open, setOpen, update, move, remove } = useListEditing(value, onChange);
   const add = (kind: string) => {
-    onChange([...value, { kind, ...withDefaults(field.blocks[kind].fields, {}) }]);
+    onChange([...value, { kind, ...initialValues(field.blocks[kind].fields) }]);
     setOpen(value.length);
   };
   // "Sections" → "Add section"
@@ -424,7 +610,7 @@ function BlocksInput({
           if (!def) return null;
           const isOpen = open === i;
           const hasError = Object.keys(errors).some((k) => k.startsWith(`${path}.${i}.`));
-          const title = field.itemLabel && field.itemLabel in def.fields ? String(item[field.itemLabel] ?? '') : '';
+          const title = field.itemLabel && field.itemLabel in def.fields ? displayText(item[field.itemLabel]) : '';
           return (
             <li key={i}>
               <div className={`flex items-center gap-1 pr-1.5 ${isOpen ? 'bg-mnml-panel' : 'hover:bg-mnml-panel'}`}>
@@ -469,7 +655,9 @@ function BlocksInput({
           );
         })}
       </ul>
-      <BlockPicker blocks={field.blocks} label={addLabel} onPick={add} />
+      <AddRow field={field} count={value.length}>
+        {(full) => <BlockPicker blocks={field.blocks} label={addLabel} onPick={add} disabled={full} />}
+      </AddRow>
     </div>
   );
 }
@@ -477,8 +665,29 @@ function BlocksInput({
 // More than this many blocks and the picker gets a search box.
 const SEARCH_FROM = 8;
 
+/** An Add control, disabled with the reason once a list field has `max` items. */
+function AddRow({ field, count, children }: { field: Limits; count: number; children: (full: boolean) => React.ReactNode }) {
+  const full = field.max !== undefined && count >= field.max;
+  return (
+    <div className="flex items-center gap-3">
+      {children(full)}
+      {full && <span className="text-xs text-mnml-text-mute">Maximum of {field.max} reached</span>}
+    </div>
+  );
+}
+
 /** One "Add" button that opens the list of block kinds, so the form doesn't grow with them. */
-function BlockPicker({ blocks, label, onPick }: { blocks: Record<string, Block>; label: string; onPick: (kind: string) => void }) {
+function BlockPicker({
+  blocks,
+  label,
+  onPick,
+  disabled,
+}: {
+  blocks: Record<string, Block>;
+  label: string;
+  onPick: (kind: string) => void;
+  disabled?: boolean;
+}) {
   const { open, setOpen, root } = useMenu();
   const [q, setQ] = useState('');
   const popup = useRef<HTMLDivElement>(null);
@@ -512,6 +721,7 @@ function BlockPicker({ blocks, label, onPick }: { blocks: Record<string, Block>;
         size="sm"
         aria-haspopup="menu"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => {
           setQ('');
           setOpen(!open);

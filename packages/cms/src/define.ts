@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeDatetime } from './datetime.js';
 import type { JSONContent } from '@tiptap/core';
 
 // The building blocks for a mnml.config.ts. One definition there drives the admin forms,
@@ -10,27 +11,46 @@ type Scalar = string | number | boolean | null;
  * a comparison (`gt`, `gte`, `lt`, `lte`, numbers only) or `{ empty }` (no value, text or items).
  */
 export type Condition =
-  Scalar | readonly Scalar[] | { not: Scalar | readonly Scalar[] } | { gt?: number; gte?: number; lt?: number; lte?: number; empty?: boolean };
+  | Scalar
+  | readonly Scalar[]
+  | { not: Scalar | readonly Scalar[] }
+  | { gt?: number; gte?: number; lt?: number; lte?: number; empty?: boolean };
 /** Show a field only while its sibling fields (same entry, group, item or block) match; every key must. */
 export type ShowIf = Record<string, Condition>;
 
-type Base = { label: string; required?: boolean; help?: string; showIf?: ShowIf };
+type Base = {
+  label: string;
+  required?: boolean;
+  help?: string;
+  showIf?: ShowIf;
+  /** The value a new entry, array item or block starts with (a function is called when it's created). Never applied on read. */
+  default?: unknown;
+};
 
 export type TextField = Base & { type: 'text' };
 export type TextareaField = Base & { type: 'textarea' };
 export type DateField = Base & { type: 'date' };
+/** A moment in time, stored as a UTC ISO string (`2026-11-18T14:30:00.000Z`), so it sorts as a string. */
+export type DatetimeField = Base & { type: 'datetime' };
 export type UrlField = Base & { type: 'url' };
 export type ImageField = Base & { type: 'image' };
 export type BooleanField = Base & { type: 'boolean' };
 export type NumberField = Base & { type: 'number'; min?: number; max?: number; step?: number };
-/** One of a fixed list of values. */
-export type SelectField<O extends readonly string[] = readonly string[]> = Base & { type: 'select'; options: O };
+/** One of a fixed list of values. `optionLabels` holds the labels the admin shows instead of the raw values. */
+export type SelectField<O extends readonly string[] = readonly string[]> = Base & { type: 'select'; options: O; optionLabels?: Record<string, string> };
+/** A select option: a value, or a value with the label the admin shows for it. */
+export type SelectOption = string | { value: string; label: string };
+type OptionValue<T> = T extends string ? T : T extends { value: infer V extends string } ? V : never;
 /** Points at an entry of another collection; the value is that entry's slug. */
 export type ReferenceField = Base & { type: 'reference'; collection: string };
+/** Points at several entries of another collection, in order; the value is their slugs. `required` means at least one. */
+export type ReferencesField = Base & { type: 'references'; collection: string } & Limits;
 export type RichTextField = Base & { type: 'richtext' };
 export type TagsField = Base & { type: 'tags' };
 /** A repeatable group of fields. `itemLabel` names the field shown as each row's title in the admin. */
-export type ArrayField<F extends Fields = Fields> = Base & { type: 'array'; fields: F; itemLabel?: keyof F & string };
+export type ArrayField<F extends Fields = Fields> = Base & { type: 'array'; fields: F; itemLabel?: keyof F & string } & Limits;
+/** How many items a list field may have. `required` also means at least one. */
+export type Limits = { min?: number; max?: number };
 
 /** Fields stored together under one key, shown as a section of the form: `page.hero.headline`. */
 export type GroupField<F extends Fields = Fields> = Base & { type: 'group'; fields: F };
@@ -41,18 +61,25 @@ export type Block<F extends Fields = Fields> = { label: string; fields: F; descr
  * A list where each item is one of several kinds of block, each with its own fields. Items are stored
  * as `{ kind: 'hero', …fields }`, so reading one narrows by `kind`. `itemLabel` names the field shown as a row's title; `addLabel` is the text of the add button (default: "Add" and the field's label, singular).
  */
-export type BlocksField<B extends Record<string, Block> = Record<string, Block>> = Base & { type: 'blocks'; blocks: B; itemLabel?: string; addLabel?: string };
+export type BlocksField<B extends Record<string, Block> = Record<string, Block>> = Base & {
+  type: 'blocks';
+  blocks: B;
+  itemLabel?: string;
+  addLabel?: string;
+} & Limits;
 
 export type Field =
   | TextField
   | TextareaField
   | DateField
+  | DatetimeField
   | UrlField
   | ImageField
   | BooleanField
   | NumberField
   | SelectField
   | ReferenceField
+  | ReferencesField
   | RichTextField
   | TagsField
   | ArrayField
@@ -63,12 +90,24 @@ export interface Fields {
   [key: string]: Field;
 }
 
-/** An uploaded image and its alt text (leave `alt` empty only for decorative images). */
-export type ImageValue = { url: string; alt: string };
+/**
+ * An uploaded image and its alt text (leave `alt` empty only for decorative images). `focalX` / `focalY`
+ * are the point to keep in frame when the image is cropped, 0–1 from the left and top; both or neither.
+ */
+export type ImageValue = { url: string; alt: string; focalX?: number; focalY?: number };
+
+/** The CSS `object-position` that keeps an image's focal point in frame: `"30% 40%"`, or `"50% 50%"` without one. */
+export function focalPosition(image: ImageValue | null | undefined): string {
+  const x = image?.focalX;
+  const y = image?.focalY;
+  if (typeof x !== 'number' || typeof y !== 'number') return '50% 50%';
+  const pct = (n: number) => `${Math.round(Math.min(1, Math.max(0, n)) * 1000) / 10}%`;
+  return `${pct(x)} ${pct(y)}`;
+}
 
 type ValueOf<F> = F extends TextField | TextareaField
   ? string
-  : F extends DateField | UrlField | ReferenceField
+  : F extends DateField | DatetimeField | UrlField | ReferenceField
     ? string | null
     : F extends ImageField
       ? ImageValue | null
@@ -80,7 +119,7 @@ type ValueOf<F> = F extends TextField | TextareaField
             ? O[number] | null
             : F extends RichTextField
               ? JSONContent
-              : F extends TagsField
+              : F extends TagsField | ReferencesField
                 ? string[]
                 : F extends ArrayField<infer S>
                   ? EntryOf<S>[]
@@ -92,7 +131,9 @@ type ValueOf<F> = F extends TextField | TextareaField
 
 export type EntryOf<F extends Fields> = { [K in keyof F]: ValueOf<F[K]> };
 
-type Opts = Omit<Base, 'label'>;
+type Opts = Omit<Base, 'label' | 'default'>;
+/** Options for a field that can start with a value: `default` is the value, or a function that returns it. */
+type WithDefault<V> = Opts & { default?: V | (() => V) };
 
 /** One kind of section for `fields.blocks()`. `description` is a one-line hint shown in the picker. */
 export const block = <F extends Fields>(label: string, fields: F, o: { description?: string } = {}): Block<F> => ({ label, fields, ...o });
@@ -100,18 +141,47 @@ export const block = <F extends Fields>(label: string, fields: F, o: { descripti
 export type SeoField = GroupField<{ title: TextField; description: TextareaField; image: ImageField }>;
 
 export const fields = {
-  text: (label: string, o: Opts = {}): TextField => ({ type: 'text', label, ...o }),
-  textarea: (label: string, o: Opts = {}): TextareaField => ({ type: 'textarea', label, ...o }),
-  date: (label: string, o: Opts = {}): DateField => ({ type: 'date', label, ...o }),
-  url: (label: string, o: Opts = {}): UrlField => ({ type: 'url', label, ...o }),
+  text: (label: string, o: WithDefault<string> = {}): TextField => ({ type: 'text', label, ...o }),
+  textarea: (label: string, o: WithDefault<string> = {}): TextareaField => ({ type: 'textarea', label, ...o }),
+  date: (label: string, o: WithDefault<string> = {}): DateField => ({ type: 'date', label, ...o }),
+  /** A date and time, stored in UTC; the admin shows it in the editor's time zone. A default is an ISO string (`() => new Date().toISOString()`). */
+  datetime: (label: string, o: WithDefault<string> = {}): DatetimeField => ({ type: 'datetime', label, ...o }),
+  url: (label: string, o: WithDefault<string> = {}): UrlField => ({ type: 'url', label, ...o }),
   image: (label: string, o: Opts = {}): ImageField => ({ type: 'image', label, ...o }),
   richtext: (label: string, o: Opts = {}): RichTextField => ({ type: 'richtext', label, ...o }),
-  tags: (label: string, o: Opts = {}): TagsField => ({ type: 'tags', label, ...o }),
-  boolean: (label: string, o: Opts = {}): BooleanField => ({ type: 'boolean', label, ...o }),
-  number: (label: string, o: Opts & { min?: number; max?: number; step?: number } = {}): NumberField => ({ type: 'number', label, ...o }),
-  select: <const O extends readonly string[]>(label: string, options: O, o: Opts = {}): SelectField<O> => ({ type: 'select', label, options, ...o }),
+  tags: (label: string, o: WithDefault<string[]> = {}): TagsField => ({ type: 'tags', label, ...o }),
+  boolean: (label: string, o: WithDefault<boolean> = {}): BooleanField => ({ type: 'boolean', label, ...o }),
+  number: (label: string, o: WithDefault<number> & { min?: number; max?: number; step?: number } = {}): NumberField => ({ type: 'number', label, ...o }),
+  /**
+   * One of `options`: values (`['news', 'guide']`) or values with labels (`[{ value: 'blog', label: 'Blog Post' }]`),
+   * or a mix. The admin shows the labels; entries store the values.
+   */
+  select: <const O extends readonly SelectOption[]>(
+    label: string,
+    options: O,
+    o: WithDefault<NoInfer<OptionValue<O[number]>>> = {},
+  ): SelectField<readonly OptionValue<O[number]>[]> => {
+    const values = options.map((x) => (typeof x === 'string' ? x : x.value));
+    const repeated = values.find((v, i) => values.indexOf(v) !== i);
+    if (repeated !== undefined) throw new Error(`fields.select('${label}'): the value '${repeated}' is listed twice.`);
+    const optionLabels = Object.fromEntries(options.flatMap((x) => (typeof x === 'string' ? [] : [[x.value, x.label]])));
+    return {
+      type: 'select',
+      label,
+      options: values as unknown as readonly OptionValue<O[number]>[],
+      ...(Object.keys(optionLabels).length ? { optionLabels } : {}),
+      ...o,
+    };
+  },
   /** The slug of an entry in `collection` (a key of your config). Only published entries are offered. */
-  reference: (label: string, collection: string, o: Opts = {}): ReferenceField => ({ type: 'reference', label, collection, ...o }),
+  reference: (label: string, collection: string, o: WithDefault<string> = {}): ReferenceField => ({ type: 'reference', label, collection, ...o }),
+  /** The slugs of entries in `collection`, in the editor's order. `min` / `max` limit how many; only published entries are offered. */
+  references: (label: string, collection: string, o: WithDefault<string[]> & { min?: number; max?: number } = {}): ReferencesField => ({
+    type: 'references',
+    label,
+    collection,
+    ...o,
+  }),
   group: <F extends Fields>(label: string, fields: F, o: Opts = {}): GroupField<F> => ({ type: 'group', label, fields, ...o }),
   /** A ready-made search/social group; read it back with `seoMetadata()`. */
   seo: (label = 'SEO', o: Opts = {}): SeoField => ({
@@ -125,14 +195,18 @@ export const fields = {
     ...o,
   }),
   /** A list of sections, each one of the `blocks` (made with `block()`), keyed by the `kind` stored with it. */
-  blocks: <const B extends Record<string, Block>>(label: string, blocks: B, o: Opts & { itemLabel?: string; addLabel?: string } = {}): BlocksField<B> => {
+  blocks: <const B extends Record<string, Block>>(
+    label: string,
+    blocks: B,
+    o: Opts & Limits & { itemLabel?: string; addLabel?: string } = {},
+  ): BlocksField<B> => {
     if (Object.keys(blocks).length === 0) throw new Error(`"${label}": blocks needs at least one block.`);
     for (const [k, b] of Object.entries(blocks)) {
       if ('kind' in b.fields) throw new Error(`"${label}": block "${k}" has a field named "kind", which is reserved.`);
     }
     return { type: 'blocks', label, blocks, ...o };
   },
-  array: <F extends Fields>(label: string, fields: F, o: Opts & { itemLabel?: NoInfer<keyof F & string> } = {}): ArrayField<F> => ({
+  array: <F extends Fields>(label: string, fields: F, o: Opts & Limits & { itemLabel?: NoInfer<keyof F & string> } = {}): ArrayField<F> => ({
     type: 'array',
     label,
     fields,
@@ -243,8 +317,40 @@ export function withDerived<E extends object>(def: Singleton | Collection, entry
 }
 
 /** The definition without its functions, safe to pass to Client Components. */
+/**
+ * The definition without functions, for the admin form in the browser: no `derived`, and function defaults
+ * replaced by their value now (so an item added later in the form starts with the value from when it opened).
+ */
 export function plainDef<T extends Singleton | Collection>(def: T): Omit<T, 'derived'> {
-  return Object.fromEntries(Object.entries(def).filter(([k]) => k !== 'derived')) as Omit<T, 'derived'>;
+  const rest = Object.fromEntries(Object.entries(def).filter(([k]) => k !== 'derived')) as Omit<T, 'derived'>;
+  return { ...rest, fields: resolveDefaults(def.fields) };
+}
+
+/** `fields` with each function `default` called, in groups, arrays and blocks too. */
+function resolveDefaults<F extends Fields>(fields: F): F {
+  const out: Record<string, Field> = {};
+  for (const [k, f] of Object.entries(fields)) {
+    let g: Field = typeof f.default === 'function' ? { ...f, default: (f.default as () => unknown)() } : f;
+    if (g.type === 'group' || g.type === 'array') g = { ...g, fields: resolveDefaults(g.fields) };
+    else if (g.type === 'blocks')
+      g = { ...g, blocks: Object.fromEntries(Object.entries(g.blocks).map(([kind, b]) => [kind, { ...b, fields: resolveDefaults(b.fields) }])) };
+    out[k] = g;
+  }
+  return out as F;
+}
+
+/**
+ * The values a new entry, array item or block starts with: each field's `default` (a function is called now), or
+ * its empty value. Only used when something is created; reads fill in missing fields with `withDefaults` instead.
+ */
+export function initialValues<F extends Fields>(fields: F): EntryOf<F> {
+  const out: Record<string, unknown> = {};
+  for (const [k, f] of Object.entries(fields)) {
+    if (f.type === 'group') out[k] = initialValues(f.fields);
+    else if (f.default !== undefined) out[k] = typeof f.default === 'function' ? (f.default as () => unknown)() : structuredClone(f.default);
+    else out[k] = emptyValue(f);
+  }
+  return out as EntryOf<F>;
 }
 
 /** The public path to preview an entry on, or null if preview is off for it. */
@@ -288,6 +394,7 @@ export function emptyValue(f: Field): unknown {
     case 'textarea':
       return '';
     case 'date':
+    case 'datetime':
     case 'url':
     case 'image':
     case 'number':
@@ -299,6 +406,7 @@ export function emptyValue(f: Field): unknown {
     case 'richtext':
       return emptyDoc;
     case 'tags':
+    case 'references':
     case 'array':
     case 'blocks':
       return [];
@@ -350,15 +458,32 @@ function fieldSchema(f: Field): z.ZodType {
       const s = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
       return z.preprocess(blankToNull, f.required ? s : s.nullable());
     }
+    case 'datetime': {
+      const s = z
+        .string()
+        .refine((v) => normalizeDatetime(v) !== null, 'Use a date and time like 2026-11-18T14:30:00Z')
+        .transform((v) => normalizeDatetime(v) as string);
+      return z.preprocess(blankToNull, f.required ? s : s.nullable());
+    }
     case 'url': {
       const s = z.string().trim().refine(isSafeUrl, 'Enter a full URL (https://… or mailto:…)');
       return z.preprocess(blankToNull, f.required ? s : s.nullable());
     }
     case 'image': {
-      const s = z.strictObject({
-        url: z.string().refine((v) => v.startsWith('/') || v.startsWith('https://'), 'Invalid image'),
-        alt: z.string().trim().max(300, 'Keep it under 300 characters'),
-      });
+      const focal = z
+        .number()
+        .min(0, 'Use a value from 0 to 1')
+        .max(1, 'Use a value from 0 to 1')
+        .transform((n) => Math.round(n * 1000) / 1000)
+        .optional();
+      const s = z
+        .strictObject({
+          url: z.string().refine((v) => v.startsWith('/') || v.startsWith('https://'), 'Invalid image'),
+          alt: z.string().trim().max(300, 'Keep it under 300 characters'),
+          focalX: focal,
+          focalY: focal,
+        })
+        .refine((v) => (v.focalX === undefined) === (v.focalY === undefined), { message: 'A focal point needs both coordinates', path: ['focalX'] });
       return z.preprocess((v) => toImage(blankToNull(v)), f.required ? s : s.nullable());
     }
     case 'boolean':
@@ -383,23 +508,41 @@ function fieldSchema(f: Field): z.ZodType {
       const s = z.array(z.string().trim().min(1));
       return f.required ? s.min(1, 'Add at least one') : s;
     }
+    case 'references': {
+      // Trimmed, without blanks or repeats; then counted.
+      return z
+        .array(z.string().trim().max(100))
+        .transform((v) => [...new Set(v.filter(Boolean))])
+        .superRefine(countCheck(f, 'Pick', ['entry', 'entries']));
+    }
     case 'array':
-      return z.array(objectSchema(f.fields));
+      return z.array(objectSchema(f.fields)).superRefine(countCheck(f, 'Add', ['item', 'items']));
     case 'group':
       return objectSchema(f.fields);
     case 'blocks': {
       const options = Object.entries(f.blocks).map(([kind, b]) => objectOf(b.fields, { kind: z.literal(kind) }));
       const item = z.discriminatedUnion('kind', options as unknown as [(typeof options)[number], ...(typeof options)[number][]]);
-      return z.array(item);
+      return z.array(item).superRefine(countCheck(f, 'Add', ['item', 'items']));
     }
   }
+}
+
+/** Checks a list's length against `min` / `max` (and `required`, which means at least one), on the field itself. */
+function countCheck(f: Base & Limits, verb: string, [one, many]: [string, string]) {
+  const min = Math.max(f.min ?? 0, f.required ? 1 : 0);
+  const max = f.max;
+  const count = (n: number) => `${n} ${n === 1 ? one : many}`;
+  return (v: unknown[], ctx: z.RefinementCtx) => {
+    if (v.length < min) ctx.addIssue({ code: 'custom', message: `${verb} at least ${count(min)}` });
+    if (max !== undefined && v.length > max) ctx.addIssue({ code: 'custom', message: `${verb} at most ${count(max)}` });
+  };
 }
 
 /** The collections that reference fields (including inside groups and arrays) point at. */
 export function referenceTargets(fields: Fields): string[] {
   const out = new Set<string>();
   for (const f of Object.values(fields)) {
-    if (f.type === 'reference') out.add(f.collection);
+    if (f.type === 'reference' || f.type === 'references') out.add(f.collection);
     else if (f.type === 'group' || f.type === 'array') for (const t of referenceTargets(f.fields)) out.add(t);
     else if (f.type === 'blocks') for (const b of Object.values(f.blocks)) for (const t of referenceTargets(b.fields)) out.add(t);
   }
@@ -436,6 +579,12 @@ function objectOf(fields: Fields, extra: Record<string, z.core.$ZodType> = {}) {
 
 export function objectSchema(fields: Fields) {
   return objectOf(fields);
+}
+
+/** The label a select shows for `value` (the value itself if it has none); null for no value. For showing it on the site. */
+export function selectLabel(field: SelectField, value: string | null | undefined): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  return field.optionLabels?.[value] ?? value;
 }
 
 export const slugSchema = z

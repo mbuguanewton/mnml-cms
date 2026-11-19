@@ -16,9 +16,9 @@ export type ConfirmOptions = {
 
 type Dialogs = {
   /** Resolves true if the user confirms, false if they cancel, press Escape or click outside. */
-  confirm(o: ConfirmOptions): Promise<boolean>;
+  confirm: (o: ConfirmOptions) => Promise<boolean>;
   /** A message with a single OK button. */
-  alert(o: Omit<ConfirmOptions, 'cancelLabel'>): Promise<void>;
+  alert: (o: Omit<ConfirmOptions, 'cancelLabel'>) => Promise<void>;
 };
 
 const DialogContext = createContext<Dialogs>({

@@ -34,3 +34,17 @@ body {
 .article blockquote { border-left: 3px solid var(--color-accent); padding-left: 1.25rem; font-style: italic; color: var(--color-soft); }
 .article code { font-family: ui-monospace, monospace; font-size: 0.9em; background: #efeae0; padding: 0.1em 0.35em; border-radius: 4px; }
 .article img { max-width: 100%; border-radius: 8px; }
+.article .post-link { display: flex; flex-direction: column; gap: 0.35rem; padding: 1.1rem 1.25rem; border: 1px solid #e5dccf; border-radius: 10px; text-decoration: none; color: inherit; font-family: var(--font-sans, ui-sans-serif, system-ui); transition: border-color 0.15s; }
+.article .post-link:hover { border-color: var(--color-accent); }
+.article .post-link-title { font-family: var(--font-serif); font-size: 1.25rem; font-weight: 600; line-height: 1.3; }
+.article .post-link-summary { font-size: 0.95rem; color: var(--color-soft); line-height: 1.5; }
+.article table { width: 100%; border-collapse: collapse; font-family: var(--font-sans, ui-sans-serif, system-ui); font-size: 0.95rem; }
+.article th, .article td { border-bottom: 1px solid #e5dccf; padding: 0.6rem 0.75rem; text-align: left; vertical-align: top; }
+.article th { font-weight: 600; border-bottom-width: 2px; }
+.article th > p, .article td > p { margin: 0; }
+.article .video { aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: #2b2722; }
+.article .video iframe { width: 100%; height: 100%; border: 0; }
+.article .code-block { border-radius: 8px; overflow: hidden; background: #2b2722; color: #f3eee6; }
+.article .code-block figcaption { font-family: ui-monospace, monospace; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; padding: 0.5rem 1rem; color: #c9bba8; border-bottom: 1px solid #3d3731; }
+.article .code-block pre { padding: 1rem; overflow-x: auto; font-size: 0.875rem; line-height: 1.6; }
+.article .code-block code { background: none; padding: 0; font-size: inherit; color: inherit; }

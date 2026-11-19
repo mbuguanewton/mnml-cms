@@ -17,7 +17,8 @@ export default config({
             label: fields.text('Label', { required: true }),
             url: fields.url('URL', { required: true }),
           },
-          { itemLabel: 'label' },
+          // Up to four links; Add is disabled after that.
+          { itemLabel: 'label', max: 4 },
         ),
       }),
     },
@@ -79,11 +80,12 @@ export default config({
           text: block('Text', { content: fields.richtext('Content') }),
           latestPosts: block('Latest posts', {
             title: fields.text('Title'),
-            count: fields.number('How many', { min: 1, max: 12, step: 1 }),
+            count: fields.number('How many', { min: 1, max: 12, step: 1, default: 3 }),
           }),
           divider: block('Divider', {}),
         },
-        { itemLabel: 'title' },
+        // A page needs at least one section to publish.
+        { itemLabel: 'title', min: 1 },
       ),
       seo: fields.seo(),
     },
@@ -108,11 +110,25 @@ export default config({
     fields: {
       title: fields.text('Title', { required: true }),
       summary: fields.textarea('Summary'),
-      date: fields.date('Date'),
-      category: fields.select('Category', ['news', 'guide', 'opinion'] as const),
+      // New posts start dated today (worked out when the form opens) and filed under news.
+      date: fields.date('Date', { default: () => new Date().toISOString().slice(0, 10) }),
+      // Labels for the admin; entries store the values ('news', 'guide', 'opinion').
+      category: fields.select(
+        'Category',
+        [
+          { value: 'news', label: 'News' },
+          { value: 'guide', label: 'How-to guide' },
+          { value: 'opinion', label: 'Opinion' },
+        ] as const,
+        { default: 'news' },
+      ),
+      // A moment in time, stored in UTC; editors see it in their own time zone.
+      publishedAt: fields.datetime('Published at', { default: () => new Date().toISOString() }),
       author: fields.reference('Author', 'authors'),
       cover: fields.image('Cover image'),
       content: fields.richtext('Content'),
+      // Several entries, in the editor's order (up to 3).
+      related: fields.references('Related posts', 'posts', { max: 3, help: 'Shown under the post, in this order' }),
       seo: fields.seo(),
     },
     // Worked out on every read; never stored or edited.

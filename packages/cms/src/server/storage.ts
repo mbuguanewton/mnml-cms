@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { entriesTable, type Database } from './db.js';
 
 /** A stored entry. `status` is 'draft' or 'published'. */
@@ -18,6 +18,8 @@ export type EntryStorage = {
   /** Insert unless the slug is taken. Returns whether it inserted. */
   insertIfAbsent(collection: string, slug: string, data: unknown, status: string): Promise<boolean>;
   remove(collection: string, slug: string): Promise<void>;
+  /** Optional: the rows of these slugs in one query (any order, missing ones left out). Without it, `getEntries` reads the collection with `readRows`. */
+  readRowsBySlug?(collection: string, slugs: string[]): Promise<(StoredRow & { slug: string })[]>;
 };
 
 /** The built-in adapter, for any Drizzle Postgres database. */
@@ -32,6 +34,11 @@ export function drizzleStorage(getDb: () => Database, tableName?: string): Entry
         .limit(1);
       return row;
     },
+    readRowsBySlug: (collection, slugs) =>
+      getDb()
+        .select({ slug: entries.slug, data: entries.data, status: entries.status })
+        .from(entries)
+        .where(and(eq(entries.collection, collection), inArray(entries.slug, slugs))),
     readRows: (collection) =>
       getDb()
         .select({ slug: entries.slug, data: entries.data, status: entries.status, createdAt: entries.createdAt, updatedAt: entries.updatedAt })

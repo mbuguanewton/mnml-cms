@@ -7,16 +7,14 @@ import { objectSchema, previewPath, slugSchema } from '../define.js';
 import { checkPassword, clearFailures, clientIp, isAdmin, lockedFor, recordFailure, sessionVersion, signOutEverywhere, type PasswordAuth } from './auth.js';
 import type { Change, Context } from './context.js';
 import { SESSION_COOKIE, sessionCookieOptions } from './session.js';
+import { IMAGE_TYPES, MAX_IMAGE_BYTES } from './media.js';
+import { loadRefOptions } from './ref-options.js';
 import { revOf } from './rev.js';
 import { PREVIEW_COOKIE, SINGLETON_SLUG } from './store.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
-//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · upload · media/delete
+//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · references · upload · media/delete
 //   GET:  media/<key> (uploaded images, public)
-
-// No SVG: it can carry scripts. Vercel caps function request bodies at 4.5 MB.
-const IMAGE_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 const MEDIA_KEY = /^[\w.\-/]+$/;
 
@@ -242,6 +240,14 @@ export function createHandlers(ctx: Context) {
     },
 
     /** Deletes a stored file. The admin warns first if entries still use it. */
+    /** Published entries to pick from, for reference pickers outside an entry's own fields (e.g. in rich text). */
+    async references(request) {
+      if (!(await isAdmin(ctx))) return unauthorized();
+      const { collections } = (await request.json().catch(() => ({}))) as { collections?: unknown };
+      if (!Array.isArray(collections) || !collections.every((c) => typeof c === 'string')) return json({ ok: false, message: 'Bad request.' }, 400);
+      return json({ ok: true, options: await loadRefOptions(ctx, collections as string[]) });
+    },
+
     async 'media/delete'(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
       const media = ctx.options.media;

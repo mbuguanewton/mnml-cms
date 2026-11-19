@@ -2,13 +2,15 @@ import 'server-only';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ExternalLinkIcon, FileTextIcon, ImageIcon, PlusIcon, SettingsIcon } from 'lucide-react';
-import { plainDef, referenceTargets, withDefaults, type Collection, type CmsConfig, type Singleton } from '../define.js';
+import { initialValues, plainDef, referenceTargets, withDefaults, type Collection, type CmsConfig, type Singleton } from '../define.js';
+import { displayText } from '../text.js';
 import type { EntryStatus } from '../api.js';
 import type { RefOptions } from '../admin/fields.js';
 import { buttonVariants } from '../admin/button.js';
 import { menuItemClass } from '../admin/action-menu.js';
 import { StatusDot } from '../admin/status-dot.js';
 import { AdminProvider } from '../admin/context.js';
+import { FormDialogProvider } from '../admin/form-dialog.js';
 import { DeleteButton } from '../admin/delete-button.js';
 import { MediaDeleteButton } from '../admin/media-delete-button.js';
 import { EntryForm } from '../admin/entry-form.js';
@@ -17,6 +19,7 @@ import { LoginForm } from '../admin/login-form.js';
 import { AdminNav, type NavGroup } from '../admin/nav.js';
 import { bodyClass, cardClass } from '../admin/styles.js';
 import { isAdmin } from './auth.js';
+import { loadRefOptions } from './ref-options.js';
 import { revOf } from './rev.js';
 import { SINGLETON_SLUG } from './store.js';
 import type { Context } from './context.js';
@@ -28,7 +31,7 @@ type AnyEntry = Record<string, unknown>;
 function derivedRows(def: Singleton | Collection, entry: AnyEntry | null) {
   if (!entry) return [];
   const show = (v: unknown) =>
-    v == null || v === '' ? '—' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : typeof v === 'object' ? JSON.stringify(v) : String(v);
+    v == null || v === '' ? '—' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : typeof v === 'object' ? JSON.stringify(v) : displayText(v);
   const spaced = (k: string) =>
     k
       .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -57,7 +60,9 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const path = (await params).path ?? [];
     const Editor = options.editor;
     const provider = (children: React.ReactNode) => (
-      <AdminProvider value={{ adminPath, apiPath }}>{Editor ? <Editor>{children}</Editor> : children}</AdminProvider>
+      <AdminProvider value={{ adminPath, apiPath }}>
+        <FormDialogProvider>{Editor ? <Editor>{children}</Editor> : children}</FormDialogProvider>
+      </AdminProvider>
     );
 
     if (path.length === 1 && path[0] === 'login') {
@@ -163,15 +168,9 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
   };
 
   /** Published entries of every collection that `def`'s reference fields point at, for the pickers. */
-  async function refOptions(def: Singleton | Collection): Promise<RefOptions> {
-    const out: RefOptions = {};
-    for (const target of referenceTargets(def.fields)) {
-      const t = Object.hasOwn(config, target) ? config[target] : undefined;
-      if (t?.kind !== 'collection') continue;
-      const items = (await store.listEntries(target as never, { drafts: false, orderBy: t.titleField } as never)) as { slug: string; entry: AnyEntry }[];
-      out[target] = items.map(({ slug, entry }) => ({ slug, label: String(entry[t.titleField] || slug) }));
-    }
-    return out;
+  // A declaration, not a const: it is defined below the `return` above, and only function declarations are hoisted.
+  function refOptions(def: Singleton | Collection): Promise<RefOptions> {
+    return loadRefOptions(ctx, referenceTargets(def.fields));
   }
 
   async function brandName() {
@@ -219,7 +218,8 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       const stored = (await store.getSingleton(key as never, { drafts: false })) as AnyEntry | null;
       // With drafts on, the autosaved draft replaces the live version in the form.
       const pending = def.drafts ? ((await store.getPending(key, SINGLETON_SLUG)) as AnyEntry | undefined) : undefined;
-      const entry = pending ? (withDefaults(def.fields, pending) as AnyEntry) : (stored ?? withDefaults(def.fields, {}));
+      // A singleton that was never saved starts like a new entry: with the fields' defaults.
+      const entry = pending ? (withDefaults(def.fields, pending) as AnyEntry) : (stored ?? initialValues(def.fields));
       return (
         <EntryForm
           schemaKey={key}
@@ -241,7 +241,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         <EntryForm
           schemaKey={key}
           schema={plainDef(def)}
-          initial={withDefaults(def.fields, {})}
+          initial={initialValues(def.fields)}
           refOptions={await refOptions(def)}
           crumbs={[home, listCrumb, { label: 'New' }]}
         />
@@ -253,7 +253,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const status = (await store.getStatus(key, sub)) ?? 'published';
     // Saved edits that aren't published yet replace the live version in the form.
     const pending = (await store.getPending(key, sub)) as AnyEntry | undefined;
-    const title = String(entry[def.titleField] || sub);
+    const title = displayText(entry[def.titleField]) || sub;
     return (
       // key: remount with fresh state after a create redirect
       <EntryForm
@@ -305,7 +305,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       }
       const items = (await store.listEntries(key as never, { drafts: false, all: true } as never)) as { slug: string; entry: AnyEntry }[];
       for (const { slug, entry } of items) {
-        const use = { group: key, entry: String(entry[def.titleField] || slug), href: `${adminPath}/${key}/${slug}` };
+        const use = { group: key, entry: displayText(entry[def.titleField]) || slug, href: `${adminPath}/${key}/${slug}` };
         scan(fieldsOnly(def, entry), use);
         const pending = await store.getPending(key, slug);
         if (pending !== undefined) scan(pending, { ...use, pending: true });
@@ -472,7 +472,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                   <tr key={slug} className="relative hover:bg-mnml-panel">
                     <td className="px-4 py-2.5">
                       <Link href={`${adminPath}/${key}/${slug}`} className="font-medium no-underline after:absolute after:inset-0">
-                        {String(entry[def.titleField] || slug)}
+                        {displayText(entry[def.titleField]) || slug}
                       </Link>
                     </td>
                     <td className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs text-mnml-text-mute max-sm:hidden">{slug}</td>
@@ -482,7 +482,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                         {status === 'draft' ? 'Draft' : pending.has(slug) ? 'Changes' : 'Published'}
                       </span>
                     </td>
-                    {dateField && <td className="px-4 py-2.5 tabular-nums text-mnml-text-soft">{String(entry[dateField] ?? '—')}</td>}
+                    {dateField && <td className="px-4 py-2.5 tabular-nums text-mnml-text-soft">{displayText(entry[dateField]) || '—'}</td>}
                   </tr>
                 ))}
               </tbody>

@@ -5,19 +5,16 @@
   "scripts": {
     "build": "pnpm --filter @n3wtou/mnml-cms build",
     "typecheck": "pnpm -r typecheck",
-    "lint": "eslint .",
+    "test": "vp test run",
+    "lint": "vp lint .",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "format": "vp fmt .",
+    "format:check": "vp fmt --check .",
+    "prepare": "vp config --no-agent"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.0",
-    "@next/eslint-plugin-next": "^16.4.0",
-    "eslint": "^9",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "prettier": "^3.9.10",
-    "typescript-eslint": "^8"
+    "vite-plus": "catalog:"
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import type { JSONContent } from '@tiptap/core';
 import {
@@ -25,15 +25,17 @@ import {
   Undo2Icon,
 } from 'lucide-react';
 import { resolveExtensions } from '../rich-text.js';
-import type { EditorTool } from '../editor.js';
+import { orderTools, type EditorTool } from '../editor.js';
 import { menuItemClass, useMenu } from './action-menu.js';
 import { useAdmin } from './context.js';
 import { useEditorConfig } from './editor-context.js';
+import { useForm } from './form-context.js';
+import { withNodeForms } from './node-view.js';
 import { uploadImage } from './upload.js';
 
 export function RichTextEditor({ value, onChange, invalid }: { value: JSONContent; onChange: (v: JSONContent) => void; invalid?: boolean }) {
   const config = useEditorConfig();
-  const extensions = useMemo(() => resolveExtensions(config), [config]);
+  const extensions = useMemo(() => withNodeForms(resolveExtensions(config), config?.tools ?? noTools), [config]);
   const editor = useEditor({
     extensions,
     content: value,
@@ -43,13 +45,23 @@ export function RichTextEditor({ value, onChange, invalid }: { value: JSONConten
     onUpdate: ({ editor }) => onChange(editor.getJSON()),
   });
 
+  const content = useRef<HTMLDivElement>(null);
+  const tools = config?.tools ?? noTools;
+  // Tools with a `context` show above that node instead of in the main toolbar.
+  const mainTools = useMemo(() => tools.filter((t) => !t.context), [tools]);
+  const contexts = useMemo(() => [...new Set(tools.flatMap((t) => (t.context ? [t.context] : [])))], [tools]);
+
   return (
     <div
       aria-invalid={invalid}
       className="rounded-[6px] border border-mnml-line bg-mnml-bg focus-within:border-mnml-text-mute/50 aria-invalid:border-mnml-danger"
     >
-      {editor && <Toolbar editor={editor} extra={config?.tools ?? noTools} />}
-      <EditorContent editor={editor} />
+      {editor && <Toolbar editor={editor} extra={mainTools} />}
+      <div ref={content} className="relative">
+        <EditorContent editor={editor} />
+        {editor &&
+          contexts.map((node) => <ContextToolbar key={node} editor={editor} node={node} tools={tools.filter((t) => t.context === node)} container={content} />)}
+      </div>
     </div>
   );
 }
@@ -57,7 +69,8 @@ export function RichTextEditor({ value, onChange, invalid }: { value: JSONConten
 const noTools: EditorTool[] = [];
 
 function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
-  const { apiPath, alert } = useAdmin();
+  const { apiPath, alert, confirm } = useAdmin();
+  const form = useForm();
   // The heading extension's levels (1–4 by default; a site can change them), or none if it was removed.
   const levels = useMemo(() => (editor.extensionManager.extensions.find((e) => e.name === 'heading')?.options.levels as Level[] | undefined) ?? [], [editor]);
   const hasQuote = useMemo(() => editor.extensionManager.extensions.some((e) => e.name === 'blockquote'), [editor]);
@@ -78,7 +91,7 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
       undo: editor.can().undo(),
       redo: editor.can().redo(),
       // The site's own tools, by name.
-      extra: Object.fromEntries(extra.map((t) => [t.name, { active: t.isActive?.(editor) ?? false, disabled: t.disabled?.(editor) ?? false }])),
+      extra: toolStates(extra, editor),
     }),
   });
   const chain = () => editor.chain().focus();
@@ -102,9 +115,16 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
 
   type Tool = { name: string; icon: React.ReactNode; label: string; active?: boolean; disabled?: boolean; run: () => void };
   const own = (group?: EditorTool['group']): Tool[] =>
-    extra
-      .filter((t) => t.group === group)
-      .map((t) => ({ name: `extra:${t.name}`, icon: t.icon, label: t.label, ...s.extra[t.name], run: () => t.run(editor) }));
+    orderTools(extra)
+      .filter((t) => t.group === group && s.extra[t.name]?.visible !== false)
+      .map((t) => ({
+        name: `extra:${t.name}`,
+        icon: t.icon,
+        label: t.label,
+        active: s.extra[t.name]?.active,
+        disabled: s.extra[t.name]?.disabled,
+        run: () => t.run(editor, { form, confirm, alert }),
+      }));
   const buttons = (tools: Tool[]) => tools.map((t) => <ToolButton key={t.name} {...t} />);
 
   const history: Tool[] = [
@@ -158,7 +178,7 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
           onChange={(e) => {
             const f = e.target.files?.[0];
             e.target.value = '';
-            if (f) addImage(f);
+            if (f) void addImage(f);
           }}
         />
       </label>
@@ -180,6 +200,92 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
           onChange={(e) => editor.chain().updateAttributes('image', { alt: e.target.value }).run()}
         />
       )}
+    </div>
+  );
+}
+
+/** What the toolbars show for each site tool: pressed, disabled, shown. */
+function toolStates(tools: EditorTool[], editor: Editor) {
+  return Object.fromEntries(
+    tools.map((t) => [t.name, { active: t.isActive?.(editor) ?? false, disabled: t.disabled?.(editor) ?? false, visible: t.visible?.(editor) ?? true }]),
+  );
+}
+
+/** Re-renders when the element's size changes (images loading, the window resizing), so positions stay right. */
+function useElementSize(el: React.RefObject<HTMLElement | null>) {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const observer = new ResizeObserver(onChange);
+      if (el.current) observer.observe(el.current);
+      return () => observer.disconnect();
+    },
+    [el],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => (el.current ? `${el.current.offsetWidth}x${el.current.offsetHeight}` : ''),
+    () => '',
+  );
+}
+
+/**
+ * A small toolbar above the nearest `node` (e.g. a table) around the cursor, while the editor has focus: the tools
+ * whose `context` is that node.
+ */
+function ContextToolbar({
+  editor,
+  node,
+  tools,
+  container,
+}: {
+  editor: Editor;
+  node: string;
+  tools: EditorTool[];
+  container: React.RefObject<HTMLDivElement | null>;
+}) {
+  const { alert, confirm } = useAdmin();
+  const form = useForm();
+  // Where the node starts in the document (it doesn't move while typing inside it), and the tools' states.
+  const s = useEditorState({
+    editor,
+    selector: ({ editor }) => {
+      if (!editor.isFocused) return null;
+      const { $from } = editor.state.selection;
+      for (let d = $from.depth; d > 0; d--) {
+        if ($from.node(d).type.name === node) return { pos: $from.before(d), tools: toolStates(tools, editor) };
+      }
+      return null;
+    },
+  });
+  // Measured on render; the size subscription re-renders when layout shifts without an edit.
+  useElementSize(container);
+  const shown = s ? tools.filter((t) => s.tools[t.name]?.visible !== false) : [];
+  const dom = s ? editor.view.nodeDOM(s.pos) : null;
+  const box = container.current?.getBoundingClientRect();
+  if (!s || shown.length === 0 || !(dom instanceof HTMLElement) || !box) return null;
+  const r = dom.getBoundingClientRect();
+  return (
+    <div
+      role="toolbar"
+      aria-label={`${node[0].toUpperCase()}${node.slice(1)} tools`}
+      // Clicking a button must not move the cursor out of the node.
+      onMouseDown={(e) => e.preventDefault()}
+      className="absolute z-10 flex items-center gap-0.5 rounded-[8px] border border-mnml-line bg-mnml-panel p-0.5 shadow-md"
+      // Just above the node's right end, where a line of text above it usually ends before. At the very top it
+      // overlaps the node's first line instead of the main toolbar.
+      style={{ top: Math.max(2, r.top - box.top - 36), right: Math.max(2, box.right - r.right) }}
+    >
+      {shown.map((t) => (
+        <ToolButton
+          key={t.name}
+          name={t.name}
+          icon={t.icon}
+          label={t.label}
+          active={s.tools[t.name]?.active}
+          disabled={s.tools[t.name]?.disabled}
+          run={() => t.run(editor, { form, confirm, alert })}
+        />
+      ))}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 {
   "name": "@n3wtou/mnml-cms",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A small schema-driven CMS for Next.js: config file, embedded admin, Postgres storage.",
   "keywords": [
     "cms",
@@ -59,6 +59,10 @@
       "types": "./dist/editor-entry.d.ts",
       "default": "./dist/editor-entry.js"
     },
+    "./table": {
+      "types": "./dist/table-entry.d.ts",
+      "default": "./dist/table-entry.js"
+    },
     "./styles.css": {
       "style": "./styles.css",
       "default": "./styles.css"
@@ -80,21 +84,24 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/copy-css.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "prepack": "pnpm build"
+    "prepack": "pnpm build",
+    "test": "vp test run"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
     "@tiptap/core": "^3.31.4",
     "@tiptap/extension-image": "^3.31.4",
+    "@tiptap/extension-table": "^3.31.4",
     "@tiptap/pm": "^3.31.4",
     "@tiptap/react": "^3.31.4",
     "@tiptap/starter-kit": "^3.31.4",
     "@tiptap/static-renderer": "^3.31.4",
     "@vercel/blob": "^2.8.1",
     "class-variance-authority": "^0.7.1",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.48.0",
     "server-only": "^0.0.1",
-    "zod": "^4.6.5",
-    "lucide-react": "^1.48.0"
+    "zod": "^4.6.5"
   },
   "peerDependencies": {
     "drizzle-orm": ">=0.40.0",
@@ -103,12 +110,14 @@
     "react-dom": ">=19.0.0"
   },
   "devDependencies": {
+    "@types/node": "^22",
     "@types/react": "^19",
+    "@types/react-dom": "^19.3.0",
+    "drizzle-orm": "^0.45.4",
     "next": "16.3.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "typescript": "^5",
-    "@types/node": "^20",
-    "drizzle-orm": "^0.45.4"
+    "vite-plus": "catalog:"
   }
 }
