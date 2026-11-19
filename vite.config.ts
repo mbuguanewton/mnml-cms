@@ -9,7 +9,7 @@ export default defineConfig({
     env: {
       builtin: true,
     },
-    ignorePatterns: ['**/dist/**', '**/.next/**', '**/node_modules/**', '**/next-env.d.ts', '.playwright/**'],
+    ignorePatterns: ['**/dist/**', '**/.next/**', '**/node_modules/**', '**/next-env.d.ts', '.playwright/**', 'docs/public/_pagefind/**'],
     rules: {
       'no-array-constructor': 'error',
       'no-unused-expressions': 'error',
@@ -90,7 +90,7 @@ export default defineConfig({
       // The full check: pre-push (.vite-hooks/pre-push) and GitHub CI both run `vp run ci`.
       // Build first: the example imports @n3wtou/mnml-cms from its dist, which `vp check` type-checks.
       ci: {
-        command: ['pnpm build', 'vp check --deny-warnings', 'pnpm typecheck', 'vp test run', 'pnpm --filter example build'],
+        command: ['pnpm build', 'vp check --deny-warnings', 'pnpm typecheck', 'vp test run', 'pnpm --filter example build', 'pnpm --filter docs build'],
         cache: false,
       },
     },
@@ -112,8 +112,10 @@ export default defineConfig({
       'next-env.d.ts',
       '*.tsbuildinfo',
       '*.md',
+      '*.mdx',
       '*.css',
       '.playwright',
+      'docs/public/_pagefind',
     ],
   },
 });

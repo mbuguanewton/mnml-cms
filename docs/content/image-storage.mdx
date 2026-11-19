@@ -1,0 +1,42 @@
+# Image storage
+
+Uploads go through a `MediaStorage` adapter.
+
+- They're served at `<apiPath>/media/<key>`, so the store itself can be private.
+- Responses are cached for a year.
+
+```ts
+type MediaStorage = {
+  put(file: File, name: string): Promise<string>;
+  get(key: string): Promise<{ body: ReadableStream<Uint8Array>; contentType?: string; size?: number } | null>;
+  list?(): Promise<{ key: string; size?: number; uploadedAt?: Date }[]>;
+  delete?(key: string): Promise<void>;
+};
+```
+
+| Method | What it does |
+| --- | --- |
+| `put` | Stores the file. Returns a unique key. |
+| `get` | Reads a file by key |
+| `list` | Optional. Adds the Media screen. |
+| `delete` | Optional. Adds Delete to the Media screen. |
+
+## The Media screen
+
+With `list`, the admin gets a **Media** screen. For every stored file, it shows:
+
+- size and date
+- the entries that use it: image fields and images in rich text, including unpublished changes
+- an "Unused" flag
+- a Delete button. Deleting a file still in use warns first.
+
+Both bundled adapters support it.
+
+## Adapters
+
+- `vercelBlobMedia({ prefix = 'cms/', access = 'private', token })` only serves keys under `prefix`.
+- `localMedia({ dir = '.mnml-uploads' })` writes to disk.
+  - It's the default in `next dev` when you pass no `media`.
+  - Don't use it on serverless hosting.
+  - Add the folder to `.gitignore`.
+- For S3, R2 or anything else, write your own: implement `put` and `get`.

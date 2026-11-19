@@ -1,0 +1,80 @@
+# Moving content between databases
+
+Seed production from your dev content, or pull production back into dev.
+
+`@n3wtou/mnml-cms/sync` does three things:
+
+1. Exports content to a JSON file.
+2. Compares a file with a database.
+3. Writes the difference.
+
+It runs from a plain script, without Next.js. The example has one, `scripts/content.ts`:
+
+| Command | What it does |
+| --- | --- |
+| `pnpm db:export` | Exports `DATABASE_URL` to `mnml-content.json` |
+| `pnpm db:import mnml-content.json --mode add` | Dry run of importing the file into `DATABASE_URL` |
+| `pnpm db:sync --from DATABASE_URL --to PROD_DATABASE_URL --mode add --apply --yes` | Copies one database into another |
+| `pnpm db:sync --from-env-file .env.local --to-env-file .env.production --mode add --apply --yes` | The same, reading each URL from a file |
+
+## Choosing the databases
+
+- `--env`, `--from` and `--to` name an environment variable that holds a database URL. Put them in `.env.local`. The URL itself never lands in your shell history.
+- `--env-file`, `--from-env-file` and `--to-env-file` read the variable from a file instead. It's `DATABASE_URL` unless you also name one. Dev and prod can each keep their own `DATABASE_URL`.
+- The file is only read. It's never loaded into the environment.
+- A `BLOB_READ_WRITE_TOKEN` in the target's file is used for the missing-image check.
+
+## Modes
+
+| `--mode` | What it does |
+| --- | --- |
+| `add` | Adds entries the target doesn't have. Leaves existing ones alone. |
+| `overwrite` | Also replaces entries that differ. |
+| `replace` | Makes the target match the file. Deletes entries the file doesn't have. |
+
+## Safety
+
+- Every run is a dry run that lists the changes, until you add `--apply`.
+- Writing to a database that isn't on localhost also needs `--yes`.
+- Before writing, the target's content is saved to `.mnml-backups/`. Undo with `db:import <backup> --mode replace`.
+- Entries are checked against your config first. If any don't fit, nothing is written.
+- The source and target can't be the same database.
+- Running an import twice is safe.
+- Writes aren't atomic: the Neon HTTP driver has no transactions. If a run stops halfway, run it again.
+
+## What moves
+
+| Moves | Doesn't move |
+| --- | --- |
+| The config's collections and singletons | Sign-in state |
+| Their autosaved drafts | Preview copies |
+| | **Uploaded images** |
+
+The script lists files the content uses that the target's media storage doesn't have. An image uploaded in dev stays broken in prod until you copy the file.
+
+`createdAt` and `updatedAt` on the target are set when the entry is written.
+
+## In your own scripts
+
+The same functions are exported: `exportContent`, `planImport`, `applyImport`, `describePlan` and `missingMedia`. Connect with `drizzleStorage` or `neonDatabase`.
+
+## Rehosting images
+
+Content from another CMS has its images on that CMS's CDN (e.g. `cdn.sanity.io`). `mediaImporter` copies them into this site's media storage. It returns the URL to put in an `image` field.
+
+```ts
+import { mediaImporter, vercelBlobMedia } from '@n3wtou/mnml-cms/sync';
+
+const importImage = mediaImporter(vercelBlobMedia()); // pass `apiPath` if it isn't /api/mnml
+const { url } = await importImage('https://cdn.sanity.io/images/…/photo.jpg');
+await storage.upsert('posts', slug, { …post, cover: { url, alt } }, 'published');
+```
+
+Use the same storage as the site.
+
+- **Each source URL is stored once.** The file is named after a hash of the URL. A later run finds it through the storage's `list()` and returns the same URL without downloading. Both built-in storages have `list()`.
+- A custom `MediaStorage` without `list()` only avoids repeats within one importer.
+- **Accepted:** `https://` images (also after redirects) that are JPEG, PNG, WebP, GIF or AVIF, up to 4 MB. Raise the limit with `maxBytes`. Anything else throws with the reason.
+- `importRemoteMedia(url, storage)` does a single image. Use one `mediaImporter` for a whole run.
+
+The example has a script: `pnpm media:import <url…>`.

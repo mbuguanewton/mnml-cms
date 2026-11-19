@@ -1,0 +1,13 @@
+# Limits
+
+`array`, `blocks` and `references` take `min` and `max`: how many items they may have.
+
+```ts
+links: fields.array('Links', { label: fields.text('Label'), url: fields.url('URL') }, { max: 4 }),
+sections: fields.blocks('Sections', { hero, text }, { min: 1 }),
+```
+
+- `required` means at least one item.
+- Too few or too many: saving fails with an error on the field ("Add at least 1 item"). Autosave pauses with the same reason.
+- At `max`, the admin disables Add and says why.
+- A field hidden by `showIf` is not checked.

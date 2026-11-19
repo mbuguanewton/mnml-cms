@@ -1,0 +1,27 @@
+# Derived values
+
+A singleton or collection can compute extra values from its own fields.
+
+```ts
+import { collection, derive, readingTime } from '@n3wtou/mnml-cms';
+
+posts: collection({
+  // …
+  derived: {
+    readingTime: derive((post) => readingTime(post.content), { after: 'content' }),
+    wordy: (post) => post.title.length > 60, // a plain function works too
+  },
+}),
+```
+
+- They run on every read. They are never stored.
+- They are typed from the function's return type.
+- They work in `orderBy` and `filter`.
+- They are pure functions of one entry. They can't share a name with a field.
+
+The admin shows them read-only in the form. Wrap the function in `derive()` to set:
+
+- `after`: the field to show it after. Default: the end of the form.
+- `label`
+
+Helpers for rich text: `plainText(doc)` and `readingTime(doc)`.

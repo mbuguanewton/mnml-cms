@@ -1,0 +1,34 @@
+# Focal point
+
+A focal point is the part of an image to keep in frame when it's cropped.
+
+## In the admin
+
+- **Focal point**, under the image, opens a larger preview.
+- Click the spot. Or focus the preview and use the arrow keys: 5% a step, 1% with Shift.
+- **Reset** removes the point.
+- Uploading a new image clears it.
+
+## Stored value
+
+- `focalX` and `focalY`: 0–1 from the left and top, 3 decimals.
+- Both or neither.
+- Images saved without a point read as before.
+
+## On your site
+
+`focalPosition(image)` returns a CSS `object-position`: `"30% 40%"`, or `"50% 50%"` when there's no point.
+
+```tsx
+import { focalPosition } from '@n3wtou/mnml-cms';
+
+<img src={post.cover.url} alt={post.cover.alt} className="aspect-[16/9] object-cover" style={{ objectPosition: focalPosition(post.cover) }} />;
+```
+
+With `next/image`:
+
+```tsx
+<Image src={post.cover.url} alt={post.cover.alt} fill className="object-cover" style={{ objectPosition: focalPosition(post.cover) }} />;
+```
+
+Without the helper: `object-position: ${focalX * 100}% ${focalY * 100}%`. With no point, use `50% 50%` (the CSS default).
