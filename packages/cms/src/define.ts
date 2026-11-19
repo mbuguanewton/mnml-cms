@@ -90,8 +90,20 @@ export interface Fields {
   [key: string]: Field;
 }
 
-/** An uploaded image and its alt text (leave `alt` empty only for decorative images). */
-export type ImageValue = { url: string; alt: string };
+/**
+ * An uploaded image and its alt text (leave `alt` empty only for decorative images). `focalX` / `focalY`
+ * are the point to keep in frame when the image is cropped, 0–1 from the left and top; both or neither.
+ */
+export type ImageValue = { url: string; alt: string; focalX?: number; focalY?: number };
+
+/** The CSS `object-position` that keeps an image's focal point in frame: `"30% 40%"`, or `"50% 50%"` without one. */
+export function focalPosition(image: ImageValue | null | undefined): string {
+  const x = image?.focalX;
+  const y = image?.focalY;
+  if (typeof x !== 'number' || typeof y !== 'number') return '50% 50%';
+  const pct = (n: number) => `${Math.round(Math.min(1, Math.max(0, n)) * 1000) / 10}%`;
+  return `${pct(x)} ${pct(y)}`;
+}
 
 type ValueOf<F> = F extends TextField | TextareaField
   ? string
@@ -458,10 +470,20 @@ function fieldSchema(f: Field): z.ZodType {
       return z.preprocess(blankToNull, f.required ? s : s.nullable());
     }
     case 'image': {
-      const s = z.strictObject({
-        url: z.string().refine((v) => v.startsWith('/') || v.startsWith('https://'), 'Invalid image'),
-        alt: z.string().trim().max(300, 'Keep it under 300 characters'),
-      });
+      const focal = z
+        .number()
+        .min(0, 'Use a value from 0 to 1')
+        .max(1, 'Use a value from 0 to 1')
+        .transform((n) => Math.round(n * 1000) / 1000)
+        .optional();
+      const s = z
+        .strictObject({
+          url: z.string().refine((v) => v.startsWith('/') || v.startsWith('https://'), 'Invalid image'),
+          alt: z.string().trim().max(300, 'Keep it under 300 characters'),
+          focalX: focal,
+          focalY: focal,
+        })
+        .refine((v) => (v.focalX === undefined) === (v.focalY === undefined), { message: 'A focal point needs both coordinates', path: ['focalX'] });
       return z.preprocess((v) => toImage(blankToNull(v)), f.required ? s : s.nullable());
     }
     case 'boolean':

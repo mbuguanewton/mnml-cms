@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { block, emptyDoc, emptyValue, fields, isVisible, objectSchema, referenceTargets, slugify, slugSchema, withDefaults, type ShowIf } from './define.js';
+import {
+  block,
+  emptyDoc,
+  emptyValue,
+  fields,
+  focalPosition,
+  isVisible,
+  objectSchema,
+  referenceTargets,
+  slugify,
+  slugSchema,
+  withDefaults,
+  type ShowIf,
+} from './define.js';
 import { displayText } from './text.js';
 
 describe('emptyValue', () => {
@@ -198,5 +211,42 @@ describe('references field', () => {
 
   it('rejects non-string slugs', () => {
     expect(objectSchema({ related }).safeParse({ related: [1] }).success).toBe(false);
+  });
+});
+
+describe('image focal point', () => {
+  const s = objectSchema({ cover: fields.image('Cover') });
+  const parse = (cover: unknown) => s.safeParse({ cover });
+
+  it('accepts a point from 0 to 1 and rounds it to 3 decimals', () => {
+    const r = parse({ url: '/a.png', alt: '', focalX: 0.12345, focalY: 1 });
+    expect(r.success && r.data.cover).toEqual({ url: '/a.png', alt: '', focalX: 0.123, focalY: 1 });
+    expect(parse({ url: '/a.png', alt: '', focalX: 0, focalY: 0 }).success).toBe(true);
+  });
+
+  it('needs both coordinates or neither', () => {
+    expect(parse({ url: '/a.png', alt: '', focalX: 0.5 }).success).toBe(false);
+    expect(parse({ url: '/a.png', alt: '', focalY: 0.5 }).success).toBe(false);
+  });
+
+  it('rejects out-of-range and non-number coordinates', () => {
+    for (const bad of [-0.1, 1.01, '0.5', null, Number.NaN, Infinity]) {
+      expect(parse({ url: '/a.png', alt: '', focalX: bad, focalY: 0.5 }).success).toBe(false);
+    }
+  });
+
+  it('reads images without a point unchanged', () => {
+    const r = parse({ url: '/a.png', alt: 'A' });
+    expect(r.success && r.data.cover).toEqual({ url: '/a.png', alt: 'A' });
+    const legacy = parse('/a.png');
+    expect(legacy.success && legacy.data.cover).toEqual({ url: '/a.png', alt: '' });
+    expect(withDefaults({ cover: fields.image('Cover') }, { cover: { url: '/a.png', alt: '' } }).cover).toEqual({ url: '/a.png', alt: '' });
+  });
+
+  it('turns the point into a CSS object-position', () => {
+    expect(focalPosition({ url: '/a.png', alt: '', focalX: 0.3, focalY: 0.4 })).toBe('30% 40%');
+    expect(focalPosition({ url: '/a.png', alt: '', focalX: 0.125, focalY: 1 })).toBe('12.5% 100%');
+    expect(focalPosition({ url: '/a.png', alt: '' })).toBe('50% 50%');
+    expect(focalPosition(null)).toBe('50% 50%');
   });
 });

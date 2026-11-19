@@ -99,7 +99,7 @@ Options for every field: `{ required, help }`.
 | `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null`; options can have labels (below) |
 | `reference(label, 'authors')` | slug of a published entry in that collection, `string \| null`; resolve with `cms.getEntry` |
 | `references(label, 'posts', { min, max })` | slugs of published entries, in the editor's order, `string[]`; resolve with `cms.getEntries` |
-| `image` | `{ url, alt } \| null` |
+| `image` | `{ url, alt, focalX?, focalY? } \| null`; the focal point is optional (see [Focal point](#focal-point)) |
 | `richtext` | Tiptap JSON; render with `<RichText>` |
 | `tags` | `string[]` |
 | `array(label, fields, { itemLabel, min, max })` | a repeatable list of `fields` |
@@ -180,6 +180,24 @@ new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short', timeZo
 ```
 
 `showIf` can test a `datetime` for a value or `{ empty: true }`; range conditions (`gt`, `lt`…) are for numbers.
+
+### Focal point
+
+An image can have a focal point: the part to keep in frame when it's cropped. In the admin, **Focal point** under
+the image opens a larger preview; click the spot (or focus the preview and use the arrow keys, 5% a step, 1% with
+Shift). **Reset** removes it, and uploading a new image clears it. It's stored as `focalX` and `focalY`, 0–1 from
+the left and top (3 decimals); both or neither. Images saved without one read as before.
+
+`focalPosition(image)` turns it into a CSS `object-position` (`"30% 40%"`, or `"50% 50%"` without a point):
+
+```tsx
+import { focalPosition } from '@n3wtou/mnml-cms';
+
+<img src={post.cover.url} alt={post.cover.alt} className="aspect-[16/9] object-cover" style={{ objectPosition: focalPosition(post.cover) }} />;
+
+// next/image
+<Image src={post.cover.url} alt={post.cover.alt} fill className="object-cover" style={{ objectPosition: focalPosition(post.cover) }} />;
+```
 
 ### Default values
 

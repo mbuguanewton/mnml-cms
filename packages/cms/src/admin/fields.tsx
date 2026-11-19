@@ -222,11 +222,13 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
   const file = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
 
   const upload = async (f: File) => {
     setBusy(true);
     setError(null);
     try {
+      // A new image starts without a focal point: the old one belonged to the old image.
       onChange({ url: await uploadImage(apiPath, f), alt: '' });
     } catch (e) {
       setError((e as Error).message);
@@ -251,6 +253,11 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
               <UploadIcon /> {busy ? 'Uploading…' : value ? 'Replace' : 'Upload'}
             </Button>
             {value && (
+              <Button type="button" variant="outline" size="sm" aria-expanded={picking} aria-controls={`${id}-focal`} onClick={() => setPicking(!picking)}>
+                Focal point
+              </Button>
+            )}
+            {value && (
               <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
                 Remove
               </Button>
@@ -270,6 +277,7 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
         />
       </div>
       {error && <p className="break-words text-mnml-danger">{error}</p>}
+      {value && picking && <FocalPointPicker id={`${id}-focal`} value={value} onChange={onChange} />}
       {value && (
         <input
           aria-label="Alt text"
@@ -280,6 +288,65 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
           onChange={(e) => onChange({ ...value, alt: e.target.value })}
         />
       )}
+    </div>
+  );
+}
+
+const clamp01 = (n: number) => Math.round(Math.min(1, Math.max(0, n)) * 1000) / 1000;
+const pct = (n: number) => `${Math.round(n * 1000) / 10}%`;
+
+/** The whole image, larger: click (or use the arrow keys) to set the point that stays in frame when it's cropped. */
+function FocalPointPicker({ id, value, onChange }: { id: string; value: ImageValue; onChange: (v: ImageValue | null) => void }) {
+  const has = typeof value.focalX === 'number' && typeof value.focalY === 'number';
+  const x = has ? (value.focalX as number) : 0.5;
+  const y = has ? (value.focalY as number) : 0.5;
+  const set = (fx: number, fy: number) => onChange({ ...value, focalX: clamp01(fx), focalY: clamp01(fy) });
+  const reset = () => {
+    const { focalX: _x, focalY: _y, ...rest } = value;
+    onChange(rest);
+  };
+  const label = has ? `Focal point: ${pct(x)} across, ${pct(y)} down` : 'Focal point: not set, the centre is used';
+
+  return (
+    <div id={id} className="flex flex-col items-start gap-2">
+      <div
+        tabIndex={0}
+        role="application"
+        aria-roledescription="focal point picker"
+        aria-label={label}
+        aria-describedby={`${id}-hint`}
+        className="relative inline-block max-w-full cursor-crosshair overflow-hidden rounded-[6px] border border-mnml-line outline-none focus-visible:ring-2 focus-visible:ring-mnml-primary/40"
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          set((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+        }}
+        onKeyDown={(e) => {
+          const step = e.shiftKey ? 0.01 : 0.05;
+          const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+          const m = moves[e.key];
+          if (!m) return;
+          e.preventDefault();
+          set(x + m[0], y + m[1]);
+        }}
+      >
+        {/* oxlint-disable-next-line nextjs/no-img-element */}
+        <img src={value.url} alt="" draggable={false} className="block max-h-80 max-w-full select-none" />
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)] ${has ? 'bg-black/30' : 'border-dashed opacity-70'}`}
+          style={{ left: pct(x), top: pct(y) }}
+        />
+      </div>
+      <div className="flex items-center gap-3">
+        <p id={`${id}-hint`} className="text-xs text-mnml-text-mute">
+          Click the point to keep in frame when the image is cropped, or use the arrow keys (Shift for smaller steps).
+        </p>
+        {has && (
+          <Button type="button" variant="ghost" size="sm" onClick={reset}>
+            Reset
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
