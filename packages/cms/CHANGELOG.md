@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.1
+
+### Patch Changes
+
+- 0a01846: The README now covers install and setup only; the full documentation moved to the docs site at https://mnml-cms.vercel.app, which is also the package's `homepage`.
+
 ## 1.4.0
 
 ### Minor Changes
