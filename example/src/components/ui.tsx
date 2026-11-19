@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { selectLabel, type ImageValue } from '@n3wtou/mnml-cms';
+import { focalPosition, selectLabel, type ImageValue } from '@n3wtou/mnml-cms';
 import config from '../../mnml.config';
 
 /** The site's time zone, for showing stored (UTC) datetimes. */
@@ -12,11 +12,11 @@ export const formatDateTime = (iso: string | null) =>
 export const formatDate = (d: string | null) =>
   d ? new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : null;
 
-/** A CMS image, or a soft gradient placeholder when there is none. */
+/** A CMS image, cropped around its focal point, or a soft gradient placeholder when there is none. */
 export function Picture({ image, className = '' }: { image: ImageValue | null; className?: string }) {
   if (!image) return <div className={`bg-gradient-to-br from-[#efe3d3] to-[#e2c9b0] ${className}`} aria-hidden />;
   // oxlint-disable-next-line nextjs/no-img-element
-  return <img src={image.url} alt={image.alt} className={`object-cover ${className}`} />;
+  return <img src={image.url} alt={image.alt} className={`object-cover ${className}`} style={{ objectPosition: focalPosition(image) }} />;
 }
 
 /** A post's category, shown by its label from the config. */
