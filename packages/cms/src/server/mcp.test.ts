@@ -170,6 +170,8 @@ describe('MCP schema', () => {
     expect(posts).toMatchObject({ kind: 'collection', titleField: 'title', basePath: '/posts' });
     expect(posts.data.required).toEqual(['title']);
     expect(posts.data.properties.kind.enum).toEqual(['news', 'guide', null]);
+    expect((await call(TOKENS.reader, 'get_schema')).notes.join(' ')).not.toMatch(/delete_entry|discard_draft/);
+    expect((await call(TOKENS.editor, 'get_schema')).notes.join(' ')).toContain('delete_entry and discard_draft only ask');
   });
 
   it('builds the collection enum of tool inputs from the config', async () => {

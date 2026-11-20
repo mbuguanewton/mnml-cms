@@ -95,14 +95,19 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
       scope: 'read',
       input: z.object({}),
       annotations: { readOnlyHint: true },
-      run: async () => ({
+      run: async (_args, { agent }) => ({
         ok: true,
         content: keys.map((k) => describeContent(k, defOf(k))),
+        // Only what this token can do, so the notes never mention a tool it doesn't have.
         notes: [
-          'Writes are drafts: they never change the live site. publish makes them live (needs the publish scope).',
+          'Writes are drafts: they never change the live site.',
+          agent.scopes.has('publish') ? 'publish makes a draft live.' : 'This token cannot publish: an editor publishes drafts in the admin.',
           'Editing a published entry keeps the live version until publish. diff_entry shows the difference.',
           'Fields you leave out keep their value (update) or start empty (create).',
-          'delete_entry and discard_draft only ask: an editor approves or rejects them in the admin.',
+          ...((asking) =>
+            asking.length ? [`${asking.join(' and ')} only ${asking.length > 1 ? 'ask' : 'asks'}: an editor approves or rejects in the admin.`] : [])(
+            [agent.scopes.has('delete') && 'delete_entry', agent.scopes.has('publish') && 'discard_draft'].filter((t): t is string => !!t),
+          ),
         ],
       }),
     },
