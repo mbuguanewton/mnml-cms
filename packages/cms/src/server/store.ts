@@ -14,6 +14,11 @@ export const PREVIEW_COOKIE = 'mnml_preview';
 const draftKey = (key: string) => `draft:${key}`;
 // Saved-but-unpublished edits to a published entry. Never read by the public readers.
 const pendingKey = (key: string) => `pending:${key}`;
+// An agent's request (from the MCP server) to delete an entry or discard its draft, waiting for an editor's approval.
+const requestKey = (key: string) => `request:${key}`;
+
+/** What an agent asked for. `rev` is the draft's fingerprint when a discard was requested. */
+export type ApprovalRequest = { action: 'delete' | 'discard'; by: string; at: string; rev?: string };
 
 /**
  * `drafts: false` reads the saved version even in Draft Mode (the admin always does).
@@ -43,7 +48,7 @@ function compare(a: unknown, b: unknown) {
   return String(a).localeCompare(String(b));
 }
 
-function arrange<E>(items: Item<E>[], o: ListOptions<E>) {
+export function arrange<E>(items: Item<E>[], o: ListOptions<E>) {
   const out = o.filter ? items.filter((i) => o.filter!(i.entry)) : [...items];
   // Stable sort: slug first so ties are deterministic, then the requested field.
   out.sort((a, b) => a.slug.localeCompare(b.slug));
@@ -101,7 +106,7 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
       this: void,
       key: K,
       o: ListOptions<EntryFor<C, K>> = {},
-    ): Promise<{ slug: string; entry: EntryFor<C, K>; status: EntryStatus }[]> {
+    ): Promise<{ slug: string; entry: EntryFor<C, K>; status: EntryStatus; createdAt: Date | null; updatedAt: Date | null }[]> {
       type E = EntryFor<C, K>;
       const items = new Map<string, Item<unknown>>();
       for (const r of await readRows(key)) {
@@ -125,7 +130,7 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
         }
       }
       const withData = [...items.values()].map((i) => ({ ...i, entry: withDerived(config[key], withDefaults(config[key].fields, i.entry)) as E }));
-      return arrange(withData, o).map(({ slug, entry, status }) => ({ slug, entry, status }));
+      return arrange(withData, o);
     },
 
     async getEntry<K extends CollectionKey<C>>(this: void, key: K, slug: string, o?: ReadOptions): Promise<EntryFor<C, K> | null> {
@@ -182,6 +187,16 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
       return new Set((await readRows(pendingKey(key))).map((r) => r.slug));
     },
 
+    /** An agent's request waiting for approval, or undefined. */
+    async getRequest(key: string, slug: string) {
+      return (await readRow(requestKey(key), slug))?.data as ApprovalRequest | undefined;
+    },
+
+    /** Slugs of the entries with a request waiting for approval. */
+    async listRequests(key: string) {
+      return new Set((await readRows(requestKey(key))).map((r) => r.slug));
+    },
+
     // Writes. Callers are responsible for auth and validation.
     upsert: write,
     /** Returns false if the slug is already taken. */
@@ -191,6 +206,8 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
     removePending: (key: string, slug: string) => remove(pendingKey(key), slug),
     saveDraft: (key: string, slug: string, data: unknown) => write(draftKey(key), slug, data),
     removeDraft: (key: string, slug: string) => remove(draftKey(key), slug),
+    saveRequest: (key: string, slug: string, request: ApprovalRequest) => write(requestKey(key), slug, request),
+    removeRequest: (key: string, slug: string) => remove(requestKey(key), slug),
   };
 }
 
