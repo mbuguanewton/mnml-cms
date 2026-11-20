@@ -25,6 +25,14 @@ export type Tool = {
 type Def = Singleton | Collection;
 type Stored = { slug: string; data: unknown; status: string; createdAt: Date; updatedAt: Date };
 
+// One importer per site, so storage is listed once (it finds earlier imports of the same URL), not on every call.
+const importers = new WeakMap<Context, ReturnType<typeof mediaImporter>>();
+const importerFor = (ctx: Context) => {
+  let importer = importers.get(ctx);
+  if (!importer) importers.set(ctx, (importer = mediaImporter(ctx.options.media!, { apiPath: ctx.apiPath, publicOnly: true })));
+  return importer;
+};
+
 const enumOf = (values: readonly string[]) => z.enum(values as [string, ...string[]]);
 const text = (v: unknown) => (typeof v === 'string' ? v : '');
 
@@ -181,21 +189,21 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
       }),
       annotations: { readOnlyHint: true },
       async run(a) {
-        const q = (a.query as string).toLowerCase();
+        const q = new RegExp((a.query as string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
         const hits: { collection: string; slug?: string; status: string; title?: string; snippet: string }[] = [];
         for (const key of (a.collections as string[] | undefined) ?? keys) {
           const def = defOf(key);
           const pending = await store.listPending(key);
           for (const r of await storage.readRows(key)) {
             const data = pending.has(r.slug) ? await store.getPending(key, r.slug) : r.data;
-            const found = strings(data).find((s) => s.toLowerCase().includes(q));
+            let at = -1;
+            const found = strings(data).find((s) => (at = s.search(q)) >= 0);
             if (!found) continue;
-            const at = found.toLowerCase().indexOf(q);
             hits.push({
               collection: key,
               ...(def.kind === 'collection' && { slug: r.slug, title: text((data as Record<string, unknown>)?.[def.titleField]) }),
               status: r.status,
-              snippet: found.slice(Math.max(0, at - 60), at + q.length + 60),
+              snippet: found.slice(Math.max(0, at - 60), at + (a.query as string).length + 60),
             });
           }
         }
@@ -341,7 +349,7 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
           input: z.object({ url: z.string(), alt: z.string().max(300).default('').describe('Describes the image.') }),
           annotations: { idempotentHint: true },
           async run(a) {
-            const r = await mediaImporter(ctx.options.media!, { apiPath: ctx.apiPath })(a.url as string);
+            const r = await importerFor(ctx)(a.url as string);
             return { ok: true, image: { url: r.url, alt: a.alt }, reused: r.reused };
           },
         }

@@ -64,6 +64,11 @@ export function createContentService(ctx: Context) {
   const { store } = ctx;
   const defOf = (key: unknown) => (typeof key === 'string' && Object.hasOwn(ctx.config, key) ? ctx.config[key] : undefined);
 
+  /** An agent's request to discard a draft has nothing left to act on once the draft is gone. */
+  async function dropDiscardRequest(key: string, slug: string) {
+    if ((await store.getRequest(key, slug))?.action === 'discard') await store.removeRequest(key, slug);
+  }
+
   /**
    * Stores already validated data as the entry's draft. A published entry (or a singleton) keeps its live version and
    * gets the data as pending changes; an entry that was never published is updated in place. The site is unchanged.
@@ -79,6 +84,7 @@ export function createContentService(ctx: Context) {
     } else if (live && revOf(def, live.data) === revOf(def, v.data)) {
       // Edited back to the live version: nothing left to publish.
       await store.removePending(v.key, v.slug);
+      await dropDiscardRequest(v.key, v.slug);
     } else {
       await store.savePending(v.key, v.slug, v.data);
       changes = true;
@@ -116,7 +122,10 @@ export function createContentService(ctx: Context) {
       } else {
         await store.upsert(v.key, v.slug, v.data, status);
       }
-      if (!pendingOnly) await store.removePending(v.key, v.slug);
+      if (!pendingOnly) {
+        await store.removePending(v.key, v.slug);
+        await dropDiscardRequest(v.key, v.slug);
+      }
       await store.removeDraft(v.key, v.slug);
       // Pending changes aren't on the site, so there is nothing to revalidate.
       if (!pendingOnly) changed(ctx, { type: 'save', key: v.key, slug: v.slug, ...(by && { by }) });
@@ -206,7 +215,7 @@ export function createContentService(ctx: Context) {
       if (!def || typeof at !== 'string') return unknownEntry;
       await store.removePending(key as string, at);
       await store.removeDraft(key as string, at);
-      if ((await store.getRequest(key as string, at))?.action === 'discard') await store.removeRequest(key as string, at);
+      await dropDiscardRequest(key as string, at);
       return { ok: true, message: 'Draft discarded. The live version is unchanged.' };
     },
 
@@ -247,7 +256,12 @@ export function createContentService(ctx: Context) {
       if (request.action === 'delete') return { ...(await service.remove(k, at, request.by)), deleted: true };
       const pending = await store.getPending(k, at);
       if (pending === undefined) return { ok: true, message: 'There were no unpublished changes left to discard.' };
-      if (revOf(def, pending) !== request.rev) return { ok: false, message: 'The draft changed after the request, so it was not discarded.', errors: {} };
+      if (revOf(def, pending) !== request.rev)
+        return {
+          ok: false,
+          message: 'The draft changed after the request, so it was not discarded and the request was dropped. Ask the agent again if it still applies.',
+          errors: {},
+        };
       return service.discard(k, at);
     },
 

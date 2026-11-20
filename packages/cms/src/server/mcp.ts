@@ -10,7 +10,7 @@ import { mcpTools, type Agent, type Tool, type ToolResult } from './mcp-tools.js
 
 const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const DEFAULT_SCOPES: AgentScope[] = ['read', 'draft'];
-const MIN_TOKEN_LENGTH = 16;
+const MIN_TOKEN_LENGTH = 32;
 
 const INSTRUCTIONS =
   'Manages the content of this site. Call get_schema first. Writes are drafts and never change the live site; ' +

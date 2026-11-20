@@ -196,6 +196,7 @@ describe('MCP reads', () => {
 
   it('searches text', async () => {
     const r = await call(TOKENS.reader, 'search', { query: 'WORLD' });
+    expect((await call(TOKENS.reader, 'search', { query: 'wor(' })).total).toBe(0);
     expect(r.results).toEqual([{ collection: 'posts', slug: 'live', title: 'Live post', status: 'published', snippet: 'Hello world' }]);
   });
 });
@@ -250,6 +251,13 @@ describe('MCP writes', () => {
     await call(TOKENS.editor, 'update_entry', { collection: 'posts', slug: 'live', data: { body: 'Two' } });
     expect(await answer('live', true)).toMatchObject({ ok: false });
     expect(row('pending:posts', 'live')?.data).toMatchObject({ body: 'Two' });
+  });
+
+  it('drops a discard request once the draft is published', async () => {
+    await call(TOKENS.editor, 'update_entry', { collection: 'posts', slug: 'live', data: { body: 'One' } });
+    await call(TOKENS.editor, 'discard_draft', { collection: 'posts', slug: 'live' });
+    await call(TOKENS.editor, 'publish', { collection: 'posts', slug: 'live' });
+    expect(row('request:posts', 'live')).toBeUndefined();
   });
 
   it('has nothing to discard without unpublished changes', async () => {
