@@ -6,7 +6,7 @@ import { createContext, type CmsOptions } from './context.js';
 import { createHandlers } from './handlers.js';
 import { createPreviewBanner } from './preview-banner.js';
 
-export type { AdminPageDef, Change, CmsOptions } from './context.js';
+export type { AdminPageDef, AgentScope, AgentToken, Change, CmsOptions, McpOptions } from './context.js';
 export type { AuthAdapter, PasswordAuth } from './auth.js';
 export type { ListOptions, ReadOptions } from './store.js';
 export { neonDatabase, type Database } from './db.js';

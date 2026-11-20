@@ -12,4 +12,6 @@ export const cms = createCms(config, {
   brand: 'Example',
   icons: { settings: <SettingsIcon />, home: <HouseIcon />, authors: <UserIcon />, posts: <FileTextIcon /> },
   editor: Editor,
+  // The MCP server at /api/mnml/mcp, for agents such as Claude Code. Off while MNML_AGENT_TOKEN is unset.
+  mcp: { tokens: [{ name: 'agent', token: process.env.MNML_AGENT_TOKEN, scopes: ['read', 'draft', 'publish'] }] },
 });

@@ -35,6 +35,8 @@ type Props = {
   refOptions?: RefOptions;
   /** Extra items for the header's "more" menu (use MenuItem / menuItemClass). */
   actions?: React.ReactNode;
+  /** Shown under the header, e.g. an agent's request waiting for approval. */
+  banner?: React.ReactNode;
 };
 
 export function EntryForm({
@@ -50,6 +52,7 @@ export function EntryForm({
   derived = [],
   refOptions = {},
   actions,
+  banner,
 }: Props) {
   const { post, confirm } = useAdmin();
   const router = useRouter();
@@ -300,6 +303,7 @@ export function EntryForm({
             </ActionMenu>
           )}
         </AdminHeader>
+        {banner}
         <div className="flex flex-1">
           <div className={showPreview ? 'w-[min(36rem,45%)] shrink-0' : 'w-full'}>
             <div className={`${bodyClass} flex flex-col gap-6`}>
