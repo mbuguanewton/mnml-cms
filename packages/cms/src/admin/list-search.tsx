@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { SearchIcon, XIcon } from 'lucide-react';
-import { inputClass } from './styles.js';
+import { Input } from './ui/input.js';
 
 /**
  * The collection list's search box. A plain GET form, so Enter works without JavaScript; with it, the list follows
@@ -33,14 +33,14 @@ export function ListSearch({ q, label }: { q: string; label: string }) {
   return (
     <form method="get" role="search" className="relative w-full sm:max-w-xs">
       <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-mnml-text-mute" />
-      <input
+      <Input
         type="search"
         name="q"
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={setValue}
         placeholder={`Search ${label.toLowerCase()}`}
         aria-label={`Search ${label.toLowerCase()} by title or slug`}
-        className={`${inputClass} pr-8 pl-8 [&::-webkit-search-cancel-button]:hidden`}
+        className="pr-8 pl-8 [&::-webkit-search-cancel-button]:hidden"
       />
       {value && (
         <button
