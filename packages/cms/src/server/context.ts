@@ -8,7 +8,29 @@ import { sessionCodec } from './session.js';
 import { createStore } from './store.js';
 import { localMedia, type MediaStorage } from './media.js';
 
-export type Change = { type: 'save' | 'delete'; key: string; slug: string };
+/** A save or delete that reached the site. `by` is the agent token's name when the MCP server made it. */
+export type Change = { type: 'save' | 'delete'; key: string; slug: string; by?: string };
+
+/**
+ * What an agent token may do. `read`: schema, entries, search, diffs, preview links. `draft`: create entries and save
+ * drafts (never live), upload images. `publish`: publish, unpublish, discard drafts, and edit singletons without
+ * drafts (those go live). `delete`: delete entries.
+ */
+export type AgentScope = 'read' | 'draft' | 'publish' | 'delete';
+
+export type AgentToken = {
+  /** Shown to `onChange` as `change.by`. Default 'agent'. */
+  name?: string;
+  /** The secret, e.g. process.env.MNML_AGENT_TOKEN. A token left unset is ignored. Use 32+ random characters. */
+  token: string | undefined;
+  /** Default ['read', 'draft']. */
+  scopes?: AgentScope[];
+  /** Limit the token to these singletons and collections. Default: all of them. */
+  collections?: string[];
+};
+
+/** The MCP server at <apiPath>/mcp, for AI agents. Off unless set. */
+export type McpOptions = { tokens: AgentToken[] };
 
 /** An extra screen in the admin, e.g. a settings page that isn't content. */
 export type AdminPageDef = {
@@ -59,6 +81,8 @@ export type CmsOptions<C extends CmsConfig> = StorageOptions & {
   editor?: ComponentType<{ children: ReactNode }>;
   /** Called after each save or delete. Default: revalidatePath('/', 'layout'). */
   revalidate?: (change: Change) => void;
+  /** Turns on the MCP server at <apiPath>/mcp, so agents (Claude Code, Cursor…) can manage content with a token. */
+  mcp?: McpOptions;
   /** Runs after the response is sent (via after()), e.g. to update a search index. */
   onChange?: (change: Change) => void | Promise<void>;
 };

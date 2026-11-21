@@ -6,9 +6,12 @@ export default {
   'drafts-and-publishing': 'Drafts and publishing',
   'moving-content': 'Moving content',
   editor: 'Editor',
+  agents: 'Agents (MCP)',
   options: 'Options',
   authentication: 'Authentication',
   'image-storage': 'Image storage',
   'other-orms': 'Other ORMs',
   'entry-points': 'Entry points',
+  'common-mistakes': 'Common mistakes',
+  upgrading: 'Upgrading',
 };

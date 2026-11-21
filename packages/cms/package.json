@@ -1,6 +1,6 @@
 {
   "name": "@n3wtou/mnml-cms",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "A small schema-driven CMS for Next.js: config file, embedded admin, Postgres storage.",
   "keywords": [
     "cms",
@@ -73,6 +73,7 @@
   "files": [
     "dist",
     "styles.css",
+    "AGENTS.md",
     "README.md",
     "LICENSE"
   ],
@@ -83,7 +84,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/copy-css.mjs",
+    "build": "node scripts/build-agent-docs.mjs && rm -rf dist && tsc -p tsconfig.build.json && node scripts/copy-css.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "prepack": "pnpm build",
     "test": "vp test run"
@@ -93,6 +94,7 @@
     "@tiptap/core": "^3.31.4",
     "@tiptap/extension-image": "^3.31.4",
     "@tiptap/extension-table": "^3.31.4",
+    "@tiptap/markdown": "^3.31.4",
     "@tiptap/pm": "^3.31.4",
     "@tiptap/react": "^3.31.4",
     "@tiptap/starter-kit": "^3.31.4",

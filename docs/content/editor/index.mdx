@@ -1,8 +1,12 @@
+---
+description: "Extend the rich text editor with Tiptap extensions and toolbar tools (defineEditor, editorProvider)."
+---
+
 # Extending the editor
 
 Add Tiptap extensions and toolbar buttons.
 
-The editor runs in the browser and `<RichText>` runs on the server. Both need the same extensions. So the config lives in a plain module that both import (no `'use client'`):
+The editor (browser) and `<RichText>` (server) need the same extensions. So the config is a plain module both import (no `'use client'`):
 
 ```ts filename="src/mnml-editor.ts"
 import { defineEditor, tools } from '@n3wtou/mnml-cms/editor';
@@ -13,7 +17,7 @@ export const editor = defineEditor({
 });
 ```
 
-A 3-line client file wraps it for the admin:
+A client file wraps it for the admin:
 
 ```tsx filename="src/mnml-editor-client.tsx"
 'use client';
@@ -22,20 +26,17 @@ import { editor } from './mnml-editor';
 export const Editor = editorProvider(editor);
 ```
 
-Then:
-
-- pass `editor: Editor` to `createCms`
-- pass `editor={editor}` to every `<RichText>`
+Then pass `editor: Editor` to `createCms`, and `editor={editor}` to every `<RichText>`:
 
 ```tsx
 <RichText content={post.content} editor={editor} />
 ```
 
-The config applies to every rich-text field. It can't be set per field: extensions and functions can't be stored in the schema sent to the admin.
+One config for every rich text field. Not per field: extensions can't travel in the schema sent to the admin.
 
 ## Ready-made tools
 
-`tools.underline`, `tools.strike` and `tools.horizontalRule` are buttons for things StarterKit already has. They need no extension.
+`tools.underline`, `tools.strike`, `tools.horizontalRule`: buttons for StarterKit features. No extension needed.
 
 ## Your own tools
 
@@ -56,39 +57,30 @@ type EditorTool = {
 };
 ```
 
-| Property | What it does |
+| Property | Does |
 | --- | --- |
-| `name` | Unique. Used as the React key. |
-| `label` | Tooltip and accessible name |
-| `run` | Runs on click. `admin` has `form()`, `confirm()` and `alert()` ([Nodes with a form](/editor/nodes-with-a-form)). |
-| `isActive` | Shows the button as pressed |
-| `disabled` | Disables the button |
-| `visible` | Shows the button only when it returns true |
-| `context` | A node name. The tool shows in a small toolbar above that node while the cursor is in it. |
-| `builtIn` | Set on the package's ready-made tools |
-| `group` | The toolbar group. Without one, the tool gets its own group at the end. |
+| `name` | Unique. React key. |
+| `label` | Tooltip, accessible name |
+| `run` | On click. `admin` has `form()`, `confirm()`, `alert()` ([Nodes with a form](/editor/nodes-with-a-form)). |
+| `isActive` | Shows pressed |
+| `disabled` | Disables |
+| `visible` | Shown only when true |
+| `context` | A node name: the tool shows in a mini toolbar above that node while the cursor is in it. |
+| `builtIn` | Set on the package's tools |
+| `group` | Toolbar group. None: own group at the end. |
 
-`run`, `isActive`, `disabled` and `visible` get the live Tiptap editor.
+`run`, `isActive`, `disabled`, `visible` get the live Tiptap editor.
 
 ## Toolbar groups
 
-In order:
+In order: undo/redo, text style menu (paragraph, headings, quote), `format` (bold, italic, code), `block` (lists), `insert` (link, image).
 
-1. Undo and redo
-2. The text style menu: paragraph, headings, quote
-3. `format`: bold, italic, code
-4. `block`: lists
-5. `insert`: link, image
-
-- `tools.underline` and `tools.strike` go in `format`. `tools.horizontalRule` goes in `insert`.
-- In each group, the package's ready-made tools (`tools.underline`, `tables.tools`…) come first.
-- Your tools follow, in the order you list them.
+- `tools.underline`, `tools.strike`: `format`. `tools.horizontalRule`: `insert`.
+- In each group, package tools (`tools.underline`, `tables.tools`…) first, then yours in listed order.
 
 ## Example: code blocks with syntax highlighting
 
-StarterKit has a plain code block. Swap it for [`CodeBlockLowlight`](https://tiptap.dev/docs/editor/extensions/nodes/code-block-lowlight) and add a button.
-
-To replace or remove a default extension, pass a function. It gets the defaults and returns the full list.
+Swap StarterKit's plain code block for [`CodeBlockLowlight`](https://tiptap.dev/docs/editor/extensions/nodes/code-block-lowlight) and add a button. To replace or remove a default extension, pass a function: it gets the defaults and returns the full list.
 
 ```tsx filename="src/mnml-editor.tsx"
 import { defineEditor } from '@n3wtou/mnml-cms/editor';
@@ -114,4 +106,4 @@ export const editor = defineEditor({
 });
 ```
 
-The highlighting only shows in the editor. `<RichText>` renders `<pre><code class="language-…">`. On the site, highlight it with any highlighter, or style it as plain code.
+Highlighting shows in the editor only. `<RichText>` renders `<pre><code class="language-…">`: highlight it on the site yourself, or leave it plain.

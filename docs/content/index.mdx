@@ -1,11 +1,18 @@
+---
+description: "A small schema-driven CMS that lives inside your Next.js site."
+---
+
 # mnml-cms
 
 A small CMS that lives inside your Next.js site.
 
 - **One config file** defines your content.
 - **The admin** is a route in your app (`/admin`).
-- **Entries** are stored in your own Postgres, in one JSON table. Changing the content model never needs a migration.
+- **Entries** live in your Postgres, one JSON table. No migrations when the model changes.
+
+- **AI agents** edit content through the built-in MCP server. Drafts only; an editor approves deletes. ([Agents](/agents))
+- **Docs for agents:** every page is Markdown at its URL plus `.md`, and the MCP `docs` tool links to them. ([Help your AI agent](/getting-started#help-your-ai-agent))
 
 Needs Next 16+ (App Router), React 19+ and Tailwind v4.
 
-Start with [Getting started](/getting-started). For a complete app, see [`example/`](https://github.com/mbuguanewton/mnml-cms/tree/main/example).
+Start: [Getting started](/getting-started). Full app: [`example/`](https://github.com/mbuguanewton/mnml-cms/tree/main/example).

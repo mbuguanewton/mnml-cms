@@ -107,4 +107,29 @@ describe('importRemoteMedia refuses', () => {
     await expect(run(SRC, fakeFetch({ length: '999999999' }))).rejects.toThrow(/larger than/);
     await expect(run(SRC, fakeFetch({ body: new Uint8Array(10) }), { maxBytes: 5 })).rejects.toThrow(/larger than 5 bytes/);
   });
+
+  it('publicOnly refuses private hosts, also after a redirect', async () => {
+    const { storage } = memoryMedia();
+    const resolve = async (host: string) => (host === 'cdn.example.com' ? ['93.184.216.34'] : ['10.0.0.5']);
+    const ok = mediaImporter(storage, { fetch: fakeFetch(), publicOnly: true, resolve });
+    await expect(ok('https://cdn.example.com/a.png')).resolves.toMatchObject({ reused: false });
+    await expect(ok('https://internal.example.com/a.png')).rejects.toThrow('not a public address');
+    await expect(ok('https://127.0.0.1/a.png')).rejects.toThrow('not a public address');
+    await expect(ok('https://[::ffff:192.168.1.1]/a.png')).rejects.toThrow('not a public address');
+
+    const redirecting = vi.fn(async (input: string) =>
+      input.includes('cdn.example.com')
+        ? new Response(null, { status: 302, headers: { location: 'https://internal.example.com/x.png' } })
+        : new Response(new Blob([PNG]), { headers: { 'content-type': 'image/png' } }),
+    ) as unknown as typeof fetch;
+    const viaRedirect = mediaImporter(memoryMedia().storage, { fetch: redirecting, publicOnly: true, resolve });
+    await expect(viaRedirect('https://cdn.example.com/r.png')).rejects.toThrow('not a public address');
+    expect(redirecting).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops reading a body without content-length at the size limit', async () => {
+    const big = new Uint8Array(64);
+    const r = mediaImporter(memoryMedia().storage, { fetch: fakeFetch({ body: big }), maxBytes: 16 });
+    await expect(r('https://cdn.example.com/big.png')).rejects.toThrow('larger than 16 bytes');
+  });
 });

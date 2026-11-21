@@ -1,27 +1,31 @@
+---
+description: "Every option of createCms: storage, auth, media, paths, sidebar, editor, MCP, revalidate and onChange."
+---
+
 # Options
 
-The second argument of `createCms(config, options)`.
+Second argument of `createCms(config, options)`.
 
 | Option | Purpose |
 | --- | --- |
-| `database` | A Drizzle Postgres database, or a function that returns one. The function is called on first use. |
-| `table` | Table name, used with `database`. Default `entries`. |
-| `storage` | Your own `EntryStorage`, instead of `database` ([Other ORMs](/other-orms)) |
+| `database` | Drizzle Postgres database, or a function returning one (called on first use) |
+| `table` | Table name, with `database`. Default `entries`. |
+| `storage` | Your own `EntryStorage` instead of `database` ([Other ORMs](/other-orms)) |
 | `auth` | `{ password, secret }` for the built-in login, or an `AuthAdapter` ([Authentication](/authentication)) |
-| `media` | Storage for uploaded images ([Image storage](/image-storage)) |
-| `adminPath`, `apiPath` | Default `/admin` and `/api/mnml`. Must match where the files live. |
-| `brand` | Sidebar title: a string, or a function (can be async) |
+| `media` | Image storage ([Image storage](/image-storage)) |
+| `adminPath`, `apiPath` | Default `/admin`, `/api/mnml`. Must match the route files. |
+| `brand` | Sidebar title: string or (async) function |
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
-| `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build them with `@n3wtou/mnml-cms/admin`. |
-| `editor` | The component from `editorProvider()`: extra editor extensions and buttons ([Extending the editor](/editor)) |
-| `revalidate` | Called after each save or delete |
-| `onChange` | Runs after the response on each save or delete (via `after()`), e.g. to update a search index |
+| `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build with `@n3wtou/mnml-cms/admin`. |
+| `editor` | Component from `editorProvider()`: extra extensions and buttons ([Extending the editor](/editor)) |
+| `mcp` | `{ tokens }`: MCP server for AI agents at `<apiPath>/mcp` ([Agents](/agents)) |
+| `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
+| `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
 
 ## In your own code
 
-`cms.isAdmin()` checks the session in your own routes. It works with the built-in login and with your adapter.
-
-Custom admin pages can open the admin's dialogs from client components. `useAdmin()` comes from `@n3wtou/mnml-cms/admin`:
+- `cms.isAdmin()`: checks the session in your routes. Works with the built-in login and adapters.
+- `useAdmin()` from `@n3wtou/mnml-cms/admin` opens the admin's dialogs in custom admin pages:
 
 ```ts
 const { confirm, alert } = useAdmin();

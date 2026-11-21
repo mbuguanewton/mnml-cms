@@ -1,0 +1,49 @@
+---
+title: "Drafts and publishing"
+description: "Drafts, autosave, Publish, Discard changes and Unpublish, and what the site shows for each."
+url: https://mnml-cms.vercel.app/drafts-and-publishing
+---
+
+# Drafts and publishing
+
+A collection entry is draft or published. The admin's dot:
+
+- **Green:** published
+- **Grey:** draft
+- **Orange over green:** published, with unpublished changes
+
+## Autosave
+
+Edits to an existing entry save ~1.5 s after typing stops ("Saving…", then "Saved"). No save button for drafts.
+
+| Action | Does |
+| --- | --- |
+| **Publish** | Draft becomes live. |
+| **Discard changes** (⋮) | Drops unpublished changes, back to live. |
+| **Unpublish** (⋮) | Takes it off the site. Content becomes a draft. |
+
+A new entry: **Create draft** stores it, **Publish** puts it live. Autosaves after that.
+
+### Only valid data is saved
+
+- Invalid or empty required field: header says "Not saved: \<field\>: \<problem\>".
+- Unsaved edits live in the browser only. Leaving warns first.
+- So Publish never fails on a stored draft.
+
+### Someone else edited it
+
+Changed since you opened it? Autosave stops and asks you to reload. Never overwrites.
+
+## On your site
+
+Public readers (`listEntries`, `getEntry`, `getEntries`, `listSlugs`) return published entries only. A draft is a 404.
+
+Editors see their draft in live preview, and anywhere on the site while Draft Mode is on for that entry (until "Exit preview").
+
+## Singletons
+
+Live by default: Save publishes. `drafts: true` gives autosave, Publish and Discard changes.
+
+```ts
+settings: singleton({ label: 'Settings', drafts: true, fields: { /* … */ } }),
+```

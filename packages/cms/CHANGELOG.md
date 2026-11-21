@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.5.0
+
+### Minor Changes
+
+- 6ddceb3: Docs for agents, all generated from the docs site's pages.
+
+  - Every docs page is served as Markdown at its URL plus `.md` (e.g. `/fields/blocks.md`), with `title`, `description` and `url` in its frontmatter. `/llms.txt` and `/llms-full.txt` list and bundle them.
+  - MCP: a `docs` tool (scope `read`) returns the `.md` links of the pages matching a topic.
+  - `AGENTS.md` in the package: where the types and docs are, and the rules agents break most.
+  - New docs pages: "Common mistakes" and "Upgrading".
+
+- 5dcf272: MCP: rich text as Markdown. Agents can send a Markdown string for any `richtext` field (nested ones too), and the server converts it to Tiptap JSON. Headings, bold, italic, strike, code, links, lists, quotes, code blocks, images and horizontal rules convert. Tables and raw HTML are refused with a field error; send Tiptap JSON for those. `get_entry` and `list_entries` take `richText: 'markdown'` to return rich text as Markdown. Nodes Markdown can't express come out as `<!-- mnml:<type> -->`, with `lossy: true`.
+
+  `markdownToRichText` and `richTextToMarkdown` are exported from `@n3wtou/mnml-cms/sync` for import scripts.
+
+  Fix: MCP `publish` and `unpublish` no longer fail on entries saved before a field was added.
+
+  New dependency: `@tiptap/markdown`. Not breaking.
+
+- 2d3b79f: MCP server for agents. Set `mcp: { tokens: [{ name, token, scopes, collections }] }` in `createCms` to serve it at `<apiPath>/mcp` (Streamable HTTP). Agents authenticate with a bearer token, separate from the admin login. Scopes are `read`, `draft` (the default with `read`), `publish` and `delete`, and a token can be limited to some collections. Tools: `get_schema`, `list_entries`, `get_entry`, `search`, `create_entry`, `update_entry`, `validate_entry`, `diff_entry`, `publish`, `unpublish`, `discard_draft`, `delete_entry`, `upload_media_from_url` and `get_preview_url`. Agent writes are drafts. They use the same validation and write path as the admin. `delete_entry` and `discard_draft` only make a request: the entry page in the admin shows it, and an editor approves or rejects it there. A discard is refused if the draft changed after the request. Like admin saves, everything except pending edits to a published entry runs `revalidate` and `onChange` (creating a draft, publishing, unpublishing, deleting), with `change.by` set to the token's name. `upload_media_from_url` only fetches public https hosts, checked again on every redirect.
+
+  Also new: `listEntries` returns `createdAt` and `updatedAt` for each entry. `<apiPath>/preview/open?key=&slug=` opens an entry's latest version in Draft Mode, for signed-in admins only.
+
+  Not breaking. No database change.
+
 ## 1.4.1
 
 ### Patch Changes

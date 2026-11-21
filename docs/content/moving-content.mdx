@@ -1,66 +1,73 @@
+---
+description: "Export and import content between databases, rehost images and convert Markdown, with @n3wtou/mnml-cms/sync."
+---
+
 # Moving content between databases
 
-Seed production from your dev content, or pull production back into dev.
+Seed prod from dev, or pull prod back into dev. `@n3wtou/mnml-cms/sync` exports content to JSON, compares a file with a database, and writes the difference. It runs in a plain script, no Next.js.
 
-`@n3wtou/mnml-cms/sync` does three things:
+The example's `scripts/content.ts`:
 
-1. Exports content to a JSON file.
-2. Compares a file with a database.
-3. Writes the difference.
-
-It runs from a plain script, without Next.js. The example has one, `scripts/content.ts`:
-
-| Command | What it does |
+| Command | Does |
 | --- | --- |
-| `pnpm db:export` | Exports `DATABASE_URL` to `mnml-content.json` |
-| `pnpm db:import mnml-content.json --mode add` | Dry run of importing the file into `DATABASE_URL` |
-| `pnpm db:sync --from DATABASE_URL --to PROD_DATABASE_URL --mode add --apply --yes` | Copies one database into another |
-| `pnpm db:sync --from-env-file .env.local --to-env-file .env.production --mode add --apply --yes` | The same, reading each URL from a file |
+| `pnpm db:export` | `DATABASE_URL` to `mnml-content.json` |
+| `pnpm db:import mnml-content.json --mode add` | Dry run: file into `DATABASE_URL` |
+| `pnpm db:sync --from DATABASE_URL --to PROD_DATABASE_URL --mode add --apply --yes` | One database into another |
+| `pnpm db:sync --from-env-file .env.local --to-env-file .env.production --mode add --apply --yes` | Same, URLs read from files |
 
 ## Choosing the databases
 
-- `--env`, `--from` and `--to` name an environment variable that holds a database URL. Put them in `.env.local`. The URL itself never lands in your shell history.
-- `--env-file`, `--from-env-file` and `--to-env-file` read the variable from a file instead. It's `DATABASE_URL` unless you also name one. Dev and prod can each keep their own `DATABASE_URL`.
-- The file is only read. It's never loaded into the environment.
-- A `BLOB_READ_WRITE_TOKEN` in the target's file is used for the missing-image check.
+- `--env`, `--from`, `--to`: name an env var holding a database URL. URLs stay out of shell history.
+- `--env-file`, `--from-env-file`, `--to-env-file`: read the var from a file. Default var `DATABASE_URL`. The file is only read, never loaded into the env.
+- A `BLOB_READ_WRITE_TOKEN` in the target's file powers the missing-image check.
 
 ## Modes
 
-| `--mode` | What it does |
+| `--mode` | Does |
 | --- | --- |
-| `add` | Adds entries the target doesn't have. Leaves existing ones alone. |
+| `add` | Adds missing entries. Leaves existing ones. |
 | `overwrite` | Also replaces entries that differ. |
-| `replace` | Makes the target match the file. Deletes entries the file doesn't have. |
+| `replace` | Target matches the file. Deletes entries not in it. |
 
 ## Safety
 
-- Every run is a dry run that lists the changes, until you add `--apply`.
-- Writing to a database that isn't on localhost also needs `--yes`.
-- Before writing, the target's content is saved to `.mnml-backups/`. Undo with `db:import <backup> --mode replace`.
-- Entries are checked against your config first. If any don't fit, nothing is written.
-- The source and target can't be the same database.
-- Running an import twice is safe.
-- Writes aren't atomic: the Neon HTTP driver has no transactions. If a run stops halfway, run it again.
+- Dry run until `--apply`.
+- A database not on localhost also needs `--yes`.
+- Target content is backed up to `.mnml-backups/` first. Undo: `db:import <backup> --mode replace`.
+- Entries are checked against your config. Any misfit: nothing is written.
+- Source and target can't be the same.
+- Running twice is safe.
+- Not atomic (Neon HTTP has no transactions). Stopped halfway? Run again.
 
 ## What moves
 
-| Moves | Doesn't move |
+| Moves | Doesn't |
 | --- | --- |
-| The config's collections and singletons | Sign-in state |
+| Collections and singletons in the config | Sign-in state |
 | Their autosaved drafts | Preview copies |
 | | **Uploaded images** |
 
-The script lists files the content uses that the target's media storage doesn't have. An image uploaded in dev stays broken in prod until you copy the file.
-
-`createdAt` and `updatedAt` on the target are set when the entry is written.
+- The script lists images the target's storage lacks. Copy those files yourself.
+- `createdAt` / `updatedAt` are set when written.
 
 ## In your own scripts
 
-The same functions are exported: `exportContent`, `planImport`, `applyImport`, `describePlan` and `missingMedia`. Connect with `drizzleStorage` or `neonDatabase`.
+Exported: `exportContent`, `planImport`, `applyImport`, `describePlan`, `missingMedia`. Connect with `drizzleStorage` or `neonDatabase`.
+
+## Markdown content
+
+`markdownToRichText` turns Markdown (a blog export, another CMS) into Tiptap JSON for a `richtext` field.
+
+```ts
+import { markdownToRichText, richTextToMarkdown } from '@n3wtou/mnml-cms/sync';
+
+const content = markdownToRichText(post.body); // throws on tables and raw HTML
+const { markdown, lossy } = richTextToMarkdown(entry.content); // lossy: some nodes became <!-- mnml:<type> -->
+```
 
 ## Rehosting images
 
-Content from another CMS has its images on that CMS's CDN (e.g. `cdn.sanity.io`). `mediaImporter` copies them into this site's media storage. It returns the URL to put in an `image` field.
+Images from another CMS live on its CDN (e.g. `cdn.sanity.io`). `mediaImporter` copies them into this site's storage and returns the URL for an `image` field.
 
 ```ts
 import { mediaImporter, vercelBlobMedia } from '@n3wtou/mnml-cms/sync';
@@ -70,11 +77,8 @@ const { url } = await importImage('https://cdn.sanity.io/images/…/photo.jpg');
 await storage.upsert('posts', slug, { …post, cover: { url, alt } }, 'published');
 ```
 
-Use the same storage as the site.
-
-- **Each source URL is stored once.** The file is named after a hash of the URL. A later run finds it through the storage's `list()` and returns the same URL without downloading. Both built-in storages have `list()`.
-- A custom `MediaStorage` without `list()` only avoids repeats within one importer.
-- **Accepted:** `https://` images (also after redirects) that are JPEG, PNG, WebP, GIF or AVIF, up to 4 MB. Raise the limit with `maxBytes`. Anything else throws with the reason.
-- `importRemoteMedia(url, storage)` does a single image. Use one `mediaImporter` for a whole run.
-
-The example has a script: `pnpm media:import <url…>`.
+- Use the site's storage.
+- Each source URL is stored once (file named after its hash). Later runs find it via `list()` and skip the download. Both built-in storages have `list()`; without it, repeats are only skipped within one importer.
+- Accepts `https://` JPEG, PNG, WebP, GIF, AVIF up to 4 MB (`maxBytes` to raise). Else throws with the reason.
+- `importRemoteMedia(url, storage)`: one image. Use one `mediaImporter` per run.
+- Example script: `pnpm media:import <url…>`.

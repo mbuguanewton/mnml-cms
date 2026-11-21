@@ -1,0 +1,40 @@
+---
+title: "Authentication"
+description: "The built-in password login, or your own auth (Better Auth, Auth.js, Clerk) through an AuthAdapter."
+url: https://mnml-cms.vercel.app/authentication
+---
+
+# Authentication
+
+## Built-in login
+
+`auth: { password, secret }`: one shared password.
+
+- 5 failed sign-ins lock the IP out for 15 minutes. Counted in the entries table, so it works on serverless.
+- Sessions last 24 h from the last visit. The proxy renews the cookie while active.
+- Changing `ADMIN_PASSWORD` or `ADMIN_SESSION_SECRET` signs everyone out. So does **Sign out everywhere** in the sidebar.
+
+## Your own login
+
+Auth.js, Better Auth, Clerk…: pass an adapter, with a `login` UI or a `loginUrl`.
+
+```tsx
+export const cms = createCms(config, {
+  // …
+  auth: {
+    isAdmin: async () => (await auth.api.getSession({ headers: await headers() }))?.user.role === 'admin',
+    login: <SignInWithSso />,
+    signOut: async () => { await auth.api.signOut({ headers: await headers() }); },
+  },
+});
+```
+
+| Field | Does |
+| --- | --- |
+| `isAdmin` | Is the visitor an admin? The admin page and every API route call it. |
+| `login` | Shown in the login card at `/admin/login`. Server or client component. |
+| `loginUrl` | Instead of `login`: signed-out visitors go to your page, e.g. `'/sign-in'` |
+| `signOut` | Optional |
+
+- Build `login` with `Button`, `inputClass` etc. from `@n3wtou/mnml-cms/admin` to match the admin.
+- Drop `adminProxy`: it only knows the built-in cookie.

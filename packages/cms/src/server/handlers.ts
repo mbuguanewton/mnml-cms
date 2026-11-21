@@ -1,20 +1,19 @@
 import 'server-only';
-import { revalidatePath } from 'next/cache';
 import { cookies, draftMode } from 'next/headers';
-import { after } from 'next/server';
-import type { AutosaveInput, AutosaveResult, EntryInput, Invalid, PreviewResult, SaveResult } from '../api.js';
-import { objectSchema, previewPath, slugSchema } from '../define.js';
+import type { AutosaveInput, AutosaveResult, EntryInput, PreviewResult, SaveResult } from '../api.js';
+import { previewPath } from '../define.js';
 import { checkPassword, clearFailures, clientIp, isAdmin, lockedFor, recordFailure, sessionVersion, signOutEverywhere, type PasswordAuth } from './auth.js';
-import type { Change, Context } from './context.js';
+import { createContentService, previewTarget, validate } from './content.js';
+import type { Context } from './context.js';
+import { createMcpHandler } from './mcp.js';
 import { SESSION_COOKIE, sessionCookieOptions } from './session.js';
 import { IMAGE_TYPES, MAX_IMAGE_BYTES } from './media.js';
 import { loadRefOptions } from './ref-options.js';
-import { revOf } from './rev.js';
-import { PREVIEW_COOKIE, SINGLETON_SLUG } from './store.js';
+import { PREVIEW_COOKIE } from './store.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
-//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · references · upload · media/delete
-//   GET:  media/<key> (uploaded images, public)
+//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · references · upload · media/delete · request · mcp
+//   GET:  media/<key> (uploaded images, public) · preview/open (admins only)
 
 const MEDIA_KEY = /^[\w.\-/]+$/;
 
@@ -32,40 +31,10 @@ function sameOrigin(request: Request) {
   }
 }
 
-/** Checks the key, the fields and the slug. Shared by save and preview. */
-function validate(ctx: Context, input: EntryInput): Invalid | { ok: true; key: string; slug: string; data: unknown } {
-  const def = Object.hasOwn(ctx.config, input.key) ? ctx.config[input.key] : undefined;
-  if (!def) return { ok: false, message: 'Unknown collection.', errors: {} };
-
-  const errors: Record<string, string> = {};
-  const parsed = objectSchema(def.fields).safeParse(input.data);
-  if (!parsed.success) for (const i of parsed.error.issues) errors[i.path.join('.')] ??= i.message;
-
-  let slug = SINGLETON_SLUG;
-  if (def.kind === 'collection') {
-    const s = slugSchema.safeParse(input.slug);
-    if (s.success) slug = s.data;
-    else errors.$slug = s.error.issues[0].message;
-  }
-  if (!parsed.success || errors.$slug) return { ok: false, message: 'Fix the highlighted fields.', errors };
-  return { ok: true, key: input.key, slug, data: parsed.data };
-}
-
-function changed(ctx: Context, change: Change) {
-  (ctx.options.revalidate ?? (() => revalidatePath('/', 'layout')))(change);
-  const onChange = ctx.options.onChange;
-  if (onChange)
-    after(async () => {
-      try {
-        await onChange(change);
-      } catch (e) {
-        console.error('cms onChange failed:', e);
-      }
-    });
-}
-
 export function createHandlers(ctx: Context) {
   const { store, adminPath } = ctx;
+  const content = createContentService(ctx);
+  const mcp = ctx.options.mcp ? createMcpHandler(ctx, content) : null;
 
   const routes: Record<string, (request: Request) => Promise<Response>> = {
     // The login form posts JSON. Without JavaScript (or before it loads) the browser posts the form itself,
@@ -110,46 +79,9 @@ export function createHandlers(ctx: Context) {
     async save(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
       const input = (await request.json()) as EntryInput;
-      const v = validate(ctx, input);
-      if (!v.ok) return json(v satisfies SaveResult);
-      const isCollection = ctx.config[v.key].kind === 'collection';
-      const action = input.action ?? 'publish';
-      if (action !== 'publish' && action !== 'draft' && action !== 'unpublish') {
-        return json({ ok: false, message: 'Unknown action.', errors: {} } satisfies SaveResult);
-      }
-      const isNew = isCollection && input.mode === 'create';
-      // Singletons are always live. A draft of an already published entry is kept beside it as pending changes.
-      const live = !isCollection || action === 'publish';
-      const pendingOnly = isCollection && action === 'draft' && !isNew && (await store.getStatus(v.key, v.slug)) === 'published';
-      const status = live ? 'published' : 'draft';
-
-      if (isNew) {
-        if (!(await store.insert(v.key, v.slug, v.data, status))) {
-          return json({ ok: false, message: 'That slug is already in use.', errors: { $slug: 'Already in use' } } satisfies SaveResult);
-        }
-      } else if (pendingOnly) {
-        await store.savePending(v.key, v.slug, v.data);
-      } else {
-        await store.upsert(v.key, v.slug, v.data, status);
-      }
-      if (!pendingOnly) await store.removePending(v.key, v.slug);
-      await store.removeDraft(v.key, v.slug);
-      // Pending changes aren't on the site, so there is nothing to revalidate.
-      if (!pendingOnly) changed(ctx, { type: 'save', key: v.key, slug: v.slug });
-      return json({
-        ok: true,
-        message: pendingOnly
-          ? 'Draft saved. The live site is unchanged.'
-          : action === 'unpublish'
-            ? 'Unpublished. It is no longer on the site.'
-            : action === 'draft'
-              ? 'Saved as a draft. It is not on the site.'
-              : isCollection
-                ? 'Published. The site is updated.'
-                : 'Saved. The site is updated.',
-        redirect: isNew ? `${adminPath}/${v.key}/${v.slug}?created=1` : undefined,
-        rev: revOf(ctx.config[v.key], v.data),
-      } satisfies SaveResult);
+      const { created, ...result } = await content.save(input);
+      if (result.ok && created) result.redirect = `${adminPath}/${input.key}/${input.slug}?created=1`;
+      return json(result satisfies SaveResult);
     },
 
     /**
@@ -159,58 +91,22 @@ export function createHandlers(ctx: Context) {
      */
     async autosave(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
-      const input = (await request.json()) as AutosaveInput;
-      const v = validate(ctx, input);
-      if (!v.ok) return json(v satisfies AutosaveResult);
-      const def = ctx.config[v.key];
-      const isCollection = def.kind === 'collection';
-      if (def.kind === 'collection' ? input.mode !== 'update' : !def.drafts) {
-        return json({ ok: false, message: 'Autosave is not available for this content.', errors: {} } satisfies AutosaveResult);
-      }
-      const live = await store.getRow(v.key, v.slug);
-      if (isCollection && !live) return json({ ok: false, message: 'This entry no longer exists.', errors: {} } satisfies AutosaveResult);
-      const current = (await store.getPending(v.key, v.slug)) ?? live?.data;
-      if (input.rev !== revOf(def, current)) {
-        return json({ ok: false, conflict: true, message: 'Changed somewhere else. Reload to see the latest version.', errors: {} } satisfies AutosaveResult);
-      }
-      const rev = revOf(def, v.data);
-      let changes = false;
-      if (live?.status === 'draft') {
-        await store.upsert(v.key, v.slug, v.data, 'draft');
-      } else if (live && revOf(def, live.data) === rev) {
-        // Edited back to the live version: nothing left to publish.
-        await store.removePending(v.key, v.slug);
-      } else {
-        await store.savePending(v.key, v.slug, v.data);
-        changes = true;
-      }
-      // A preview copy of the unsaved form would shadow the draft.
-      await store.removeDraft(v.key, v.slug);
-      return json({ ok: true, rev, changes } satisfies AutosaveResult);
+      return json((await content.autosave((await request.json()) as AutosaveInput)) satisfies AutosaveResult);
     },
 
     /** Throws away an entry's unpublished changes, going back to the live version. */
     async discard(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
       const { key, slug } = await request.json();
-      const def = typeof key === 'string' && Object.hasOwn(ctx.config, key) ? ctx.config[key] : undefined;
-      if (!def) return json({ ok: false, message: 'Unknown entry.' }, 400);
-      const at = def.kind === 'singleton' ? SINGLETON_SLUG : slug;
-      if (typeof at !== 'string') return json({ ok: false, message: 'Unknown entry.' }, 400);
-      await store.removePending(key, at);
-      await store.removeDraft(key, at);
-      return json({ ok: true });
+      const result = await content.discard(key, slug);
+      return result.ok ? json({ ok: true }) : json(result, 400);
     },
 
     async delete(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
       const { key, slug } = await request.json();
-      if (ctx.config[key]?.kind !== 'collection' || typeof slug !== 'string') return json({ ok: false, message: 'Unknown entry.' }, 400);
-      await store.remove(key, slug);
-      await store.removeDraft(key, slug);
-      await store.removePending(key, slug);
-      changed(ctx, { type: 'delete', key, slug });
-      return json({ ok: true, redirect: `${adminPath}/${key}` });
+      const result = await content.remove(key, slug);
+      return result.ok ? json({ ok: true, redirect: `${adminPath}/${key}` }) : json(result, 400);
     },
 
     /**
@@ -239,7 +135,19 @@ export function createHandlers(ctx: Context) {
       return Response.redirect(new URL(target, request.url), 303);
     },
 
-    /** Deletes a stored file. The admin warns first if entries still use it. */
+    /** An editor approves or rejects an agent's request to delete an entry or discard its draft. */
+    async request(request) {
+      if (!(await isAdmin(ctx))) return unauthorized();
+      const { key, slug, approve } = await request.json();
+      const r = await content.resolveRequest(key, slug, approve === true);
+      return json({ ...r, ...(r.ok && r.deleted && { redirect: `${adminPath}/${key}` }) });
+    },
+
+    /** The MCP server for agents (`mcp` option). It checks its own tokens instead of the admin session. */
+    async mcp(request) {
+      return mcp ? mcp(request) : json({ error: 'Not found' }, 404);
+    },
+
     /** Published entries to pick from, for reference pickers outside an entry's own fields (e.g. in rich text). */
     async references(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
@@ -248,6 +156,7 @@ export function createHandlers(ctx: Context) {
       return json({ ok: true, options: await loadRefOptions(ctx, collections as string[]) });
     },
 
+    /** Deletes a stored file. The admin warns first if entries still use it. */
     async 'media/delete'(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
       const media = ctx.options.media;
@@ -291,9 +200,28 @@ export function createHandlers(ctx: Context) {
     }
   }
 
-  /** Uploaded images, streamed from storage. Keys carry a random suffix, so responses never change. */
-  async function GET(_request: Request, { params }: { params: Promise<{ route?: string[] }> }) {
+  /**
+   * A link to an entry's latest version on the site (from the MCP tool `get_preview_url`): signs nothing in, so
+   * only an admin's browser gets Draft Mode. Everyone else goes to the login page.
+   */
+  async function openPreview(request: Request) {
+    const q = new URL(request.url).searchParams;
+    const key = q.get('key') ?? '';
+    const slug = q.get('slug') ?? undefined;
+    const target = previewTarget(ctx, key, slug);
+    if (!target) return new Response('Not found', { status: 404 });
+    if (!(await isAdmin(ctx))) return Response.redirect(new URL(ctx.loginUrl, request.url), 303);
+    await store.removeDraft(key, target.slug);
+    (await draftMode()).enable();
+    (await cookies()).set(PREVIEW_COOKIE, `${key}/${target.slug}`, { httpOnly: true, sameSite: 'lax', path: '/' });
+    return Response.redirect(new URL(target.path, request.url), 303);
+  }
+
+  /** Uploaded images (streamed from storage; keys carry a random suffix, so responses never change), and preview links. */
+  async function GET(request: Request, { params }: { params: Promise<{ route?: string[] }> }) {
     const [first, ...rest] = (await params).route ?? [];
+    if (first === 'preview' && rest.join('/') === 'open') return openPreview(request);
+    if (first === 'mcp' && mcp && rest.length === 0) return new Response('Use POST.', { status: 405, headers: { Allow: 'POST' } });
     const key = rest.join('/');
     if (first !== 'media' || !ctx.options.media || !MEDIA_KEY.test(key) || key.includes('..')) return new Response('Not found', { status: 404 });
     const file = await ctx.options.media.get(key);

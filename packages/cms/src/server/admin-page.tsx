@@ -11,6 +11,7 @@ import { menuItemClass } from '../admin/action-menu.js';
 import { StatusDot } from '../admin/status-dot.js';
 import { AdminProvider } from '../admin/context.js';
 import { FormDialogProvider } from '../admin/form-dialog.js';
+import { AgentRequest } from '../admin/agent-request.js';
 import { DeleteButton } from '../admin/delete-button.js';
 import { MediaDeleteButton } from '../admin/media-delete-button.js';
 import { EntryForm } from '../admin/entry-form.js';
@@ -220,8 +221,10 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       const pending = def.drafts ? ((await store.getPending(key, SINGLETON_SLUG)) as AnyEntry | undefined) : undefined;
       // A singleton that was never saved starts like a new entry: with the fields' defaults.
       const entry = pending ? (withDefaults(def.fields, pending) as AnyEntry) : (stored ?? initialValues(def.fields));
+      const request = await store.getRequest(key, SINGLETON_SLUG);
       return (
         <EntryForm
+          banner={request && <AgentRequest schemaKey={key} action={request.action} by={request.by} at={request.at} />}
           schemaKey={key}
           schema={plainDef(def)}
           initial={fieldsOnly(def, entry as AnyEntry)}
@@ -254,10 +257,12 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     // Saved edits that aren't published yet replace the live version in the form.
     const pending = (await store.getPending(key, sub)) as AnyEntry | undefined;
     const title = displayText(entry[def.titleField]) || sub;
+    const request = await store.getRequest(key, sub);
     return (
       // key: remount with fresh state after a create redirect
       <EntryForm
         key={sub}
+        banner={request && <AgentRequest schemaKey={key} slug={sub} action={request.action} by={request.by} at={request.at} />}
         schemaKey={key}
         schema={plainDef(def)}
         slug={sub}
@@ -440,6 +445,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       } as never,
     )) as { slug: string; entry: AnyEntry; status: EntryStatus }[];
     const pending = await store.listPending(key);
+    const requests = await store.listRequests(key);
     const cols = dateField ? 4 : 3;
     return (
       <>
@@ -474,6 +480,11 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                       <Link href={`${adminPath}/${key}/${slug}`} className="font-medium no-underline after:absolute after:inset-0">
                         {displayText(entry[def.titleField]) || slug}
                       </Link>
+                      {requests.has(slug) && (
+                        <span className="mt-1 block w-fit rounded-full bg-mnml-warn px-2 py-0.5 text-xs font-medium whitespace-nowrap text-mnml-on-warn sm:mt-0 sm:ml-2 sm:inline-block">
+                          Awaiting approval
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs text-mnml-text-mute max-sm:hidden">{slug}</td>
                     <td className="px-4 py-2.5">

@@ -4,6 +4,8 @@ A small schema-driven CMS you embed in a Next.js site (App Router, v16+). One co
 content, the admin is mounted at a route in your app, and entries are stored in your own Postgres in one
 JSON table, so changing the content model never needs a migration.
 
+AI agents can edit content through the built-in [MCP server](https://mnml-cms.vercel.app/agents), and read every docs page as Markdown ([For AI agents](#for-ai-agents)).
+
 Needs Next 16+, React 19+ and Tailwind v4. A complete app is in [`example/`](https://github.com/mbuguanewton/mnml-cms/tree/main/example).
 
 ```sh
@@ -99,6 +101,16 @@ const post = await cms.getEntry('posts', slug); // fully typed from mnml.config.
 More readers (`listEntries`, `getEntries`, `getSingleton`, ordering and filters) are in
 [Reading content](https://mnml-cms.vercel.app/reading-content).
 
+## For AI agents
+
+Add to your project's `AGENTS.md` or `CLAUDE.md`:
+
+```md
+Read node_modules/@n3wtou/mnml-cms/AGENTS.md before changing anything that uses mnml-cms.
+```
+
+Every docs page is Markdown at its URL plus `.md` (e.g. https://mnml-cms.vercel.app/agents.md); the index is https://mnml-cms.vercel.app/llms.txt.
+
 ## Documentation
 
 Everything else is in the docs at **https://mnml-cms.vercel.app**:
@@ -109,6 +121,7 @@ Everything else is in the docs at **https://mnml-cms.vercel.app**:
   [conditional fields](https://mnml-cms.vercel.app/fields/conditional-fields), [derived values](https://mnml-cms.vercel.app/fields/derived-values), [SEO](https://mnml-cms.vercel.app/fields/seo)
 - [Reading content](https://mnml-cms.vercel.app/reading-content)
 - [Drafts and publishing](https://mnml-cms.vercel.app/drafts-and-publishing)
+- [Agents (MCP)](https://mnml-cms.vercel.app/agents): let Claude Code, Cursor or Zed manage content with scoped tokens
 - [Moving content between databases](https://mnml-cms.vercel.app/moving-content), including rehosting images
 - [Extending the editor](https://mnml-cms.vercel.app/editor): [tables](https://mnml-cms.vercel.app/editor/tables), [nodes with a form](https://mnml-cms.vercel.app/editor/nodes-with-a-form),
   [linking entries](https://mnml-cms.vercel.app/editor/linking-entries), [custom node rendering](https://mnml-cms.vercel.app/editor/custom-rendering)

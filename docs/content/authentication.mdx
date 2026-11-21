@@ -1,17 +1,20 @@
+---
+description: "The built-in password login, or your own auth (Better Auth, Auth.js, Clerk) through an AuthAdapter."
+---
+
 # Authentication
 
 ## Built-in login
 
 `auth: { password, secret }`: one shared password.
 
-- After 5 failed sign-ins, the client's IP is locked out for 15 minutes. Attempts are counted in the entries table, so this works on serverless.
-- Sessions last 24 hours from the last visit. The proxy renews the cookie while you're active.
-- Changing `ADMIN_PASSWORD` or `ADMIN_SESSION_SECRET` signs everyone out.
-- **Sign out everywhere** in the sidebar does the same, on demand.
+- 5 failed sign-ins lock the IP out for 15 minutes. Counted in the entries table, so it works on serverless.
+- Sessions last 24 h from the last visit. The proxy renews the cookie while active.
+- Changing `ADMIN_PASSWORD` or `ADMIN_SESSION_SECRET` signs everyone out. So does **Sign out everywhere** in the sidebar.
 
 ## Your own login
 
-For Auth.js, Better Auth, Clerk and others, pass an adapter instead. Give it a `login` UI or a `loginUrl`.
+Auth.js, Better Auth, Clerk…: pass an adapter, with a `login` UI or a `loginUrl`.
 
 ```tsx
 export const cms = createCms(config, {
@@ -24,12 +27,12 @@ export const cms = createCms(config, {
 });
 ```
 
-| Adapter field | What it does |
+| Field | Does |
 | --- | --- |
-| `isAdmin` | Says if the visitor is an admin. The admin page and every API route call it. |
-| `login` | Shown in the admin's login card at `/admin/login`. A server or client component. |
-| `loginUrl` | Instead of `login`: sends signed-out visitors to your own page, e.g. `'/sign-in'` |
+| `isAdmin` | Is the visitor an admin? The admin page and every API route call it. |
+| `login` | Shown in the login card at `/admin/login`. Server or client component. |
+| `loginUrl` | Instead of `login`: signed-out visitors go to your page, e.g. `'/sign-in'` |
 | `signOut` | Optional |
 
-- Build `login` with `Button`, `inputClass` and friends from `@n3wtou/mnml-cms/admin` to match the admin.
-- Leave out `adminProxy`. It only understands the built-in session cookie.
+- Build `login` with `Button`, `inputClass` etc. from `@n3wtou/mnml-cms/admin` to match the admin.
+- Drop `adminProxy`: it only knows the built-in cookie.
