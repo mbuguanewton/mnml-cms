@@ -1,12 +1,14 @@
 import 'server-only';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
+import { agentTokens } from './agent-tokens.js';
 import type { ContentService } from './content.js';
 import type { AgentScope, Context } from './context.js';
 import { mcpTools, type Agent, type Tool, type ToolResult } from './mcp-tools.js';
 
 // The MCP server at <apiPath>/mcp: Streamable HTTP without sessions or streaming. Each POST carries one JSON-RPC
-// message and gets one JSON response. Agents sign in with a bearer token from the `mcp.tokens` option.
+// message and gets one JSON response. Agents sign in with a bearer token: one from the `mcp.tokens` option, or one an
+// editor created in the admin (`mcp.adminTokens`).
 
 const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const DEFAULT_SCOPES: AgentScope[] = ['read', 'draft'];
@@ -48,21 +50,30 @@ export function createMcpHandler(ctx: Context, content: ContentService) {
     return [{ digest: digest(t.token), agent }];
   });
 
-  // No usable token (e.g. the env value is unset): the route stays off.
-  if (tokens.length === 0) return null;
+  const stored = ctx.options.mcp?.adminTokens ? agentTokens(ctx) : null;
+  // No usable config token (e.g. the env value is unset) and no admin tokens: the route stays off.
+  if (tokens.length === 0 && !stored) return null;
 
-  /** The agent whose token is in the Authorization header. Every token is compared, in constant time. */
-  function authenticate(request: Request): Agent | null {
+  /**
+   * The agent whose token is in the Authorization header. Config tokens are all compared in constant time; then an
+   * admin-created token is looked up by its hash (a high-entropy token, so the lookup reveals nothing).
+   */
+  async function authenticate(request: Request): Promise<Agent | null> {
     const m = /^Bearer\s+(\S+)\s*$/i.exec(request.headers.get('authorization') ?? '');
     if (!m) return null;
     const given = digest(m[1]);
     let found: Agent | null = null;
     for (const t of tokens) if (timingSafeEqual(given, t.digest) && !found) found = t.agent;
-    return found;
+    if (found || !stored) return found;
+    const hit = await stored.find(m[1]);
+    if (!hit) return null;
+    await stored.touch(hit.id, hit.data);
+    const allowed = hit.data.collections;
+    return { name: hit.data.name, scopes: new Set(hit.data.scopes), keys: allowed ? keys.filter((k) => allowed.includes(k)) : keys };
   }
 
   return async function handleMcp(request: Request): Promise<Response> {
-    const agent = authenticate(request);
+    const agent = await authenticate(request);
     if (!agent) return fail(null, -32001, 'Unauthorized. Send Authorization: Bearer <agent token>.', 401, { 'WWW-Authenticate': 'Bearer realm="mnml-cms"' });
 
     let msg: { jsonrpc?: unknown; id?: Id; method?: unknown; params?: Record<string, unknown> };

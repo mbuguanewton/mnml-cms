@@ -30,7 +30,12 @@ export type AgentToken = {
 };
 
 /** The MCP server at <apiPath>/mcp, for AI agents. Off unless set. */
-export type McpOptions = { tokens: AgentToken[] };
+export type McpOptions = {
+  /** Tokens from your config (env vars). Good for CI and scripts. */
+  tokens?: AgentToken[];
+  /** Lets signed-in editors create and revoke tokens on an "Agent access" page in the admin. Stored hashed. */
+  adminTokens?: boolean;
+};
 
 /** An extra screen in the admin, e.g. a settings page that isn't content. */
 export type AdminPageDef = {

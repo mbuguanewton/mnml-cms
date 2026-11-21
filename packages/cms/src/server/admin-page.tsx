@@ -1,7 +1,8 @@
 import 'server-only';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ExternalLinkIcon, FileTextIcon, ImageIcon, PlusIcon, SettingsIcon } from 'lucide-react';
+import { headers } from 'next/headers';
+import { ExternalLinkIcon, FileTextIcon, ImageIcon, KeyRoundIcon, PlusIcon, SettingsIcon } from 'lucide-react';
 import { initialValues, plainDef, referenceTargets, withDefaults, type Collection, type CmsConfig, type Singleton } from '../define.js';
 import { displayText } from '../text.js';
 import type { EntryStatus } from '../api.js';
@@ -11,7 +12,9 @@ import { menuItemClass } from '../admin/action-menu.js';
 import { StatusDot } from '../admin/status-dot.js';
 import { AdminProvider } from '../admin/context.js';
 import { FormDialogProvider } from '../admin/form-dialog.js';
+import { AgentAccess } from '../admin/agent-access.js';
 import { AgentRequest } from '../admin/agent-request.js';
+import { agentTokens } from './agent-tokens.js';
 import { DeleteButton } from '../admin/delete-button.js';
 import { MediaDeleteButton } from '../admin/media-delete-button.js';
 import { EntryForm } from '../admin/entry-form.js';
@@ -51,6 +54,9 @@ const fieldsOnly = (def: Singleton | Collection, entry: AnyEntry): AnyEntry => O
 //   (none) dashboard · login · <singleton> · <collection> · <collection>/new · <collection>/<slug> · <extra page>
 
 const rootClass = 'mnml-root flex flex-1 flex-col bg-mnml-bg text-sm text-mnml-text [font-family:ui-sans-serif,system-ui,sans-serif]';
+
+/** The admin screen for MCP tokens (`mcp: { adminTokens: true }`). */
+const AGENT_ACCESS = 'agent-access';
 
 export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
   const { config, store, adminPath, apiPath, options } = ctx;
@@ -197,6 +203,11 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       if (!group) groups.push((group = { title, items: [] }));
       group.items.push({ href: `${adminPath}/${p.path}`, label: p.label, icon: p.icon ?? <FileTextIcon /> });
     }
+    if (options.mcp?.adminTokens && !Object.hasOwn(config, AGENT_ACCESS)) {
+      let tools = groups.find((g) => g.title === 'Tools');
+      if (!tools) groups.push((tools = { title: 'Tools', items: [] }));
+      tools.items.push({ href: `${adminPath}/${AGENT_ACCESS}`, label: 'Agent access', icon: <KeyRoundIcon /> });
+    }
     if (options.media?.list && !Object.hasOwn(config, 'media')) {
       groups.push({ title: 'Library', items: [{ href: `${adminPath}/media`, label: 'Media', icon: <ImageIcon /> }] });
     }
@@ -210,6 +221,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const extra = options.pages?.find((p) => p.path === key);
     if (extra && !sub) return extra.render();
     if (key === 'media' && !sub && !Object.hasOwn(config, 'media')) return mediaScreen();
+    if (key === AGENT_ACCESS && !sub && options.mcp?.adminTokens && !Object.hasOwn(config, AGENT_ACCESS)) return agentAccessScreen();
 
     const def = Object.hasOwn(config, key) ? (config[key] as Singleton | Collection) : undefined;
     if (!def) notFound();
@@ -317,6 +329,28 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       }
     }
     return found;
+  }
+
+  async function agentAccessScreen() {
+    const h = await headers();
+    const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost';
+    const proto = h.get('x-forwarded-proto') ?? (/^(localhost|127\.)/.test(host) ? 'http' : 'https');
+    const configTokens = (options.mcp?.tokens ?? [])
+      .filter((t) => t.token)
+      .map((t) => ({ name: t.name ?? 'agent', scopes: t.scopes ?? ['read', 'draft'], collections: t.collections ?? null }));
+    return (
+      <>
+        <AdminHeader crumbs={[home, { label: 'Agent access' }]} />
+        <main className={bodyClass}>
+          <AgentAccess
+            tokens={await agentTokens(ctx as unknown as Context).list()}
+            configTokens={configTokens}
+            content={defs.map(([key, def]) => ({ key, label: def.label }))}
+            mcpUrl={`${proto}://${host}${apiPath}/mcp`}
+          />
+        </main>
+      </>
+    );
   }
 
   async function mediaScreen() {

@@ -3,6 +3,7 @@ import { cookies, draftMode } from 'next/headers';
 import type { AutosaveInput, AutosaveResult, EntryInput, PreviewResult, SaveResult } from '../api.js';
 import { previewPath } from '../define.js';
 import { checkPassword, clearFailures, clientIp, isAdmin, lockedFor, recordFailure, sessionVersion, signOutEverywhere, type PasswordAuth } from './auth.js';
+import { agentTokens } from './agent-tokens.js';
 import { createContentService, previewTarget, validate } from './content.js';
 import type { Context } from './context.js';
 import { createMcpHandler } from './mcp.js';
@@ -12,7 +13,7 @@ import { loadRefOptions } from './ref-options.js';
 import { PREVIEW_COOKIE } from './store.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
-//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · references · upload · media/delete · request · mcp
+//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · references · upload · media/delete · request · tokens/create · tokens/revoke · mcp
 //   GET:  media/<key> (uploaded images, public) · preview/open (admins only)
 
 const MEDIA_KEY = /^[\w.\-/]+$/;
@@ -35,6 +36,7 @@ export function createHandlers(ctx: Context) {
   const { store, adminPath } = ctx;
   const content = createContentService(ctx);
   const mcp = ctx.options.mcp ? createMcpHandler(ctx, content) : null;
+  const tokens = ctx.options.mcp?.adminTokens ? agentTokens(ctx) : null;
 
   const routes: Record<string, (request: Request) => Promise<Response>> = {
     // The login form posts JSON. Without JavaScript (or before it loads) the browser posts the form itself,
@@ -141,6 +143,21 @@ export function createHandlers(ctx: Context) {
       const { key, slug, approve } = await request.json();
       const r = await content.resolveRequest(key, slug, approve === true);
       return json({ ...r, ...(r.ok && r.deleted && { redirect: `${adminPath}/${key}` }) });
+    },
+
+    /** Creates an MCP token from the Agent access page. The response is the only time the token is shown. */
+    async 'tokens/create'(request) {
+      if (!tokens) return json({ error: 'Not found' }, 404);
+      if (!(await isAdmin(ctx))) return unauthorized();
+      return json(await tokens.create(await request.json().catch(() => ({}))));
+    },
+
+    async 'tokens/revoke'(request) {
+      if (!tokens) return json({ error: 'Not found' }, 404);
+      if (!(await isAdmin(ctx))) return unauthorized();
+      const { id } = await request.json().catch(() => ({}));
+      const r = await tokens.revoke(id);
+      return json(r, r.ok ? 200 : 400);
     },
 
     /** The MCP server for agents (`mcp` option). It checks its own tokens instead of the admin session. */
