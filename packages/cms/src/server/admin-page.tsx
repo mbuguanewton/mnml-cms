@@ -2,7 +2,7 @@ import 'server-only';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { headers } from 'next/headers';
-import { ExternalLinkIcon, FileTextIcon, ImageIcon, KeyRoundIcon, PlusIcon, SettingsIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, ExternalLinkIcon, FileTextIcon, ImageIcon, KeyRoundIcon, PlusIcon, SettingsIcon } from 'lucide-react';
 import { initialValues, plainDef, referenceTargets, withDefaults, type Collection, type CmsConfig, type Singleton } from '../define.js';
 import { displayText } from '../text.js';
 import type { EntryStatus } from '../api.js';
@@ -14,6 +14,8 @@ import { AdminProvider } from '../admin/context.js';
 import { FormDialogProvider } from '../admin/form-dialog.js';
 import { AgentAccess } from '../admin/agent-access.js';
 import { AgentRequest } from '../admin/agent-request.js';
+import { ListSearch } from '../admin/list-search.js';
+import { listView, parsePage } from './list-view.js';
 import { agentTokens } from './agent-tokens.js';
 import { DeleteButton } from '../admin/delete-button.js';
 import { MediaDeleteButton } from '../admin/media-delete-button.js';
@@ -250,7 +252,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     }
 
     const listCrumb = { label: def.label, href: `${adminPath}/${key}` };
-    if (!sub) return collectionList(key, def);
+    if (!sub) return collectionList(key, def, query);
     if (sub === 'new') {
       return (
         <EntryForm
@@ -467,10 +469,10 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     );
   }
 
-  async function collectionList(key: string, def: Collection) {
+  async function collectionList(key: string, def: Collection, query: Record<string, string | string[] | undefined>) {
     // Columns: the title field, the slug, and the first date field if there is one (newest first).
     const dateField = Object.entries(def.fields).find(([, f]) => f.type === 'date')?.[0];
-    const items = (await store.listEntries(
+    const all = (await store.listEntries(
       key as never,
       {
         drafts: false,
@@ -478,6 +480,28 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         ...(dateField && { orderBy: dateField, order: 'desc' }),
       } as never,
     )) as { slug: string; entry: AnyEntry; status: EntryStatus }[];
+    // Search (title or slug) and paging, both from the URL.
+    const q = typeof query.q === 'string' ? query.q : '';
+    const view = listView(all, { q, page: parsePage(query.page), title: (i) => displayText(i.entry[def.titleField]) });
+    const items = view.items;
+    const pageHref = (n: number) => {
+      const p = new URLSearchParams({ ...(q.trim() && { q: q.trim() }), ...(n > 1 && { page: String(n) }) }).toString();
+      return `${adminPath}/${key}${p ? `?${p}` : ''}`;
+    };
+    const pageLink = (n: number, label: string, icon: React.ReactNode, disabled: boolean) =>
+      disabled ? (
+        <span aria-disabled="true" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'pointer-events-none opacity-50' })}>
+          {icon} {label}
+        </span>
+      ) : (
+        <Link
+          href={pageHref(n)}
+          rel={label === 'Next' ? 'next' : 'prev'}
+          className={buttonVariants({ variant: 'outline', size: 'sm', className: 'no-underline' })}
+        >
+          {icon} {label}
+        </Link>
+      );
     const pending = await store.listPending(key);
     const requests = await store.listRequests(key);
     const cols = dateField ? 4 : 3;
@@ -488,7 +512,8 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
             <PlusIcon /> Create
           </Link>
         </AdminHeader>
-        <main className={bodyClass}>
+        <main className={`${bodyClass} flex flex-col gap-4`}>
+          {all.length > 0 && <ListSearch q={q} label={def.label} />}
           <div className={`${cardClass} overflow-hidden`}>
             <table className="w-full text-left">
               <thead className="border-b border-mnml-line bg-mnml-panel text-mnml-text-soft">
@@ -503,7 +528,16 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                 {items.length === 0 && (
                   <tr>
                     <td colSpan={cols} className="px-4 py-6 text-center text-mnml-text-mute">
-                      No entries yet.
+                      {all.length === 0 ? (
+                        'No entries yet.'
+                      ) : (
+                        <>
+                          No entries match “{q.trim()}”.{' '}
+                          <Link href={`${adminPath}/${key}`} className="text-mnml-link">
+                            Clear search
+                          </Link>
+                        </>
+                      )}
                     </td>
                   </tr>
                 )}
@@ -533,6 +567,17 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
               </tbody>
             </table>
           </div>
+          {view.pages > 1 && (
+            <nav aria-label="Pages" className="flex flex-wrap items-center justify-between gap-2 text-sm text-mnml-text-soft">
+              <span className="tabular-nums">
+                {view.from}–{view.to} of {view.total}
+              </span>
+              <span className="flex gap-2">
+                {pageLink(view.page - 1, 'Previous', <ChevronLeftIcon />, view.page <= 1)}
+                {pageLink(view.page + 1, 'Next', <ChevronRightIcon />, view.page >= view.pages)}
+              </span>
+            </nav>
+          )}
         </main>
       </>
     );
