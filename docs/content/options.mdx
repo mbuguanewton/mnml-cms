@@ -14,8 +14,9 @@ The second argument of `createCms(config, options)`.
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
 | `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build them with `@n3wtou/mnml-cms/admin`. |
 | `editor` | The component from `editorProvider()`: extra editor extensions and buttons ([Extending the editor](/editor)) |
-| `revalidate` | Called after each save or delete |
-| `onChange` | Runs after the response on each save or delete (via `after()`), e.g. to update a search index |
+| `mcp` | `{ tokens }`: the MCP server for AI agents at `<apiPath>/mcp` ([Agents](/agents)) |
+| `revalidate` | Called after each save or delete with `{ type, key, slug, by? }`. `by` is the agent token's name when an agent made the change. |
+| `onChange` | Runs after the response on each save or delete (via `after()`), e.g. to update a search index. Gets the same change as `revalidate`. |
 
 ## In your own code
 
