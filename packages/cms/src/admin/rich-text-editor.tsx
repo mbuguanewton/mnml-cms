@@ -1,7 +1,9 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
+import { Menu } from './ui/menu.js';
+import type { MenuAction } from './ui/slots.js';
 import { Tooltip } from './ui/tooltip.js';
 import type { JSONContent } from '@tiptap/core';
 import {
@@ -20,6 +22,8 @@ import {
   LinkIcon,
   ListIcon,
   ListOrderedIcon,
+  Maximize2Icon,
+  Minimize2Icon,
   PilcrowIcon,
   QuoteIcon,
   Redo2Icon,
@@ -30,19 +34,32 @@ import { orderTools, type EditorTool } from '../editor.js';
 import { menuItemClass, useMenu } from './action-menu.js';
 import { useAdmin } from './context.js';
 import { useEditorConfig } from './editor-context.js';
+import { useEntry } from './entry-context.js';
 import { useForm } from './form-context.js';
 import { withNodeForms } from './node-view.js';
 import { uploadImage } from './upload.js';
 
-export function RichTextEditor({ value, onChange, invalid }: { value: JSONContent; onChange: (v: JSONContent) => void; invalid?: boolean }) {
+export function RichTextEditor({
+  value,
+  onChange,
+  invalid,
+  label,
+}: {
+  value: JSONContent;
+  onChange: (v: JSONContent) => void;
+  invalid?: boolean;
+  /** The field's label, shown in the fullscreen header. */
+  label?: string;
+}) {
   const config = useEditorConfig();
+  const entry = useEntry();
   const extensions = useMemo(() => withNodeForms(resolveExtensions(config), config?.tools ?? noTools), [config]);
   const editor = useEditor({
     extensions,
     content: value,
     // Render on the client only, otherwise SSR and hydration disagree.
     immediatelyRender: false,
-    editorProps: { attributes: { class: 'mnml-prose min-h-48 px-3 py-2.5 focus:outline-none' } },
+    editorProps: { attributes: { class: 'mnml-prose px-3 py-2.5 focus:outline-none' } },
     onUpdate: ({ editor }) => onChange(editor.getJSON()),
   });
 
@@ -52,26 +69,119 @@ export function RichTextEditor({ value, onChange, invalid }: { value: JSONConten
   const mainTools = useMemo(() => tools.filter((t) => !t.context), [tools]);
   const contexts = useMemo(() => [...new Set(tools.flatMap((t) => (t.context ? [t.context] : [])))], [tools]);
 
+  // Fullscreen: the shell is a <dialog> that is always rendered as a plain block, and opened as a modal. The editor's
+  // DOM never moves, so the cursor and undo history survive, and the browser makes the page behind inert.
+  const shell = useRef<HTMLDialogElement>(null);
+  const expand = useRef<HTMLButtonElement>(null);
+  const [full, setFull] = useState(false);
+  const toggleFull = () => {
+    const d = shell.current;
+    if (!d) return;
+    if (d.open) return d.close();
+    d.showModal();
+    setFull(true);
+    editor?.commands.focus();
+  };
+  useEffect(() => {
+    if (!full) return;
+    const html = document.documentElement;
+    const prev = html.style.overflow;
+    html.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = prev;
+    };
+  }, [full]);
+
   return (
-    <div
-      aria-invalid={invalid}
-      className="rounded-[6px] border border-mnml-line bg-mnml-bg focus-within:border-mnml-text-mute/50 aria-invalid:border-mnml-danger"
+    <dialog
+      ref={shell}
+      // Closed, it is just the field's frame; open, a fullscreen dialog named after the field.
+      role={full ? undefined : 'none'}
+      aria-label={full ? `${label ?? 'Rich text'}, fullscreen` : undefined}
+      // ProseMirror binds Escape (select parent node) and cancels it, so the dialog's own Escape never fires from the
+      // editor. Close here, unless a menu inside is open: Escape closes that first.
+      onKeyDown={(e) => {
+        const d = shell.current;
+        if (e.key !== 'Escape' || !d?.open || d.querySelector('[aria-expanded="true"]')) return;
+        e.preventDefault();
+        d.close();
+      }}
+      onClose={() => {
+        setFull(false);
+        expand.current?.focus();
+      }}
+      className="static m-0 block h-auto w-full max-w-none border-0 bg-transparent p-0 text-inherit open:fixed open:inset-0 open:size-full open:max-h-none open:overflow-hidden open:bg-mnml-bg"
     >
-      {editor && <Toolbar editor={editor} extra={mainTools} />}
-      <div ref={content} className="relative">
-        <EditorContent editor={editor} />
-        {editor &&
-          contexts.map((node) => <ContextToolbar key={node} editor={editor} node={node} tools={tools.filter((t) => t.context === node)} container={content} />)}
+      <div
+        aria-invalid={invalid}
+        className={`flex flex-col bg-mnml-bg ${full ? 'h-full' : 'rounded-[6px] border border-mnml-line focus-within:border-mnml-text-mute/50 aria-invalid:border-mnml-danger'}`}
+      >
+        {full && (
+          <div className="flex h-12 shrink-0 items-center gap-3 border-b border-mnml-line px-4">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-mnml-text">{entry?.title || label}</p>
+              {entry?.title && label && <p className="truncate text-xs text-mnml-text-mute">{label}</p>}
+            </div>
+            {entry?.status}
+          </div>
+        )}
+        {editor && (
+          <Toolbar
+            editor={editor}
+            extra={mainTools}
+            full={full}
+            end={
+              <Tooltip content={full ? 'Exit fullscreen' : 'Fullscreen'}>
+                <button ref={expand} type="button" aria-label={full ? 'Exit fullscreen' : 'Fullscreen'} onClick={toggleFull} className={toolClass}>
+                  {full ? <Minimize2Icon /> : <Maximize2Icon />}
+                </button>
+              </Tooltip>
+            }
+          />
+        )}
+        {/* Inline: a fixed height that scrolls, with a drag handle to make it taller (like a textarea). */}
+        <div
+          onMouseDown={(e) => {
+            // A press on the empty space under the text puts the cursor at the end. Not on the scrollbar or the
+            // resize corner, which need the press themselves.
+            const box = e.currentTarget;
+            const r = box.getBoundingClientRect();
+            if (e.clientX - r.left >= box.clientWidth || (r.right - e.clientX < 16 && r.bottom - e.clientY < 16)) return;
+            if (editor && !editor.view.dom.contains(e.target as Node) && (e.target as HTMLElement).closest('[role="toolbar"]') === null) {
+              e.preventDefault();
+              editor.commands.focus('end');
+            }
+          }}
+          className={full ? 'min-h-0 flex-1 cursor-text overflow-y-auto' : 'h-72 min-h-32 cursor-text resize-y overflow-y-auto rounded-b-[5px]'}
+        >
+          <div ref={content} className={`relative ${full ? 'mx-auto w-full max-w-[70ch] px-2 py-6 [&_.mnml-prose]:min-h-[60vh]' : ''}`}>
+            <EditorContent editor={editor} />
+            {editor &&
+              contexts.map((node) => (
+                <ContextToolbar key={node} editor={editor} node={node} tools={tools.filter((t) => t.context === node)} container={content} />
+              ))}
+          </div>
+        </div>
       </div>
-    </div>
+    </dialog>
   );
 }
 
 const noTools: EditorTool[] = [];
 
-function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
+// One toolbar entry: drawn as a button while it fits, as a menu item once it overflows into "More tools".
+type Item = { key: string; group: string; pinned?: boolean; node: React.ReactNode; menu?: MenuAction };
+type Tool = { name: string; icon: React.ReactNode; label: string; active?: boolean; disabled?: boolean; run: () => void };
+
+// Layout constants for the overflow sums: the row's gap, a divider (1px + 12px margin) and the "More tools" button.
+const GAP = 2;
+const DIVIDER = 13 + GAP;
+const MORE = 28 + GAP;
+
+function Toolbar({ editor, extra, end, full }: { editor: Editor; extra: EditorTool[]; end: React.ReactNode; full: boolean }) {
   const { apiPath, alert, confirm } = useAdmin();
   const form = useForm();
+  const file = useRef<HTMLInputElement>(null);
   // The heading extension's levels (1–4 by default; a site can change them), or none if it was removed.
   const levels = useMemo(() => (editor.extensionManager.extensions.find((e) => e.name === 'heading')?.options.levels as Level[] | undefined) ?? [], [editor]);
   const hasQuote = useMemo(() => editor.extensionManager.extensions.some((e) => e.name === 'blockquote'), [editor]);
@@ -114,7 +224,6 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
     }
   };
 
-  type Tool = { name: string; icon: React.ReactNode; label: string; active?: boolean; disabled?: boolean; run: () => void };
   const own = (group?: EditorTool['group']): Tool[] =>
     orderTools(extra)
       .filter((t) => t.group === group && s.extra[t.name]?.visible !== false)
@@ -122,89 +231,169 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
         name: `extra:${t.name}`,
         icon: t.icon,
         label: t.label,
-        active: s.extra[t.name]?.active,
+        // Only tools that can be on or off show as pressed (and as a checked menu item).
+        active: t.isActive ? s.extra[t.name]?.active : undefined,
         disabled: s.extra[t.name]?.disabled,
         run: () => t.run(editor, { form, confirm, alert }),
       }));
-  const buttons = (tools: Tool[]) => tools.map((t) => <ToolButton key={t.name} {...t} />);
+  const item =
+    (group: string, pinned?: boolean) =>
+    (t: Tool): Item => ({
+      key: t.name,
+      group,
+      pinned,
+      node: <ToolButton {...t} />,
+      menu: { id: t.name, label: t.label, icon: t.icon, checked: t.active, disabled: t.disabled, onSelect: t.run },
+    });
 
-  const history: Tool[] = [
-    { name: 'undo', icon: <Undo2Icon />, label: 'Undo', disabled: !s.undo, run: () => chain().undo().run() },
-    { name: 'redo', icon: <Redo2Icon />, label: 'Redo', disabled: !s.redo, run: () => chain().redo().run() },
+  // In toolbar order; items overflow from the end, the pinned ones (history, text style) never do.
+  const items: Item[] = [
+    ...[
+      { name: 'undo', icon: <Undo2Icon />, label: 'Undo', disabled: !s.undo, run: () => chain().undo().run() },
+      { name: 'redo', icon: <Redo2Icon />, label: 'Redo', disabled: !s.redo, run: () => chain().redo().run() },
+    ].map(item('history', true)),
+    {
+      key: 'style',
+      group: 'style',
+      pinned: true,
+      node: (
+        <BlockMenu
+          levels={levels}
+          quote={hasQuote}
+          current={s.quote ? 'quote' : s.heading}
+          onPick={(style) => {
+            if (style === 'quote') {
+              if (!s.quote) chain().setBlockquote().run();
+              return;
+            }
+            // Paragraphs and headings leave the quote they are in.
+            const c = s.quote ? chain().unsetBlockquote() : chain();
+            (style ? c.setHeading({ level: style }) : c.setParagraph()).run();
+          }}
+        />
+      ),
+    },
+    ...[
+      { name: 'bold', icon: <BoldIcon />, label: 'Bold', active: s.bold, run: () => chain().toggleBold().run() },
+      { name: 'italic', icon: <ItalicIcon />, label: 'Italic', active: s.italic, run: () => chain().toggleItalic().run() },
+      ...own('format'),
+      { name: 'code', icon: <CodeIcon />, label: 'Code', active: s.code, run: () => chain().toggleCode().run() },
+    ].map(item('format')),
+    ...[
+      { name: 'bullet', icon: <ListIcon />, label: 'Bullet list', active: s.bullet, run: () => chain().toggleBulletList().run() },
+      { name: 'ordered', icon: <ListOrderedIcon />, label: 'Numbered list', active: s.ordered, run: () => chain().toggleOrderedList().run() },
+      ...own('block'),
+    ].map(item('block')),
+    ...[
+      { name: 'link', icon: <LinkIcon />, label: 'Link', active: s.link, run: setLink },
+      { name: 'image', icon: <ImageIcon />, label: 'Image', run: () => file.current?.click() },
+      ...own('insert'),
+    ].map(item('insert')),
+    ...own(undefined).map(item('rest')),
   ];
-  const format: Tool[] = [
-    { name: 'bold', icon: <BoldIcon />, label: 'Bold', active: s.bold, run: () => chain().toggleBold().run() },
-    { name: 'italic', icon: <ItalicIcon />, label: 'Italic', active: s.italic, run: () => chain().toggleItalic().run() },
-    ...own('format'),
-    { name: 'code', icon: <CodeIcon />, label: 'Code', active: s.code, run: () => chain().toggleCode().run() },
-  ];
-  const blocks: Tool[] = [
-    { name: 'bullet', icon: <ListIcon />, label: 'Bullet list', active: s.bullet, run: () => chain().toggleBulletList().run() },
-    { name: 'ordered', icon: <ListOrderedIcon />, label: 'Numbered list', active: s.ordered, run: () => chain().toggleOrderedList().run() },
-    ...own('block'),
-  ];
-  const rest = own(undefined);
+
+  // How many items fit: widths come from a hidden copy of the whole row, the room from the row itself.
+  const row = useRef<HTMLDivElement>(null);
+  const measure = useRef<HTMLDivElement>(null);
+  const endBox = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(Infinity);
+  const shape = items.map((i) => `${i.group}:${i.key}`).join('|');
+  useLayoutEffect(() => {
+    const r = row.current;
+    const m = measure.current;
+    if (!r || !m) return;
+    const calc = () => {
+      const widths = [...m.children].map((el) => el.getBoundingClientRect().width);
+      const cs = getComputedStyle(r);
+      const room = r.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - (endBox.current?.offsetWidth ?? 0) - GAP;
+      const groups = shape.split('|').map((k) => k.split(':')[0]);
+      let used = 0;
+      const ends: number[] = [];
+      groups.forEach((g, i) => {
+        used += widths[i] + (i > 0 ? GAP : 0) + (i > 0 && g !== groups[i - 1] ? DIVIDER : 0);
+        ends.push(used);
+      });
+      if (used <= room) return setFit(Infinity);
+      const pinned = items.filter((i) => i.pinned).length;
+      let n = groups.length;
+      while (n > pinned && ends[n - 1] + DIVIDER + MORE > room) n--;
+      setFit(n);
+    };
+    calc();
+    const observer = new ResizeObserver(calc);
+    observer.observe(r);
+    return () => observer.disconnect();
+    // oxlint-disable-next-line react/exhaustive-deps
+  }, [shape]);
+
+  const shown = items.slice(0, fit);
+  const more = items.slice(fit).flatMap((i) => (i.menu ? [i.menu] : []));
 
   return (
-    <div role="toolbar" aria-label="Formatting" className="flex flex-wrap items-center gap-0.5 rounded-t-[5px] border-b border-mnml-line bg-mnml-panel p-1">
-      {buttons(history)}
-      <Divider />
-      <BlockMenu
-        levels={levels}
-        quote={hasQuote}
-        current={s.quote ? 'quote' : s.heading}
-        onPick={(style) => {
-          if (style === 'quote') {
-            if (!s.quote) chain().setBlockquote().run();
-            return;
-          }
-          // Paragraphs and headings leave the quote they are in.
-          const c = s.quote ? chain().unsetBlockquote() : chain();
-          (style ? c.setHeading({ level: style }) : c.setParagraph()).run();
-        }}
-      />
-      <Divider />
-      {buttons(format)}
-      <Divider />
-      {buttons(blocks)}
-      <Divider />
-      <ToolButton name="link" icon={<LinkIcon />} label="Link" active={s.link} run={setLink} />
-      <Tooltip content="Image">
-        {/* has-focus-visible: the file input inside is sr-only, so the label shows its focus. */}
-        <label className="mnml-state flex size-7 cursor-pointer items-center justify-center rounded-[6px] text-mnml-text-soft has-focus-visible:ring-2 has-focus-visible:ring-mnml-primary/40">
-          <ImageIcon className="size-4" />
-          <input
-            type="file"
-            aria-label="Image"
-            accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-            className="sr-only"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = '';
-              if (f) void addImage(f);
-            }}
-          />
-        </label>
-      </Tooltip>
-      {buttons(own('insert'))}
-      {rest.length > 0 && (
-        <>
-          <Divider />
-          {buttons(rest)}
-        </>
-      )}
-      {s.imageAlt !== null && (
+    <>
+      <div
+        ref={row}
+        role="toolbar"
+        aria-label="Formatting"
+        // inline-size containment: the row takes the field's width instead of growing to fit every tool.
+        className={`relative flex shrink-0 items-center gap-0.5 border-b [contain:inline-size] border-mnml-line bg-mnml-panel p-1 ${full ? '' : 'rounded-t-[5px]'}`}
+      >
+        {shown.map((it, i) => (
+          <Fragment key={it.key}>
+            {i > 0 && it.group !== shown[i - 1].group && <Divider />}
+            {it.node}
+          </Fragment>
+        ))}
+        {more.length > 0 && (
+          <>
+            <Divider />
+            <Menu label="More tools" items={more} className={`${toolClass} aria-expanded:bg-mnml-surface aria-expanded:text-mnml-text`} />
+          </>
+        )}
+        <div ref={endBox} className="ml-auto flex items-center">
+          {end}
+        </div>
+        {/* A hidden copy of every item, measured to decide how many fit. */}
+        <div
+          ref={measure}
+          aria-hidden
+          inert
+          className="pointer-events-none invisible absolute left-0 top-0 flex h-0 w-0 gap-0.5 overflow-hidden [&>*]:shrink-0"
+        >
+          {items.map((it) => (
+            <div key={it.key} className="flex">
+              {it.node}
+            </div>
+          ))}
+        </div>
         <input
-          aria-label="Image alt text"
-          placeholder="Alt text: describe the selected image (leave empty only if decorative)"
-          maxLength={300}
-          className="ml-1 min-w-48 flex-1 rounded-[6px] border border-mnml-line bg-mnml-bg px-2 text-xs focus:border-mnml-primary focus:outline-none"
-          value={s.imageAlt}
-          // No focus() here: it would pull the cursor out of this input on every keystroke.
-          onChange={(e) => editor.chain().updateAttributes('image', { alt: e.target.value }).run()}
+          ref={file}
+          type="file"
+          tabIndex={-1}
+          aria-hidden
+          accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f) void addImage(f);
+          }}
         />
+      </div>
+      {s.imageAlt !== null && (
+        <div className="flex shrink-0 items-center border-b border-mnml-line bg-mnml-panel px-1 pb-1">
+          <input
+            aria-label="Image alt text"
+            placeholder="Alt text: describe the selected image (leave empty only if decorative)"
+            maxLength={300}
+            className="h-7 min-w-0 flex-1 rounded-[6px] border border-mnml-line bg-mnml-bg px-2 text-xs focus:border-mnml-primary focus:outline-none"
+            value={s.imageAlt}
+            // No focus() here: it would pull the cursor out of this input on every keystroke.
+            onChange={(e) => editor.chain().updateAttributes('image', { alt: e.target.value }).run()}
+          />
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -316,13 +505,15 @@ function ToolButton({
         aria-pressed={active}
         disabled={disabled}
         onClick={run}
-        className={`flex size-7 items-center justify-center rounded-[6px] disabled:opacity-40 [&_svg]:size-4 ${active ? 'bg-mnml-surface text-mnml-text' : 'mnml-state text-mnml-text-soft'}`}
+        className={`flex size-7 shrink-0 items-center justify-center rounded-[6px] disabled:opacity-40 [&_svg]:size-4 ${active ? 'bg-mnml-surface text-mnml-text' : 'mnml-state text-mnml-text-soft'}`}
       >
         {icon}
       </button>
     </Tooltip>
   );
 }
+
+const toolClass = 'mnml-state flex size-7 shrink-0 items-center justify-center rounded-[6px] text-mnml-text-soft [&_svg]:size-4';
 
 // Inline styles: --mnml-line is too faint on the toolbar, and this shows even before the host's Tailwind rescans.
 const Divider = () => (

@@ -2,12 +2,15 @@
 export { Button, buttonVariants } from './ui/button.js';
 export { Checkbox, Switch } from './ui/checkbox.js';
 export { Input, Textarea } from './ui/input.js';
+export { Menu } from './ui/menu.js';
 export { Select } from './ui/select.js';
 export { Tooltip } from './ui/tooltip.js';
 export type {
   ButtonProps,
   CheckboxProps,
   InputProps,
+  MenuAction,
+  MenuProps,
   SelectOption,
   SelectProps,
   SwitchProps,
