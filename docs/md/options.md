@@ -20,7 +20,7 @@ Second argument of `createCms(config, options)`.
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
 | `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build with `@n3wtou/mnml-cms/admin`. |
 | `editor` | Component from `editorProvider()`: extra extensions and buttons ([Extending the editor](https://mnml-cms.vercel.app/editor.md)) |
-| `mcp` | `{ tokens }`: MCP server for AI agents at `<apiPath>/mcp` ([Agents](https://mnml-cms.vercel.app/agents.md)) |
+| `mcp` | `{ tokens, adminTokens }`: MCP server for AI agents at `<apiPath>/mcp`, with tokens from env and/or the admin ([Agents](https://mnml-cms.vercel.app/agents.md)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
 

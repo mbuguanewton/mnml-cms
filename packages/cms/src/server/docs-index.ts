@@ -214,6 +214,7 @@ export const docsIndex: DocsPage[] = [
     "headings": [
       "Set up",
       "Tokens",
+      "Tokens from the admin",
       "Scopes",
       "Tools",
       "Rich text",

@@ -960,7 +960,7 @@ Let AI agents (Claude Code, Cursor, Zed) edit your content. The CMS has a built-
 
 Done. The server lives at `<apiPath>/mcp`, e.g. `https://your-site.com/api/mnml/mcp`. Your route file (`export const { GET, POST } = cms.handlers`) already serves it.
 
-- No token set: the route is off (404).
+- No token set (and no `adminTokens`): the route is off (404).
 - Token under 32 characters: ignored, with a warning in the log.
 
 ## Tokens
@@ -984,6 +984,21 @@ mcp: {
   ],
 },
 ```
+
+### Tokens from the admin
+
+Let editors make tokens in the admin instead of env vars:
+
+```ts
+mcp: { adminTokens: true },
+```
+
+- **Agent access** appears in the sidebar (under Tools).
+- Create: name, scopes (default `read` + `draft`), content (default all). The token (`mnml_…`) shows **once**, with a ready `claude mcp add` command. Copy it then.
+- Stored as a SHA-256 hash in the entries table. No migration.
+- The list shows each token's scopes, content, created and last used (updated at most once a minute).
+- **Revoke** cuts access on the agent's next request.
+- Config tokens still work alongside, and show in the list as "from config". Names are unique across both.
 
 ### Scopes
 
@@ -1141,7 +1156,7 @@ Second argument of `createCms(config, options)`.
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
 | `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build with `@n3wtou/mnml-cms/admin`. |
 | `editor` | Component from `editorProvider()`: extra extensions and buttons ([Extending the editor](https://mnml-cms.vercel.app/editor.md)) |
-| `mcp` | `{ tokens }`: MCP server for AI agents at `<apiPath>/mcp` ([Agents](https://mnml-cms.vercel.app/agents.md)) |
+| `mcp` | `{ tokens, adminTokens }`: MCP server for AI agents at `<apiPath>/mcp`, with tokens from env and/or the admin ([Agents](https://mnml-cms.vercel.app/agents.md)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
 
