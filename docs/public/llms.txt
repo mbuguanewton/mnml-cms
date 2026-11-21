@@ -2,35 +2,35 @@
 
 > A small schema-driven CMS that lives inside your Next.js site.
 
-Every page as one file: https://mnml-cms.vercel.app/llms-full.txt
+Each page is Markdown at its URL plus `.md`. Every page in one file: https://mnml-cms.vercel.app/llms-full.txt
 
 ## Docs
 
-- [mnml-cms](https://mnml-cms.vercel.app): A small schema-driven CMS that lives inside your Next.js site.
-- [Getting started](https://mnml-cms.vercel.app/getting-started): Install mnml-cms in a Next.js site: the config, createCms, the admin and API routes, the proxy and the database table.
-- [Field types](https://mnml-cms.vercel.app/fields): Every field type in mnml.config.ts, its options and the value readers return.
-- [Limits](https://mnml-cms.vercel.app/fields/limits): min and max on array, blocks and references fields.
-- [Blocks](https://mnml-cms.vercel.app/fields/blocks): Pages made of different kinds of sections with fields.blocks() and block().
-- [Select labels](https://mnml-cms.vercel.app/fields/select-labels): Show labels in the admin for select values, and read them with selectLabel().
-- [Dates and times](https://mnml-cms.vercel.app/fields/dates-and-times): The date and datetime fields: storage, time zones and sorting.
-- [Focal point](https://mnml-cms.vercel.app/fields/focal-point): Keep the important part of an image in frame when it's cropped (focalX, focalY, focalPosition).
-- [Default values](https://mnml-cms.vercel.app/fields/default-values): Starting values for new entries, items and blocks with default.
-- [Conditional fields](https://mnml-cms.vercel.app/fields/conditional-fields): Show a field only when other fields match, with showIf.
-- [Derived values](https://mnml-cms.vercel.app/fields/derived-values): Read-only values computed from an entry's fields (derive, readingTime, plainText).
-- [SEO](https://mnml-cms.vercel.app/fields/seo): The seo() field and seoMetadata() for Next.js metadata.
-- [Reading content](https://mnml-cms.vercel.app/reading-content): Read content on your pages: getSingleton, listEntries, getEntry, getEntries, listSlugs, RichText and live preview.
-- [Drafts and publishing](https://mnml-cms.vercel.app/drafts-and-publishing): Drafts, autosave, Publish, Discard changes and Unpublish, and what the site shows for each.
-- [Moving content between databases](https://mnml-cms.vercel.app/moving-content): Export and import content between databases, rehost images and convert Markdown, with @n3wtou/mnml-cms/sync.
-- [Extending the editor](https://mnml-cms.vercel.app/editor): Extend the rich text editor with Tiptap extensions and toolbar tools (defineEditor, editorProvider).
-- [Tables](https://mnml-cms.vercel.app/editor/tables): Tables in rich text with @n3wtou/mnml-cms/table.
-- [Nodes with a form](https://mnml-cms.vercel.app/editor/nodes-with-a-form): Custom rich text nodes edited through a form (tools.node, nodeAttributes).
-- [Linking entries from rich text](https://mnml-cms.vercel.app/editor/linking-entries): Link to other entries from rich text with the reference tool and referenceNode.
-- [Custom node rendering](https://mnml-cms.vercel.app/editor/custom-rendering): Render rich text nodes with your own React components on the site.
-- [Agents (MCP)](https://mnml-cms.vercel.app/agents): Let AI agents (Claude Code, Cursor, Zed) manage content through the built-in MCP server, with scoped tokens, drafts and editor approval.
-- [Options](https://mnml-cms.vercel.app/options): Every option of createCms: storage, auth, media, paths, sidebar, editor, MCP, revalidate and onChange.
-- [Authentication](https://mnml-cms.vercel.app/authentication): The built-in password login, or your own auth (Better Auth, Auth.js, Clerk) through an AuthAdapter.
-- [Image storage](https://mnml-cms.vercel.app/image-storage): Where uploaded images are stored: local disk in development, Vercel Blob, or your own storage.
-- [Other ORMs](https://mnml-cms.vercel.app/other-orms): Store entries without Drizzle by writing your own EntryStorage (Prisma, Kysely, SQL).
-- [Entry points](https://mnml-cms.vercel.app/entry-points): Every import path of @n3wtou/mnml-cms and what it contains.
-- [Common mistakes](https://mnml-cms.vercel.app/common-mistakes): The mistakes that cost the most time with mnml-cms, and how to avoid them.
-- [Upgrading](https://mnml-cms.vercel.app/upgrading): What each mnml-cms version added, what broke, and the steps to upgrade an older site.
+- [mnml-cms](https://mnml-cms.vercel.app/index.md): A small schema-driven CMS that lives inside your Next.js site.
+- [Getting started](https://mnml-cms.vercel.app/getting-started.md): Install mnml-cms in a Next.js site: the config, createCms, the admin and API routes, the proxy and the database table.
+- [Field types](https://mnml-cms.vercel.app/fields.md): Every field type in mnml.config.ts, its options and the value readers return.
+- [Limits](https://mnml-cms.vercel.app/fields/limits.md): min and max on array, blocks and references fields.
+- [Blocks](https://mnml-cms.vercel.app/fields/blocks.md): Pages made of different kinds of sections with fields.blocks() and block().
+- [Select labels](https://mnml-cms.vercel.app/fields/select-labels.md): Show labels in the admin for select values, and read them with selectLabel().
+- [Dates and times](https://mnml-cms.vercel.app/fields/dates-and-times.md): The date and datetime fields: storage, time zones and sorting.
+- [Focal point](https://mnml-cms.vercel.app/fields/focal-point.md): Keep the important part of an image in frame when it's cropped (focalX, focalY, focalPosition).
+- [Default values](https://mnml-cms.vercel.app/fields/default-values.md): Starting values for new entries, items and blocks with default.
+- [Conditional fields](https://mnml-cms.vercel.app/fields/conditional-fields.md): Show a field only when other fields match, with showIf.
+- [Derived values](https://mnml-cms.vercel.app/fields/derived-values.md): Read-only values computed from an entry's fields (derive, readingTime, plainText).
+- [SEO](https://mnml-cms.vercel.app/fields/seo.md): The seo() field and seoMetadata() for Next.js metadata.
+- [Reading content](https://mnml-cms.vercel.app/reading-content.md): Read content on your pages: getSingleton, listEntries, getEntry, getEntries, listSlugs, RichText and live preview.
+- [Drafts and publishing](https://mnml-cms.vercel.app/drafts-and-publishing.md): Drafts, autosave, Publish, Discard changes and Unpublish, and what the site shows for each.
+- [Moving content between databases](https://mnml-cms.vercel.app/moving-content.md): Export and import content between databases, rehost images and convert Markdown, with @n3wtou/mnml-cms/sync.
+- [Extending the editor](https://mnml-cms.vercel.app/editor.md): Extend the rich text editor with Tiptap extensions and toolbar tools (defineEditor, editorProvider).
+- [Tables](https://mnml-cms.vercel.app/editor/tables.md): Tables in rich text with @n3wtou/mnml-cms/table.
+- [Nodes with a form](https://mnml-cms.vercel.app/editor/nodes-with-a-form.md): Custom rich text nodes edited through a form (tools.node, nodeAttributes).
+- [Linking entries from rich text](https://mnml-cms.vercel.app/editor/linking-entries.md): Link to other entries from rich text with the reference tool and referenceNode.
+- [Custom node rendering](https://mnml-cms.vercel.app/editor/custom-rendering.md): Render rich text nodes with your own React components on the site.
+- [Agents (MCP)](https://mnml-cms.vercel.app/agents.md): Let AI agents (Claude Code, Cursor, Zed) manage content through the built-in MCP server, with scoped tokens, drafts and editor approval.
+- [Options](https://mnml-cms.vercel.app/options.md): Every option of createCms: storage, auth, media, paths, sidebar, editor, MCP, revalidate and onChange.
+- [Authentication](https://mnml-cms.vercel.app/authentication.md): The built-in password login, or your own auth (Better Auth, Auth.js, Clerk) through an AuthAdapter.
+- [Image storage](https://mnml-cms.vercel.app/image-storage.md): Where uploaded images are stored: local disk in development, Vercel Blob, or your own storage.
+- [Other ORMs](https://mnml-cms.vercel.app/other-orms.md): Store entries without Drizzle by writing your own EntryStorage (Prisma, Kysely, SQL).
+- [Entry points](https://mnml-cms.vercel.app/entry-points.md): Every import path of @n3wtou/mnml-cms and what it contains.
+- [Common mistakes](https://mnml-cms.vercel.app/common-mistakes.md): The mistakes that cost the most time with mnml-cms, and how to avoid them.
+- [Upgrading](https://mnml-cms.vercel.app/upgrading.md): What each mnml-cms version added, what broke, and the steps to upgrade an older site.

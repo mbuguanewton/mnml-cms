@@ -99,17 +99,11 @@ Run `drizzle-kit push`. Scripts import the same table from `@n3wtou/mnml-cms/sch
 
 ## Help your AI agent
 
-The package ships skills and an `AGENTS.md` matching the installed version. Add to your `AGENTS.md` or `CLAUDE.md`:
+Add to your `AGENTS.md` or `CLAUDE.md`:
 
 ```md
 Read node_modules/@n3wtou/mnml-cms/AGENTS.md before changing anything that uses mnml-cms.
 ```
 
-Claude Code: link the skills so it finds them:
-
-```sh
-mkdir -p .claude/skills && for s in node_modules/@n3wtou/mnml-cms/skills/*; do ln -sfn "../../$s" ".claude/skills/$(basename "$s")"; done
-```
-
-Web agents: [llms.txt](https://mnml-cms.vercel.app/llms.txt), [llms-full.txt](https://mnml-cms.vercel.app/llms-full.txt).
-
+- Every docs page is Markdown at its URL plus `.md`, e.g. [/agents.md](https://mnml-cms.vercel.app/agents.md). Index: [llms.txt](https://mnml-cms.vercel.app/llms.txt). Everything: [llms-full.txt](https://mnml-cms.vercel.app/llms-full.txt).
+- With the [MCP server](/agents) on, the `docs` tool hands agents the right `.md` links.

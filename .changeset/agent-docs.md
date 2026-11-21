@@ -2,9 +2,9 @@
 '@n3wtou/mnml-cms': minor
 ---
 
-Agent docs in the package, built from the docs site so they match the installed version.
+Docs for agents, all generated from the docs site's pages.
 
-- `skills/mnml-*`: Claude Code skills, one per docs section (getting started, fields, reading content, drafts, moving content, editor, agents, setup, upgrading). `AGENTS.md` shows how to link them into `.claude/skills/`.
-- `AGENTS.md`: where the skills, types and docs are, and the rules agents break most.
-- MCP: a `docs` tool (scope `read`) returns links to the right docs pages for a topic.
-- The docs site serves `/llms.txt` and `/llms-full.txt`, and has new "Common mistakes" and "Upgrading" pages.
+- Every docs page is served as Markdown at its URL plus `.md` (e.g. `/fields/blocks.md`), with `title`, `description` and `url` in its frontmatter. `/llms.txt` and `/llms-full.txt` list and bundle them.
+- MCP: a `docs` tool (scope `read`) returns the `.md` links of the pages matching a topic.
+- `AGENTS.md` in the package: where the types and docs are, and the rules agents break most.
+- New docs pages: "Common mistakes" and "Upgrading".

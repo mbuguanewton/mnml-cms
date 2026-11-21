@@ -1,6 +1,6 @@
 # mnml-cms repo
 
-Guidance for working on the package itself. Using the CMS in a site is covered by the generated skills in `packages/cms/skills/` (linked into `.claude/skills/`), built from the docs.
+Guidance for working on the package itself. How the CMS works is in `docs/content/` (also served as Markdown: `<page>.md` on the docs site).
 
 This repo is a pnpm monorepo: `packages/cms` is the package (`@n3wtou/mnml-cms`) and `example/` is a Next.js site
 that consumes it through `workspace:*`. 
@@ -33,7 +33,7 @@ that consumes it through `workspace:*`.
   the admin or on a page.
 - Planned work lives in `TODO.md` (gitignored). Branches are `feat/<slug>` off `develop` (staging), merged by
   PR; `main` is the release branch and only takes PRs from `develop`.
-- **Agent docs are generated.** `docs/content` is the only source. `packages/cms/scripts/build-agent-docs.mjs` builds the skills
-  (`packages/cms/skills/`), the MCP docs index (`packages/cms/src/server/docs-index.ts`) and `docs/public/llms*.txt`. It runs in
-  `pnpm build`; CI fails if they're stale. Every docs page needs a `description` in its frontmatter. A new page must be added to a skill in
-  `SKILLS` in that script.
+- **Agent docs are generated.** `docs/content` is the only source. `packages/cms/scripts/build-agent-docs.mjs` writes each page as
+  Markdown to `docs/md/<page>.md` (frontmatter: title, description, url; served at `<page>.md` by `docs/app/md`), `docs/public/llms*.txt`, and the MCP docs index
+  (`packages/cms/src/server/docs-index.ts`). It runs in `pnpm build`; CI fails if they're stale. Every docs page needs a
+  `description` in its frontmatter.

@@ -128,7 +128,7 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
     {
       name: 'docs',
       description:
-        'Links to the mnml-cms documentation. Give a topic (e.g. "blocks", "preview", "tokens") for the best matching pages with their URL, summary and sections; leave it out for every page. Use it to point people to the right page.',
+        'mnml-cms documentation. Give a topic (e.g. "blocks", "preview", "tokens") for the best matching pages; leave it out for every page. Each page has a `markdown` link: fetch it to read the page as Markdown.',
       scope: 'read',
       input: z.object({ topic: z.string().optional() }),
       annotations: { readOnlyHint: true },
@@ -137,7 +137,7 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
           .toLowerCase()
           .split(/[^a-z0-9]+/)
           .filter((t) => t.length > 1);
-        const all = docsIndex.map(({ title, url, description }) => ({ title, url, description }));
+        const all = docsIndex.map(({ title, markdown, description }) => ({ title, markdown, description }));
         if (!terms.length) return { ok: true, site: DOCS_SITE, pages: all };
         const score = (p: (typeof docsIndex)[number]) =>
           terms.reduce(
@@ -153,7 +153,7 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
           .filter((x) => x.s > 0)
           .sort((x, y) => y.s - x.s)
           .slice(0, 5)
-          .map(({ p }) => ({ title: p.title, url: p.url, description: p.description, sections: p.headings }));
+          .map(({ p }) => ({ title: p.title, markdown: p.markdown, url: p.url, description: p.description, sections: p.headings }));
         return pages.length ? { ok: true, pages } : { ok: true, pages: [], message: 'No page matched. Every page:', all };
       },
     },

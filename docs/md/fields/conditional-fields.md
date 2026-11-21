@@ -1,0 +1,34 @@
+---
+title: "Conditional fields"
+description: "Show a field only when other fields match, with showIf."
+url: https://mnml-cms.vercel.app/fields/conditional-fields
+---
+
+# Conditional fields
+
+`showIf` shows a field only while its siblings match (fields next to it in the same entry, group, array item or block).
+
+```ts
+type: fields.select('Type', ['post', 'link'] as const),
+url: fields.url('URL', { required: true, showIf: { type: 'link' } }),
+badge: fields.text('Badge', { showIf: { type: ['link', 'video'], price: { gt: 0 } } }), // every key must match
+```
+
+## Conditions
+
+| Condition | Sibling is |
+| --- | --- |
+| A value | equal |
+| A list | any of them |
+| `{ not: … }` | not the value (or none of the list) |
+| `{ gt }`, `{ gte }`, `{ lt }`, `{ lte }` | a number in range |
+| `{ empty: true \| false }` | empty, or not |
+
+- Plain data, not functions, so the admin checks them while typing.
+- Naming a non-sibling throws when the config loads.
+
+## Hidden fields
+
+- Not validated. A hidden `required` field never blocks a save.
+- Value kept. Toggle back, text still there.
+- Readers still return it. Check the same condition when rendering.

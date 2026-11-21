@@ -1,0 +1,51 @@
+---
+title: "Custom node rendering"
+description: "Render rich text nodes with your own React components on the site."
+url: https://mnml-cms.vercel.app/editor/custom-rendering
+---
+
+# Custom node rendering
+
+`<RichText>` renders nodes with their extension's `renderHTML`. To use your own React component (an embed, highlighted code, a callout, an entry card), map the node's name to it.
+
+The component gets `node` (Tiptap JSON), `attrs`, and `children` (rendered content; none for leaf nodes like images).
+
+```tsx filename="src/components/code-block.tsx"
+import type { RichTextNodeProps } from '@n3wtou/mnml-cms/editor';
+
+export function CodeBlock({ attrs, children }: RichTextNodeProps) {
+  return (
+    <figure>
+      <figcaption>{String(attrs.language ?? '')}</figcaption>
+      <pre><code>{children}</code></pre>
+    </figure>
+  );
+}
+```
+
+## For every `<RichText>`
+
+In the editor config. Keys are node names: `codeBlock`, `image`, `blockquote`, yours…
+
+```ts filename="src/mnml-editor.ts"
+export const editor = defineEditor({
+  components: { codeBlock: CodeBlock },
+});
+```
+
+The admin loads this config in the browser, so these components ship to the client. Keep them plain.
+
+## For one `<RichText>`
+
+Pass `components`. Merged over the editor config's; wins for the same node.
+
+```tsx
+<RichText content={post.content} editor={editor} components={{ blockLink: PostCard }} />
+```
+
+Async server components go here, e.g. a card fetching the linked entry.
+
+## Good to know
+
+- Nodes without a component render as usual.
+- Components for unknown nodes are ignored.

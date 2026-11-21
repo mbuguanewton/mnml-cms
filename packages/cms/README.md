@@ -4,7 +4,7 @@ A small schema-driven CMS you embed in a Next.js site (App Router, v16+). One co
 content, the admin is mounted at a route in your app, and entries are stored in your own Postgres in one
 JSON table, so changing the content model never needs a migration.
 
-AI agents can edit content through the built-in [MCP server](https://mnml-cms.vercel.app/agents), and the package ships skills that match the installed version ([For AI agents](#for-ai-agents)).
+AI agents can edit content through the built-in [MCP server](https://mnml-cms.vercel.app/agents), and read every docs page as Markdown ([For AI agents](#for-ai-agents)).
 
 Needs Next 16+, React 19+ and Tailwind v4. A complete app is in [`example/`](https://github.com/mbuguanewton/mnml-cms/tree/main/example).
 
@@ -109,7 +109,7 @@ Add to your project's `AGENTS.md` or `CLAUDE.md`:
 Read node_modules/@n3wtou/mnml-cms/AGENTS.md before changing anything that uses mnml-cms.
 ```
 
-The package ships skills for Claude Code in `skills/`; `AGENTS.md` shows how to link them.
+Every docs page is Markdown at its URL plus `.md` (e.g. https://mnml-cms.vercel.app/agents.md); the index is https://mnml-cms.vercel.app/llms.txt.
 
 ## Documentation
 

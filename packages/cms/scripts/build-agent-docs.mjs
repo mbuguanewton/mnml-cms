@@ -1,7 +1,7 @@
-// Builds everything agents read from the docs (docs/content), so the docs stay the only source:
-//   packages/cms/skills/mnml-*/      skills shipped in the package (one per docs section, subpages as references/)
-//   packages/cms/src/server/docs-index.ts   the index behind the MCP `docs` tool
-//   docs/public/llms.txt, llms-full.txt     for agents reading the docs site
+// Builds what agents read from the docs (docs/content), so the docs stay the only source:
+//   docs/md/<page>.md                       every page as Markdown (title, description, url in its frontmatter), served at <url>.md
+//   docs/public/llms.txt, llms-full.txt     the index and every page in one file
+//   packages/cms/src/server/docs-index.ts   the index behind the MCP `docs` tool, which links to the .md pages
 // `--check` writes nothing and fails if any of them is out of date (CI runs it before the build).
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -10,61 +10,9 @@ import { fileURLToPath } from 'node:url';
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = join(PKG, '../..');
 const CONTENT = join(ROOT, 'docs/content');
+const MD = join(ROOT, 'docs/md');
 const SITE = 'https://mnml-cms.vercel.app';
 const GENERATED = 'Generated from docs/content by packages/cms/scripts/build-agent-docs.mjs. Edit the docs, not this file.';
-
-// Skills: one per docs section. `when` is the skill's description: it loads in every conversation, so keep it short.
-const SKILLS = [
-  {
-    name: 'mnml-getting-started',
-    main: 'getting-started',
-    refs: ['index', 'entry-points', 'common-mistakes'],
-    when: 'mnml-cms setup in Next.js: config, createCms, admin/API routes, proxy, table. Also basics that break: server-only imports, image values, drafts 404ing.',
-  },
-  {
-    name: 'mnml-fields',
-    main: 'fields/index',
-    refs: 'fields/*',
-    when: 'Editing mnml.config.ts: singletons, collections, fields (select, blocks, references, showIf, defaults, derived, SEO, limits, dates, images).',
-  },
-  {
-    name: 'mnml-reading-content',
-    main: 'reading-content',
-    when: 'Rendering mnml content on pages: getEntry, listEntries, getSingleton, getEntries, listSlugs, RichText, seoMetadata, static params, preview.',
-  },
-  {
-    name: 'mnml-drafts',
-    main: 'drafts-and-publishing',
-    when: 'mnml drafts: autosave, Publish, Unpublish, Discard, singleton drafts, why a draft 404s.',
-  },
-  {
-    name: 'mnml-moving-content',
-    main: 'moving-content',
-    when: 'Moving mnml content: export/import between databases, migrating from another CMS, rehosting images, Markdown to rich text in scripts.',
-  },
-  {
-    name: 'mnml-editor',
-    main: 'editor/index',
-    refs: 'editor/*',
-    when: 'Extending the mnml rich text editor: Tiptap extensions, toolbar tools, tables, form nodes, entry links, custom node rendering.',
-  },
-  {
-    name: 'mnml-agents',
-    main: 'agents',
-    when: 'mnml MCP server for AI agents: tokens, scopes, tools, Markdown rich text, delete approval, connecting Claude Code, Cursor, Zed.',
-  },
-  {
-    name: 'mnml-setup',
-    main: 'options',
-    refs: ['authentication', 'image-storage', 'other-orms'],
-    when: 'mnml createCms options, auth (password or AuthAdapter), image storage (Vercel Blob, local, custom), EntryStorage without Drizzle.',
-  },
-  {
-    name: 'mnml-upgrading',
-    main: 'upgrading',
-    when: 'Upgrading @n3wtou/mnml-cms, checking which version a project has, fixing breakage after an upgrade.',
-  },
-];
 
 /** `{ key: 'Title' }` from a Nextra `_meta.ts`, in order. */
 function readMeta(dir) {
@@ -98,70 +46,54 @@ function readPages() {
   return pages;
 }
 
-/** Links inside the docs (`](/fields/blocks)`) as full URLs, so they work outside the site. */
-const absolute = (body) => body.replace(/\]\((\/[^)\s]*)\)/g, (_, href) => `](${SITE}${href === '/' ? '' : href})`);
+/** A page's Markdown file, relative to the site: `fields/blocks.md`, `fields.md` (a section's index), `index.md`. */
+const mdPath = (path) => `${path.replace(/\/index$/, '')}.md`;
+
+/** Links inside the docs (`](/fields/blocks)`) as full links to the Markdown pages, so agents can follow them. */
+const toMarkdownLinks = (body) =>
+  body.replace(/\]\((\/[^)\s#]*)(#[^)\s]*)?\)/g, (_, href, hash = '') => `](${SITE}/${href === '/' ? 'index' : href.slice(1)}.md${hash})`);
 
 function build() {
-  const pages = readPages();
-  const byPath = new Map(pages.map((p) => [p.path, p]));
+  const pages = readPages().map((p) => ({ ...p, markdown: `${SITE}/${mdPath(p.path)}` }));
   const files = new Map(); // path relative to ROOT → content
-  const skillOf = new Map();
 
-  for (const s of SKILLS) {
-    const main = byPath.get(s.main);
-    if (!main) throw new Error(`Skill ${s.name}: no page ${s.main}.`);
-    const refs = (
-      s.refs === undefined
-        ? []
-        : typeof s.refs === 'string'
-          ? pages.filter((p) => p.path.startsWith(s.refs.slice(0, -1)) && p.path !== s.main).map((p) => p.path)
-          : s.refs
-    ).map((path) => {
-      const page = byPath.get(path);
-      if (!page) throw new Error(`Skill ${s.name}: no page ${path}.`);
-      return page;
-    });
-    for (const p of [main, ...refs]) skillOf.set(p.path, s.name);
-    const dir = `packages/cms/skills/${s.name}`;
-    const refName = (p) => `${p.path.split('/').pop()}.md`;
-    const more = refs.length ? `\n\n## More\n\n${refs.map((p) => `- [${p.title}](references/${refName(p)}): ${p.description}`).join('\n')}\n` : '\n';
+  for (const p of pages) {
     files.set(
-      `${dir}/SKILL.md`,
-      `---\nname: ${s.name}\ndescription: ${JSON.stringify(s.when)}\n---\n\n<!-- ${GENERATED} -->\n\n` +
-        `> Matches the installed version. Online: ${main.url}\n\n${absolute(main.body)}${more}`,
+      `docs/md/${mdPath(p.path)}`,
+      `---\ntitle: ${JSON.stringify(p.title)}\ndescription: ${JSON.stringify(p.description)}\nurl: ${p.url}\n---\n\n${toMarkdownLinks(p.body)}\n`,
     );
-    for (const p of refs) files.set(`${dir}/references/${refName(p)}`, `<!-- ${GENERATED} -->\n\n${absolute(p.body)}\n`);
   }
-  const orphans = pages.filter((p) => !skillOf.has(p.path)).map((p) => p.path);
-  if (orphans.length) throw new Error(`Pages in no skill: ${orphans.join(', ')}. Add them to SKILLS in build-agent-docs.mjs.`);
 
-  const index = pages.map((p) => ({ title: p.title, url: p.url, description: p.description, headings: p.headings, skill: skillOf.get(p.path) }));
+  const index = pages.map((p) => ({ title: p.title, url: p.url, markdown: p.markdown, description: p.description, headings: p.headings }));
   files.set(
     'packages/cms/src/server/docs-index.ts',
-    `// ${GENERATED}\n\nexport type DocsPage = { title: string; url: string; description: string; headings: string[]; skill: string };\n\n` +
+    `// ${GENERATED}\n\nexport type DocsPage = { title: string; url: string; markdown: string; description: string; headings: string[] };\n\n` +
       `export const DOCS_SITE = ${JSON.stringify(SITE)};\n\nexport const docsIndex: DocsPage[] = ${JSON.stringify(index, null, 2)};\n`,
   );
 
-  const intro = byPath.get('index').description;
+  const intro = pages.find((p) => p.path === 'index').description;
   files.set(
     'docs/public/llms.txt',
-    `# mnml-cms\n\n> ${intro}\n\nEvery page as one file: ${SITE}/llms-full.txt\n\n## Docs\n\n${pages.map((p) => `- [${p.title}](${p.url}): ${p.description}`).join('\n')}\n`,
+    `# mnml-cms\n\n> ${intro}\n\nEach page is Markdown at its URL plus \`.md\`. Every page in one file: ${SITE}/llms-full.txt\n\n## Docs\n\n${pages.map((p) => `- [${p.title}](${p.markdown}): ${p.description}`).join('\n')}\n`,
   );
-  files.set('docs/public/llms-full.txt', `# mnml-cms\n\n> ${intro}\n\n${pages.map((p) => `<!-- ${p.url} -->\n\n${absolute(p.body)}`).join('\n\n---\n\n')}\n`);
+  files.set(
+    'docs/public/llms-full.txt',
+    `# mnml-cms\n\n> ${intro}\n\n${pages.map((p) => `<!-- ${p.markdown} -->\n\n${toMarkdownLinks(p.body)}`).join('\n\n---\n\n')}\n`,
+  );
   return files;
 }
 
 const check = process.argv.includes('--check');
 const files = build();
-const skillsDir = join(PKG, 'skills');
-const existingSkills = existsSync(skillsDir)
-  ? readdirSync(skillsDir, { recursive: true, withFileTypes: true })
-      .filter((d) => d.isFile())
+// Generated Markdown pages; one whose docs page is gone is removed.
+const existingPages = existsSync(MD)
+  ? readdirSync(MD, { recursive: true, withFileTypes: true })
+      .filter((d) => d.isFile() && d.name.endsWith('.md'))
       .map((d) => relative(ROOT, join(d.parentPath, d.name)))
   : [];
 
 const stale = [...files].filter(([path, content]) => !existsSync(join(ROOT, path)) || readFileSync(join(ROOT, path), 'utf8') !== content).map(([p]) => p);
-const extra = existingSkills.filter((p) => !files.has(p));
+const extra = existingPages.filter((p) => !files.has(p));
 
 if (check) {
   if (stale.length || extra.length) {
