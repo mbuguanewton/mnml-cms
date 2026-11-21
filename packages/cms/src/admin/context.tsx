@@ -2,6 +2,7 @@
 
 import { createContext, use, useCallback } from 'react';
 import { DialogProvider, useDialogs } from './confirm.js';
+import { ToastProvider, useToasts } from './ui/toast.js';
 
 type AdminContextValue = { adminPath: string; apiPath: string };
 
@@ -10,15 +11,18 @@ const AdminContext = createContext<AdminContextValue>({ adminPath: '/admin', api
 export function AdminProvider({ value, children }: { value: AdminContextValue; children: React.ReactNode }) {
   return (
     <AdminContext value={value}>
-      <DialogProvider>{children}</DialogProvider>
+      <ToastProvider>
+        <DialogProvider>{children}</DialogProvider>
+      </ToastProvider>
     </AdminContext>
   );
 }
 
-/** Admin and API paths, `post()` for calling the CMS route handler, and `confirm()` / `alert()` for dialogs. */
+/** Admin and API paths, `post()` for calling the CMS route handler, `confirm()` / `alert()` for dialogs and `toast()`. */
 export function useAdmin() {
   const ctx = use(AdminContext);
   const dialogs = useDialogs();
+  const toasts = useToasts();
   // Stable across renders, so effects can depend on it.
   const post = useCallback(
     async <T,>(route: string, body: unknown): Promise<T> => {
@@ -33,5 +37,5 @@ export function useAdmin() {
     },
     [ctx.apiPath],
   );
-  return { ...ctx, ...dialogs, post };
+  return { ...ctx, ...dialogs, ...toasts, post };
 }

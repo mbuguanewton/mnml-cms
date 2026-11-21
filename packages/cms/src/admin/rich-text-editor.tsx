@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
+import { Tooltip } from './ui/tooltip.js';
 import type { JSONContent } from '@tiptap/core';
 import {
   BoldIcon,
@@ -168,20 +169,23 @@ function Toolbar({ editor, extra }: { editor: Editor; extra: EditorTool[] }) {
       {buttons(blocks)}
       <Divider />
       <ToolButton name="link" icon={<LinkIcon />} label="Link" active={s.link} run={setLink} />
-      <label title="Image" className="mnml-state flex size-7 cursor-pointer items-center justify-center rounded-[6px] text-mnml-text-soft">
-        <ImageIcon className="size-4" />
-        <input
-          type="file"
-          aria-label="Image"
-          accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-          className="sr-only"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            e.target.value = '';
-            if (f) void addImage(f);
-          }}
-        />
-      </label>
+      <Tooltip content="Image">
+        {/* has-focus-visible: the file input inside is sr-only, so the label shows its focus. */}
+        <label className="mnml-state flex size-7 cursor-pointer items-center justify-center rounded-[6px] text-mnml-text-soft has-focus-visible:ring-2 has-focus-visible:ring-mnml-primary/40">
+          <ImageIcon className="size-4" />
+          <input
+            type="file"
+            aria-label="Image"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+            className="sr-only"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) void addImage(f);
+            }}
+          />
+        </label>
+      </Tooltip>
       {buttons(own('insert'))}
       {rest.length > 0 && (
         <>
@@ -305,17 +309,18 @@ function ToolButton({
   run: () => void;
 }) {
   return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      aria-pressed={active}
-      disabled={disabled}
-      onClick={run}
-      className={`flex size-7 items-center justify-center rounded-[6px] disabled:opacity-40 [&_svg]:size-4 ${active ? 'bg-mnml-surface text-mnml-text' : 'mnml-state text-mnml-text-soft'}`}
-    >
-      {icon}
-    </button>
+    <Tooltip content={label}>
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={active}
+        disabled={disabled}
+        onClick={run}
+        className={`flex size-7 items-center justify-center rounded-[6px] disabled:opacity-40 [&_svg]:size-4 ${active ? 'bg-mnml-surface text-mnml-text' : 'mnml-state text-mnml-text-soft'}`}
+      >
+        {icon}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -345,18 +350,19 @@ function BlockMenu({ levels, quote, current, onPick }: { levels: Level[]; quote:
 
   return (
     <div ref={root} className="relative">
-      <button
-        type="button"
-        title="Text style"
-        aria-label={`Text style: ${selected.label}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        className={`flex h-7 items-center gap-0.5 rounded-[6px] px-1.5 [&>svg:first-child]:size-4 ${current ? 'bg-mnml-surface text-mnml-text' : 'mnml-state text-mnml-text-soft'}`}
-      >
-        <Current />
-        <ChevronDownIcon className="size-3" />
-      </button>
+      <Tooltip content={`Text style: ${selected.label}`}>
+        <button
+          type="button"
+          aria-label={`Text style: ${selected.label}`}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className={`flex h-7 items-center gap-0.5 rounded-[6px] px-1.5 [&>svg:first-child]:size-4 ${current ? 'bg-mnml-surface text-mnml-text' : 'mnml-state text-mnml-text-soft'}`}
+        >
+          <Current />
+          <ChevronDownIcon className="size-3" />
+        </button>
+      </Tooltip>
       <div role="menu" hidden={!open} className="absolute left-0 top-full z-20 mt-1 w-40 rounded-[8px] border border-mnml-line bg-mnml-bg p-1 shadow-lg">
         {options.map(({ style, label, Icon }) => (
           <button

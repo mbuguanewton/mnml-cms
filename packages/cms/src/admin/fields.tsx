@@ -19,7 +19,10 @@ import { fromLocalInput, toLocalInput } from '../datetime.js';
 import { displayText } from '../text.js';
 import { EntryCombobox } from './entry-combobox.js';
 import { useMenu } from './action-menu.js';
-import { Button } from './button.js';
+import { Button } from './ui/button.js';
+import { Checkbox } from './ui/checkbox.js';
+import { Input as TextInput, Textarea } from './ui/input.js';
+import { Select } from './ui/select.js';
 import { useAdmin } from './context.js';
 import { RichTextEditor } from './rich-text-editor.js';
 import { uploadImage } from './upload.js';
@@ -59,78 +62,46 @@ export function FieldRenderer({ field, value, onChange, path, errors, siblings }
 function Input({ id, field, value, onChange, path, errors, invalid }: Props & { id: string; invalid: boolean }) {
   switch (field.type) {
     case 'text':
-      return <input id={id} className={inputClass} aria-invalid={invalid} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
+      return <TextInput id={id} invalid={invalid} value={(value as string) ?? ''} onChange={onChange} />;
     case 'textarea':
-      return (
-        <textarea id={id} rows={4} className={inputClass} aria-invalid={invalid} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />
-      );
+      return <Textarea id={id} invalid={invalid} value={(value as string) ?? ''} onChange={onChange} />;
     case 'date':
-      return (
-        <input
-          id={id}
-          type="date"
-          className={`${inputClass} w-auto`}
-          aria-invalid={invalid}
-          value={(value as string) ?? ''}
-          onChange={(e) => onChange(e.target.value || null)}
-        />
-      );
+      return <TextInput id={id} type="date" invalid={invalid} value={(value as string) ?? ''} onChange={(v) => onChange(v || null)} />;
     case 'datetime':
       return <DatetimeInput id={id} value={value as string | null} onChange={onChange} invalid={invalid} />;
     case 'url':
       return (
-        <input
-          id={id}
-          inputMode="url"
-          placeholder="https://"
-          className={inputClass}
-          aria-invalid={invalid}
-          value={(value as string) ?? ''}
-          onChange={(e) => onChange(e.target.value || null)}
-        />
+        <TextInput id={id} inputMode="url" placeholder="https://" invalid={invalid} value={(value as string) ?? ''} onChange={(v) => onChange(v || null)} />
       );
     case 'image':
       return <ImageInput id={id} value={value as ImageValue | null} onChange={onChange} />;
     case 'boolean':
-      return (
-        <input
-          id={id}
-          type="checkbox"
-          className="size-4 self-start accent-mnml-primary"
-          checked={value === true}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-      );
+      return <Checkbox id={id} invalid={invalid} className="self-start" checked={value === true} onChange={onChange} />;
     case 'number':
       return (
-        <input
+        <TextInput
           id={id}
           type="number"
           min={field.min}
           max={field.max}
           step={field.step}
-          className={`${inputClass} w-auto`}
-          aria-invalid={invalid}
-          value={(value as number | null) ?? ''}
-          onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
+          invalid={invalid}
+          value={typeof value === 'number' ? String(value) : ''}
+          onChange={(v) => onChange(v === '' ? null : Number(v))}
         />
       );
-    case 'select': {
-      const current = (value as string | null) ?? '';
-      // Keep a stored value that is no longer an option visible instead of silently dropping it.
-      const missing = current !== '' && !field.options.includes(current);
+    case 'select':
+      // A stored value that is no longer an option stays visible, marked unavailable.
       return (
-        <select id={id} className={`${inputClass} w-auto`} aria-invalid={invalid} value={current} onChange={(e) => onChange(e.target.value || null)}>
-          <option value="">—</option>
-          {missing && <option value={current}>{current} (unavailable)</option>}
-          {field.options.map((o) => (
-            <option key={o} value={o}>
-              {field.optionLabels?.[o] ?? o}
-            </option>
-          ))}
-        </select>
+        <Select
+          id={id}
+          clearable
+          invalid={invalid}
+          value={(value as string | null) || null}
+          onChange={onChange}
+          options={field.options.map((o) => ({ value: o, label: field.optionLabels?.[o] ?? o }))}
+        />
       );
-    }
     case 'reference':
       return <ReferenceInput id={id} collection={field.collection} value={value as string | null} onChange={onChange} invalid={invalid} />;
     case 'references':
@@ -279,13 +250,12 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
       {error && <p className="break-words text-mnml-danger">{error}</p>}
       {value && picking && <FocalPointPicker id={`${id}-focal`} value={value} onChange={onChange} />}
       {value && (
-        <input
+        <TextInput
           aria-label="Alt text"
           placeholder="Alt text: describe the image (leave empty only if decorative)"
           maxLength={300}
-          className={inputClass}
           value={value.alt}
-          onChange={(e) => onChange({ ...value, alt: e.target.value })}
+          onChange={(alt) => onChange({ ...value, alt })}
         />
       )}
     </div>
@@ -361,15 +331,15 @@ function DatetimeInput({ id, value, onChange, invalid }: { id: string; value: st
   const zone = useSyncExternalStore(noSubscribe, browserTimeZone, () => null);
   return (
     <div className="flex flex-col gap-1">
-      <input
+      <TextInput
         id={id}
         type="datetime-local"
-        className={`${inputClass} w-auto`}
-        aria-invalid={invalid}
+        invalid={invalid}
         aria-describedby={zone ? `${id}-zone` : undefined}
         disabled={!zone}
         value={zone ? toLocalInput(value) : ''}
-        onChange={(e) => onChange(fromLocalInput(e.target.value))}
+        onChange={(v) => onChange(fromLocalInput(v))}
+        className="self-start"
       />
       {zone && (
         <p id={`${id}-zone`} className="text-xs text-mnml-text-mute">
@@ -737,12 +707,12 @@ function BlockPicker({
           className="absolute left-0 top-full z-20 mt-1 w-72 max-w-[calc(100vw-3rem)] rounded-[8px] border border-mnml-line bg-mnml-bg p-1 shadow-lg"
         >
           {all.length > SEARCH_FROM && (
-            <input
+            <TextInput
               aria-label="Search blocks"
               placeholder="Search…"
-              className={`${inputClass} mb-1`}
+              className="mb-1"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={setQ}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();

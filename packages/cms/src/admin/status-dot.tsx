@@ -17,13 +17,14 @@ const background: Record<DotState, string> = {
   changes: `linear-gradient(to bottom, ${ORANGE} 50%, ${GREEN} 50%)`,
 };
 
-export function StatusDot({ state, className = '' }: { state: DotState; className?: string }) {
+/** `focusable`: reachable with Tab, for a Tooltip around a dot that has no text next to it. */
+export function StatusDot({ state, focusable, className = '' }: { state: DotState; focusable?: boolean; className?: string }) {
   return (
     <span
       role="img"
       aria-label={dotLabels[state]}
-      title={dotLabels[state]}
-      className={`inline-block shrink-0 rounded-full ${className}`}
+      tabIndex={focusable ? 0 : undefined}
+      className={`inline-block shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-mnml-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-mnml-bg ${className}`}
       style={{ width: 11, height: 11, background: background[state] }}
     />
   );

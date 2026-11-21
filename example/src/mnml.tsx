@@ -1,7 +1,8 @@
 import 'server-only';
-import { FileTextIcon, HouseIcon, SettingsIcon, UserIcon } from 'lucide-react';
+import { DatabaseZapIcon, FileTextIcon, HouseIcon, SettingsIcon, UserIcon } from 'lucide-react';
 import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next';
 import config from '../mnml.config';
+import { CacheTool } from './admin/cache-tool';
 import { Editor } from './mnml-editor-client';
 
 export const cms = createCms(config, {
@@ -12,6 +13,8 @@ export const cms = createCms(config, {
   brand: 'Example',
   icons: { settings: <SettingsIcon />, home: <HouseIcon />, authors: <UserIcon />, posts: <FileTextIcon /> },
   editor: Editor,
+  // An extra admin screen, built with the components from @n3wtou/mnml-cms/admin.
+  pages: [{ path: 'cache', label: 'Cache', icon: <DatabaseZapIcon />, render: () => <CacheTool /> }],
   // The MCP server at /api/mnml/mcp, for agents such as Claude Code.
   // adminTokens: editors also create and revoke tokens under Agent access in /admin.
   mcp: { adminTokens: true, tokens: [{ name: 'agent', token: process.env.MNML_AGENT_TOKEN, scopes: ['read', 'draft', 'publish'] }] },

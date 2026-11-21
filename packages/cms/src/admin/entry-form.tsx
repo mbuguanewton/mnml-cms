@@ -6,13 +6,15 @@ import { EyeIcon, FileXIcon, Undo2Icon } from 'lucide-react';
 import { isVisible, slugify, type Collection, type Fields, type Singleton } from '../define.js';
 import type { AutosaveResult, EntryInput, EntryStatus, SaveAction, SaveResult } from '../api.js';
 import { ActionMenu, MenuItem } from './action-menu.js';
-import { Button } from './button.js';
+import { Button } from './ui/button.js';
+import { Input } from './ui/input.js';
+import { Tooltip } from './ui/tooltip.js';
 import { useAdmin } from './context.js';
 import { FieldRenderer, RefOptionsProvider, type RefOptions } from './fields.js';
 import { LivePreview } from './live-preview.js';
 import { AdminHeader, type Crumb } from './header.js';
-import { StatusDot } from './status-dot.js';
-import { bodyClass, inputClass, labelClass } from './styles.js';
+import { StatusDot, dotLabels } from './status-dot.js';
+import { bodyClass, labelClass } from './styles.js';
 
 type Props = {
   schemaKey: string;
@@ -54,7 +56,7 @@ export function EntryForm({
   actions,
   banner,
 }: Props) {
-  const { post, confirm } = useAdmin();
+  const { post, confirm, toast } = useAdmin();
   const router = useRouter();
   const fields: Fields = def.fields;
   const mode: 'create' | 'update' = def.kind === 'collection' && !existingSlug ? 'create' : 'update';
@@ -64,7 +66,14 @@ export function EntryForm({
   const [data, setData] = useState(initial);
   const [slug, setSlug] = useState(existingSlug ?? '');
   const [slugEdited, setSlugEdited] = useState(false);
-  const [result, setResult] = useState<SaveResult | null>(notice ? { ok: true, message: notice } : null);
+  const [result, setResult] = useState<SaveResult | null>(null);
+  // A notice from the page (e.g. "Created" after the redirect) shows once.
+  const noticed = useRef(false);
+  useEffect(() => {
+    if (!notice || noticed.current) return;
+    noticed.current = true;
+    toast({ title: notice, tone: 'success' });
+  }, [notice, toast]);
   const [pending, startTransition] = useTransition();
   const errors = result && !result.ok ? result.errors : {};
 
@@ -132,6 +141,7 @@ export function EntryForm({
           setAuto({ kind: 'saved' });
         } else if (r.conflict) {
           setAuto({ kind: 'conflict', message: r.message });
+          toast({ title: 'Not saved', description: r.message, tone: 'danger', duration: 0 });
         } else {
           // Incomplete or invalid: keep editing, nothing is saved until it is valid.
           failed.current = current;
@@ -141,6 +151,7 @@ export function EntryForm({
       } catch (e) {
         failed.current = current;
         setAuto({ kind: 'error', message: `Couldn't save: ${(e as Error).message}` });
+        toast({ title: "Couldn't save", description: (e as Error).message, tone: 'danger' });
       }
     }, AUTOSAVE_MS);
     return () => clearTimeout(t);
@@ -176,6 +187,7 @@ export function EntryForm({
         return;
       }
       setResult(r);
+      toast({ title: r.message, tone: r.ok ? 'success' : 'danger' });
       if (!r.ok && tab !== ALL) {
         // Don't leave the editor on a tab that hides the problem.
         const bad = Object.keys(r.errors).map(tabOf);
@@ -212,13 +224,15 @@ export function EntryForm({
     const r = await post<{ ok: boolean }>('discard', { key: schemaKey, slug: def.kind === 'collection' ? slug : undefined });
     if (r.ok) window.location.reload();
   };
-  // What the header says about saving: autosave progress, or the result of the last manual save.
-  const note =
-    autosave && 'message' in auto
-      ? { ok: false, text: auto.kind === 'paused' ? `Not saved: ${auto.message}` : auto.message }
-      : autosave && auto.kind !== 'idle'
-        ? { ok: true, text: auto.kind === 'saving' ? 'Saving…' : 'Saved' }
-        : result && { ok: result.ok, text: result.message };
+  // Autosave progress in the header. Manual saves, conflicts and errors are toasts; the reason a save is paused
+  // stays here (in full on wide screens) since it lasts until the form is fixed.
+  const note = !autosave
+    ? null
+    : 'message' in auto
+      ? { ok: false, short: 'Not saved', text: auto.kind === 'paused' ? `Not saved: ${auto.message}` : 'Not saved' }
+      : auto.kind === 'idle'
+        ? null
+        : { ok: true, short: auto.kind === 'saving' ? 'Saving…' : 'Saved', text: auto.kind === 'saving' ? 'Saving…' : 'Saved' };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (pending) return;
@@ -233,15 +247,15 @@ export function EntryForm({
       <p className="-mt-1 text-mnml-text-mute">
         {mode === 'update' ? 'The URL is fixed once an entry is created.' : 'Used in the URL. Filled in from the title.'}
       </p>
-      <input
+      <Input
         id="f-slug"
-        className={`${inputClass} [font-family:ui-monospace,monospace] text-xs read-only:bg-mnml-panel read-only:text-mnml-text-soft`}
-        aria-invalid={!!errors.$slug}
+        className="[font-family:ui-monospace,monospace] text-xs read-only:bg-mnml-panel read-only:text-mnml-text-soft"
+        invalid={!!errors.$slug}
         value={slug}
         readOnly={mode === 'update'}
-        onChange={(e) => {
+        onChange={(v) => {
           setSlugEdited(true);
-          setSlug(e.target.value);
+          setSlug(v);
         }}
       />
       {errors.$slug && <p className="text-mnml-danger">{errors.$slug}</p>}
@@ -252,12 +266,19 @@ export function EntryForm({
     <RefOptionsProvider value={refOptions}>
       <form onSubmit={submit} className="flex flex-1 flex-col">
         <AdminHeader crumbs={crumbs}>
-          {isCollection && mode === 'update' && <StatusDot state={dotState} className="mx-1" />}
-          {note && (
-            <span role="status" className={`max-sm:hidden ${note.ok ? 'text-mnml-primary' : 'text-mnml-danger'}`}>
-              {note.text}
-            </span>
+          {isCollection && mode === 'update' && (
+            <Tooltip content={dotLabels[dotState]} side="bottom">
+              <StatusDot state={dotState} focusable className="mx-1" />
+            </Tooltip>
           )}
+          <span role="status" className={`min-w-0 truncate text-sm ${note?.ok ? 'text-mnml-text-soft' : 'text-mnml-danger'}`}>
+            {note && (
+              <>
+                <span className="sm:hidden">{note.short}</span>
+                <span className="max-sm:hidden">{note.text}</span>
+              </>
+            )}
+          </span>
           {canPreview && (
             <Button
               type="button"
