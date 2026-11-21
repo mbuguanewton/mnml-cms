@@ -58,6 +58,17 @@ The script lists files the content uses that the target's media storage doesn't 
 
 The same functions are exported: `exportContent`, `planImport`, `applyImport`, `describePlan` and `missingMedia`. Connect with `drizzleStorage` or `neonDatabase`.
 
+## Markdown content
+
+Content in Markdown (a blog export, another CMS) goes into a `richtext` field with `markdownToRichText`. It returns Tiptap JSON.
+
+```ts
+import { markdownToRichText, richTextToMarkdown } from '@n3wtou/mnml-cms/sync';
+
+const content = markdownToRichText(post.body); // throws on tables and raw HTML
+const { markdown, lossy } = richTextToMarkdown(entry.content); // lossy: some nodes became <!-- mnml:<type> -->
+```
+
 ## Rehosting images
 
 Content from another CMS has its images on that CMS's CDN (e.g. `cdn.sanity.io`). `mediaImporter` copies them into this site's media storage. It returns the URL to put in an `image` field.

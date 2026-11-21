@@ -77,7 +77,7 @@ mcp: {
 | --- | --- |
 | `get_schema` | All content the token can use. Each field as JSON Schema: type, required, options, limits. Call first. |
 | `list_entries` | A collection's entries: `status`, `createdAt`, `updatedAt`, `hasDraftChanges`. Filter, sort, page. |
-| `get_entry` | One entry, latest version, drafts included. Shows a waiting approval request. |
+| `get_entry` | One entry, latest version, drafts included. Shows a waiting approval request. Rich text as JSON or Markdown. |
 | `search` | Find text in entries, rich text too. |
 | `validate_entry` | Check data, save nothing. Returns errors per field. |
 | `diff_entry` | Fields where the draft differs from live. |
@@ -92,7 +92,21 @@ mcp: {
 
 - Bad data returns errors per field, same checks as the admin.
 - Unknown field names fail. They are never dropped silently.
-- Rich text is Tiptap JSON: `{ "type": "doc", "content": [...] }`. `get_schema` tells the agent.
+
+### Rich text
+
+Agents write rich text as Markdown. The server turns it into Tiptap JSON.
+
+```json
+{ "title": "Hello", "content": "## Intro\n\nSome **bold** text and a [link](https://x.com).\n\n- one\n- two" }
+```
+
+- Works: headings, **bold**, *italic*, ~~strike~~, `code`, links, lists, quotes, code blocks, images, `---`.
+- Tables and raw HTML: refused with a field error. Send Tiptap JSON (`{ "type": "doc", "content": [...] }`) for those.
+- References and your own editor nodes: Tiptap JSON only.
+- Works in nested fields too (groups, arrays, blocks).
+
+To read rich text as Markdown, pass `richText: 'markdown'` to `get_entry` or `list_entries`. It's shorter than JSON. Nodes Markdown can't show come out as `<!-- mnml:<type> -->`, and the result has `lossy: true`. Don't write that Markdown back, or those nodes are lost.
 
 ## Drafts
 

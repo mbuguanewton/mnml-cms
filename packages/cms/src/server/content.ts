@@ -2,7 +2,7 @@ import 'server-only';
 import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
 import type { AutosaveInput, AutosaveResult, EntryInput, Invalid, SaveResult } from '../api.js';
-import { objectSchema, slugSchema } from '../define.js';
+import { objectSchema, slugSchema, withDefaults } from '../define.js';
 import type { Change, Context } from './context.js';
 import { revOf } from './rev.js';
 import { SINGLETON_SLUG } from './store.js';
@@ -194,7 +194,8 @@ export function createContentService(ctx: Context) {
       const pending = await store.getPending(key, at);
       if (pending === undefined && !row) return { ok: false, message: 'This entry does not exist.', errors: {} };
       if (pending === undefined && row?.status === 'published') return { ok: true, message: 'Already published. There were no changes to publish.' };
-      return service.save({ key, slug: at, mode: 'update', action: 'publish', data: pending ?? row?.data }, by);
+      // Stored data may predate fields added since; fill them in like the readers do.
+      return service.save({ key, slug: at, mode: 'update', action: 'publish', data: withDefaults(def.fields, pending ?? row?.data) }, by);
     },
 
     /** Takes a published collection entry off the site. Its latest version (with any pending changes) becomes its draft. */
@@ -204,7 +205,7 @@ export function createContentService(ctx: Context) {
       const row = await store.getRow(key, slug);
       if (!row) return { ok: false, message: 'This entry does not exist.', errors: {} };
       if (row.status === 'draft') return { ok: true, message: 'Already unpublished.' };
-      const data = (await store.getPending(key, slug)) ?? row.data;
+      const data = withDefaults(def.fields, (await store.getPending(key, slug)) ?? row.data);
       return service.save({ key, slug, mode: 'update', action: 'unpublish', data }, by);
     },
 
