@@ -40,6 +40,7 @@ const cmsConfig = config({
       title: fields.text('Title', { required: true }),
       kind: fields.select('Kind', ['news', 'guide']),
       body: fields.textarea('Body'),
+      content: fields.richtext('Content'),
     },
   }),
   pages: collection({ label: 'Pages', titleField: 'title', basePath: '', fields: { title: fields.text('Title') } }),
@@ -170,6 +171,7 @@ describe('MCP schema', () => {
     expect(posts).toMatchObject({ kind: 'collection', titleField: 'title', basePath: '/posts' });
     expect(posts.data.required).toEqual(['title']);
     expect(posts.data.properties.kind.enum).toEqual(['news', 'guide', null]);
+    expect(posts.data.properties.content.anyOf[0]).toEqual({ type: 'string', description: 'Markdown' });
     expect((await call(TOKENS.reader, 'get_schema')).notes.join(' ')).not.toMatch(/delete_entry|discard_draft/);
     expect((await call(TOKENS.editor, 'get_schema')).notes.join(' ')).toContain('delete_entry and discard_draft only ask');
   });
@@ -306,6 +308,32 @@ describe('MCP writes', () => {
     );
     expect(res.status).toBe(401);
     expect(row('posts', 'live')).toBeDefined();
+  });
+
+  it('accepts Markdown for rich text and returns it as Markdown when asked', async () => {
+    const r = await call(TOKENS.writer, 'create_entry', { collection: 'posts', data: { title: 'Md post', content: '## Hello\n\nSome **bold** text.' } });
+    expect(r.ok).toBe(true);
+    const stored = row('posts', 'md-post')?.data as { content: { type: string; content: { type: string }[] } };
+    expect(stored.content.type).toBe('doc');
+    expect(stored.content.content.map((n) => n.type)).toEqual(['heading', 'paragraph']);
+
+    const asJson = await call(TOKENS.reader, 'get_entry', { collection: 'posts', slug: 'md-post' });
+    expect(asJson.entry.content.type).toBe('doc');
+    const asMd = await call(TOKENS.reader, 'get_entry', { collection: 'posts', slug: 'md-post', richText: 'markdown' });
+    expect(asMd.entry.content).toBe('## Hello\n\nSome **bold** text.');
+    expect(asMd.lossy).toBeUndefined();
+    const listed = await call(TOKENS.reader, 'list_entries', { collection: 'posts', fields: ['content'], richText: 'markdown' });
+    expect(listed.entries.find((e: { slug: string }) => e.slug === 'md-post').entry).toEqual({ content: '## Hello\n\nSome **bold** text.' });
+
+    const upd = await call(TOKENS.writer, 'update_entry', { collection: 'posts', slug: 'md-post', data: { content: 'New *text*' } });
+    expect(upd.ok).toBe(true);
+    expect((await call(TOKENS.reader, 'get_entry', { collection: 'posts', slug: 'md-post', richText: 'markdown' })).entry.content).toBe('New *text*');
+  });
+
+  it('refuses Markdown tables with a field error', async () => {
+    const r = await call(TOKENS.writer, 'create_entry', { collection: 'posts', data: { title: 'T', content: '| a |\n|---|\n| 1 |' } });
+    expect(r.isError).toBe(true);
+    expect(r.errors.content).toContain('tables');
   });
 
   it('validates without saving', async () => {

@@ -12,9 +12,8 @@ const limits = (f: { min?: number; max?: number; required?: boolean }): Json => 
 };
 
 const RICH_TEXT =
-  'Rich text as Tiptap (ProseMirror) JSON: {"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hello"}]}]}. ' +
-  'Other nodes: heading (attrs.level 1-4), bulletList/orderedList > listItem > paragraph, blockquote, codeBlock, horizontalRule, image (attrs.src, attrs.alt). ' +
-  'Marks on text: bold, italic, underline, strike, code, link (attrs.href).';
+  'Markdown (easiest): headings, **bold**, *italic*, ~~strike~~, `code`, links, lists, > quotes, code blocks, images, ---. No tables or raw HTML. ' +
+  'Or Tiptap JSON {"type":"doc","content":[...]}, needed for tables, entry references and the site\'s own nodes.';
 
 function describe(f: Field, extra?: string): string | undefined {
   const parts = [f.help, extra, f.showIf && `Only used while ${JSON.stringify(f.showIf)} (sibling fields).`].filter(Boolean);
@@ -63,7 +62,15 @@ export function fieldJsonSchema(f: Field): Json {
     case 'references':
       return base({ type: 'array', items: { type: 'string' }, ...limits(f) }, `Slugs of entries in "${f.collection}", in order.`);
     case 'richtext':
-      return base({ type: 'object', properties: { type: { const: 'doc' } }, required: ['type'] }, RICH_TEXT);
+      return base(
+        {
+          anyOf: [
+            { type: 'string', description: 'Markdown' },
+            { type: 'object', properties: { type: { const: 'doc' } }, required: ['type'] },
+          ],
+        },
+        RICH_TEXT,
+      );
     case 'tags':
       return base({ type: 'array', items: { type: 'string', minLength: 1 }, ...limits(f) });
     case 'array':

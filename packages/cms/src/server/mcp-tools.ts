@@ -2,6 +2,7 @@ import 'server-only';
 import { z } from 'zod';
 import { canonical } from '../canonical.js';
 import { initialValues, slugify, withDefaults, type Collection, type Singleton } from '../define.js';
+import { markdownFields, richTextFieldsToMarkdown } from '../markdown.js';
 import { mediaImporter } from '../remote-media.js';
 import { previewTarget, type ContentService } from './content.js';
 import type { AgentScope, Context } from './context.js';
@@ -74,7 +75,10 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
     if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return { errors: { $data: 'Expected an object of fields.' } };
     const unknown = unknownFields(def.fields, patch);
     if (unknown.length) return { errors: Object.fromEntries(unknown.map((p) => [p, 'Not a field. See get_schema.'])) };
-    return { data: withDefaults(def.fields, { ...(withDefaults(def.fields, base) as object), ...patch }) };
+    // Rich text may come as Markdown: convert it before anything else sees it.
+    const md = markdownFields(def.fields, patch);
+    if (Object.keys(md.errors).length) return { errors: md.errors };
+    return { data: withDefaults(def.fields, { ...(withDefaults(def.fields, base) as object), ...(md.data as object) }) };
   }
 
   /** Records a delete or discard for an editor to approve, and says where. */
@@ -84,6 +88,14 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
     const page = defOf(key).kind === 'collection' ? `${ctx.adminPath}/${key}/${slug}` : `${ctx.adminPath}/${key}`;
     return { ok: true, status: 'awaiting_approval', message: r.message, approveUrl: `${origin}${page}` };
   }
+
+  const richTextArg = z
+    .enum(['json', 'markdown'])
+    .default('json')
+    .describe("How to return rich text. 'markdown' is shorter; nodes Markdown can't express come out as <!-- mnml:<type> --> and lossy is true.");
+
+  /** An entry with its rich text as Markdown when asked. */
+  const shaped = (def: Def, entry: unknown, as: unknown) => (as === 'markdown' ? richTextFieldsToMarkdown(def.fields, entry) : { data: entry, lossy: false });
 
   const invalid = (errors: Record<string, string>): ToolResult => ({ ok: false, message: 'Fix the listed fields.', errors });
 
@@ -122,6 +134,7 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
         orderBy: z.string().optional().describe("A field, or 'slug' | 'createdAt' | 'updatedAt'. Default 'slug'."),
         order: z.enum(['asc', 'desc']).default('asc'),
         fields: z.array(z.string()).optional().describe('Only return these fields of each entry. Default: all.'),
+        richText: richTextArg,
         limit: z.number().int().min(1).max(100).default(20),
         offset: z.number().int().min(0).default(0),
       }),
@@ -141,18 +154,13 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
           }));
         const page = arrange(items, { orderBy: a.orderBy as never, order: a.order as 'asc' | 'desc', limit: a.limit as number, offset: a.offset as number });
         const pick = a.fields as string[] | undefined;
-        return {
-          ok: true,
-          total: items.length,
-          entries: page.map((i) => ({
-            slug: i.slug,
-            status: i.status,
-            hasDraftChanges: pending.has(i.slug),
-            createdAt: i.createdAt,
-            updatedAt: i.updatedAt,
-            entry: pick ? Object.fromEntries(Object.entries(i.entry).filter(([k]) => pick.includes(k))) : i.entry,
-          })),
-        };
+        let lossy = false as boolean;
+        const entries = page.map((i) => {
+          const r = shaped(def, pick ? Object.fromEntries(Object.entries(i.entry).filter(([k]) => pick.includes(k))) : i.entry, a.richText);
+          lossy ||= r.lossy;
+          return { slug: i.slug, status: i.status, hasDraftChanges: pending.has(i.slug), createdAt: i.createdAt, updatedAt: i.updatedAt, entry: r.data };
+        });
+        return { ok: true, total: items.length, entries, ...(lossy && { lossy }) };
       },
     },
 
@@ -160,7 +168,7 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
       name: 'get_entry',
       description: 'One entry at its latest version (unpublished edits included), with status and timestamps.',
       scope: 'read',
-      input: z.object({ collection: anyKey, slug: slugArg }),
+      input: z.object({ collection: anyKey, slug: slugArg, richText: richTextArg }),
       annotations: { readOnlyHint: true },
       async run(a) {
         const key = a.collection as string;
@@ -170,6 +178,7 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
           if (defOf(key).kind === 'collection') return { ok: false, message: `No entry "${slug}" in ${key}.` };
           return { ok: true, exists: false, entry: withDefaults(defOf(key).fields, {}) };
         }
+        const shown = shaped(defOf(key), withDefaults(defOf(key).fields, data), a.richText);
         return {
           ok: true,
           slug: defOf(key).kind === 'collection' ? slug : undefined,
@@ -178,7 +187,8 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
           awaitingApproval: (await store.getRequest(key, slug)) ?? null,
           createdAt: r?.createdAt,
           updatedAt: r?.updatedAt,
-          entry: withDefaults(defOf(key).fields, data),
+          entry: shown.data,
+          ...(shown.lossy && { lossy: true }),
         };
       },
     },
@@ -223,7 +233,7 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
       scope: 'draft',
       input: z.object({
         collection: collectionKey,
-        data: z.record(z.string(), z.unknown()).describe('Field values, shaped as in get_schema.'),
+        data: z.record(z.string(), z.unknown()).describe('Field values, shaped as in get_schema. Rich text: a Markdown string or Tiptap JSON.'),
         slug: z.string().optional(),
       }),
       async run(a, { agent }) {
@@ -245,7 +255,9 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
       input: z.object({
         collection: anyKey,
         slug: slugArg,
-        data: z.record(z.string(), z.unknown()).describe('The fields to change, shaped as in get_schema. Each replaces the whole field value.'),
+        data: z
+          .record(z.string(), z.unknown())
+          .describe('The fields to change, shaped as in get_schema. Each replaces the whole field value. Rich text: a Markdown string or Tiptap JSON.'),
       }),
       async run(a, { agent }) {
         const key = a.collection as string;
