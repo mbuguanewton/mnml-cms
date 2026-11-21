@@ -1,0 +1,24 @@
+<!-- Generated from docs/content by packages/cms/scripts/build-agent-docs.mjs. Edit the docs, not this file. -->
+
+# Derived values
+
+Extra values computed from an entry's own fields.
+
+```ts
+import { collection, derive, readingTime } from '@n3wtou/mnml-cms';
+
+posts: collection({
+  // …
+  derived: {
+    readingTime: derive((post) => readingTime(post.content), { after: 'content' }),
+    wordy: (post) => post.title.length > 60, // a plain function works too
+  },
+}),
+```
+
+- Run on every read. Never stored.
+- Typed from the return type.
+- Work in `orderBy` and `filter`.
+- Pure functions of one entry. Can't share a field's name.
+- Shown read-only in the form. `derive(fn, { after, label })` sets the field to show after (default: end) and the label.
+- Rich text helpers: `plainText(doc)`, `readingTime(doc)`.

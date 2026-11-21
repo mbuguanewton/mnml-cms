@@ -1,8 +1,10 @@
+---
+description: "Store entries without Drizzle by writing your own EntryStorage (Prisma, Kysely, SQL)."
+---
+
 # Other ORMs
 
-To use something other than Drizzle, pass `storage` instead of `database`.
-
-`storage` is five plain queries. The CMS handles caching, sorting and drafts.
+Not Drizzle? Pass `storage` instead of `database`: five plain queries. The CMS handles caching, sorting and drafts.
 
 ```ts
 type EntryStorage = {
@@ -18,12 +20,12 @@ type EntryStorage = {
 | Method | Notes |
 | --- | --- |
 | `upsert` | Set `updatedAt` to now. |
-| `insertIfAbsent` | Return `false` if the slug already exists. |
-| `readRowsBySlug` | Optional. Reads these slugs' rows in one query, in any order. Without it, `getEntries` reads the whole collection with `readRows`. |
+| `insertIfAbsent` | `false` if the slug exists. |
+| `readRowsBySlug` | Optional. These slugs' rows, one query, any order. Without it, `getEntries` uses `readRows`. |
 
 ## The table
 
-Create it yourself. Keep these names.
+Create it yourself, with these names.
 
 ```sql
 create table entries (
@@ -83,4 +85,4 @@ const storage: EntryStorage = {
 };
 ```
 
-`drizzle-orm` is still a peer dependency. Install it even when you pass `storage`.
+`drizzle-orm` is still a peer dependency: install it anyway.

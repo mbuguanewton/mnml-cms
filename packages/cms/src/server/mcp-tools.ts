@@ -6,6 +6,7 @@ import { markdownFields, richTextFieldsToMarkdown } from '../markdown.js';
 import { mediaImporter } from '../remote-media.js';
 import { previewTarget, type ContentService } from './content.js';
 import type { AgentScope, Context } from './context.js';
+import { DOCS_SITE, docsIndex } from './docs-index.js';
 import { describeContent, unknownFields } from './mcp-schema.js';
 import { arrange, SINGLETON_SLUG } from './store.js';
 
@@ -122,6 +123,39 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
           ),
         ],
       }),
+    },
+
+    {
+      name: 'docs',
+      description:
+        'Links to the mnml-cms documentation. Give a topic (e.g. "blocks", "preview", "tokens") for the best matching pages with their URL, summary and sections; leave it out for every page. Use it to point people to the right page.',
+      scope: 'read',
+      input: z.object({ topic: z.string().optional() }),
+      annotations: { readOnlyHint: true },
+      run: async (a) => {
+        const terms = ((a.topic as string | undefined) ?? '')
+          .toLowerCase()
+          .split(/[^a-z0-9]+/)
+          .filter((t) => t.length > 1);
+        const all = docsIndex.map(({ title, url, description }) => ({ title, url, description }));
+        if (!terms.length) return { ok: true, site: DOCS_SITE, pages: all };
+        const score = (p: (typeof docsIndex)[number]) =>
+          terms.reduce(
+            (n, t) =>
+              n +
+              (p.title.toLowerCase().includes(t) ? 3 : 0) +
+              (p.description.toLowerCase().includes(t) ? 2 : 0) +
+              (p.headings.some((h) => h.toLowerCase().includes(t)) ? 1 : 0),
+            0,
+          );
+        const pages = docsIndex
+          .map((p) => ({ p, s: score(p) }))
+          .filter((x) => x.s > 0)
+          .sort((x, y) => y.s - x.s)
+          .slice(0, 5)
+          .map(({ p }) => ({ title: p.title, url: p.url, description: p.description, sections: p.headings }));
+        return pages.length ? { ok: true, pages } : { ok: true, pages: [], message: 'No page matched. Every page:', all };
+      },
     },
 
     collectionKey && {

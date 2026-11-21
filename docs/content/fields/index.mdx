@@ -1,3 +1,7 @@
+---
+description: "Every field type in mnml.config.ts, its options and the value readers return."
+---
+
 # Field types
 
 Every field takes `{ required, help }`.
@@ -6,45 +10,40 @@ Every field takes `{ required, help }`.
 | --- | --- |
 | `text`, `textarea` | `string` |
 | `date` (`YYYY-MM-DD`), `url` | `string \| null` |
-| `datetime` | `string \| null`, a moment in UTC (`2026-11-18T14:30:00.000Z`). Edited in the editor's time zone. |
+| `datetime` | `string \| null`, UTC (`2026-11-18T14:30:00.000Z`). Edited in local time. |
 | `number(label, { min, max, step })` | `number \| null` |
 | `boolean` | `boolean`, default `false` |
 | `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null`. Options can have [labels](/fields/select-labels). |
-| `reference(label, 'authors')` | `string \| null`: the slug of a published entry. Read it with `cms.getEntry`. |
-| `references(label, 'posts', { min, max })` | `string[]`: slugs of published entries, in the editor's order. Read them with `cms.getEntries`. |
-| `image` | `{ url, alt, focalX?, focalY? } \| null`. The [focal point](/fields/focal-point) is optional. |
-| `richtext` | Tiptap JSON. Render it with `<RichText>`. |
+| `reference(label, 'authors')` | `string \| null`: a published entry's slug. Read with `cms.getEntry`. |
+| `references(label, 'posts', { min, max })` | `string[]`: published slugs, in order. Read with `cms.getEntries`. |
+| `image` | `{ url, alt, focalX?, focalY? } \| null`. [Focal point](/fields/focal-point) optional. |
+| `richtext` | Tiptap JSON. Render with `<RichText>`. |
 | `tags` | `string[]` |
-| `array(label, fields, { itemLabel, min, max })` | A repeatable list of `fields` |
-| `group(label, fields)` | A nested object, shown as one section: `page.hero.headline` |
-| `blocks(label, { hero: block('Hero', fields), … }, { itemLabel, min, max })` | A list of sections, each one of the [blocks](/fields/blocks): `{ kind: 'hero', …its fields }[]` |
-| `seo(label?)` | A `group` of `title`, `description` and `image` ([SEO](/fields/seo)) |
+| `array(label, fields, { itemLabel, min, max })` | Repeatable list of `fields` |
+| `group(label, fields)` | Nested object, one form section: `page.hero.headline` |
+| `blocks(label, { hero: block('Hero', fields), … }, { itemLabel, min, max })` | Sections of different [blocks](/fields/blocks): `{ kind: 'hero', …fields }[]` |
+| `seo(label?)` | `group` of `title`, `description`, `image` ([SEO](/fields/seo)) |
 
 ## Picking entries
 
-`reference` and `references` use a search box. Type to filter by title or slug. Pick with ↓/↑ and Enter, or click.
+`reference` and `references` use a search box: filter by title or slug, pick with ↓/↑ + Enter or a click.
 
-- A `reference` shows the picked entry, with a clear (×) button.
-- A `references` field shows the picked entries. Editors can move them up or down, remove them, and add more up to `max`.
+- `reference`: shows the pick, with a clear (×) button.
+- `references`: shows the picks. Reorder, remove, add up to `max`.
 
 ```ts
 related: fields.references('Related posts', 'posts', { max: 3 }),
 authors: fields.references('Authors', 'authors', { required: true }),
 ```
 
-How `references` is validated:
+`references` validation:
 
-- Slugs are trimmed. Blanks and repeats are dropped.
-- Then `min` and `max` are checked. `required` means at least one.
-
-If a picked entry is unpublished later, it stays in the list marked "(unavailable)". Readers leave it out.
+- Slugs trimmed. Blanks and repeats dropped.
+- Then `min` / `max`. `required` = at least one.
+- An entry unpublished later stays, marked "(unavailable)". Readers skip it.
 
 ## Groups become tabs
 
-An entry with groups gets tabs above its form:
+Groups add tabs above the form: **All fields**, **General** (fields outside groups), one per group.
 
-- **All fields**
-- **General**: the fields outside any group
-- One tab per group
-
-For a page with sections, use one singleton with a group per section. If editors add pages, use a collection.
+A page with fixed sections: one singleton, a group per section. Editors add pages: a collection.

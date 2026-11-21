@@ -1,8 +1,10 @@
+---
+description: "The seo() field and seoMetadata() for Next.js metadata."
+---
+
 # SEO
 
-`fields.seo()` adds a group of `title`, `description` and `image`.
-
-`seoMetadata(entry.seo, fallback)` turns it into Next.js `Metadata`. Empty values use `fallback`.
+`fields.seo()`: a group of `title`, `description`, `image`. `seoMetadata(entry.seo, fallback)` makes Next.js `Metadata`; empties use `fallback`.
 
 ```ts
 export const generateMetadata = async () => seoMetadata((await cms.getSingleton('home'))?.seo, { title: 'Home' });

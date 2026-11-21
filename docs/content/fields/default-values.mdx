@@ -1,6 +1,10 @@
+---
+description: "Starting values for new entries, items and blocks with default."
+---
+
 # Default values
 
-`default` is the value a new entry, array item or block starts with. Pass a value, or a function that returns one.
+`default`: the starting value of a new entry, array item or block. A value, or a function returning one.
 
 ```ts
 pageType: fields.select('Type', ['page', 'post'] as const, { default: 'page' }),
@@ -9,9 +13,9 @@ date: fields.date('Date', { default: () => new Date().toISOString().slice(0, 10)
 count: fields.number('How many', { default: 3 }),
 ```
 
-- **Type-checked** against the field. A `select` default must be one of its options.
-- **Only on create:** a new collection entry, a never-saved singleton, a new array item, a new block.
-- **Never on read.** A field missing from stored data still reads as its empty value.
-- **Functions run when the entry form opens.** Items and blocks added later in that form get the value from when it opened. Functions can't be sent to the browser.
+- **Type-checked.** A `select` default must be an option.
+- **Create only:** new collection entry, never-saved singleton, new item, new block.
+- **Never on read.** Missing stored fields read as empty.
+- **Functions run when the form opens.** Later items in that form reuse that value (functions can't go to the browser).
 
-Fields that take a `default`: `text`, `textarea`, `number`, `boolean`, `select`, `date`, `datetime`, `url`, `reference`, `references`, `tags`. For a `group`, give its fields defaults.
+Takes `default`: `text`, `textarea`, `number`, `boolean`, `select`, `date`, `datetime`, `url`, `reference`, `references`, `tags`. Groups: set defaults on their fields.

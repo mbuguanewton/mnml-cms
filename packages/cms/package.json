@@ -73,6 +73,8 @@
   "files": [
     "dist",
     "styles.css",
+    "skills",
+    "AGENTS.md",
     "README.md",
     "LICENSE"
   ],
@@ -83,7 +85,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/copy-css.mjs",
+    "build": "node scripts/build-agent-docs.mjs && rm -rf dist && tsc -p tsconfig.build.json && node scripts/copy-css.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "prepack": "pnpm build",
     "test": "vp test run"

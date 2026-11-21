@@ -1,6 +1,10 @@
+---
+description: "Pages made of different kinds of sections with fields.blocks() and block()."
+---
+
 # Blocks
 
-Use `blocks` for a page made of different kinds of sections. Each kind has its own fields.
+`blocks`: a page of different kinds of sections, each kind with its own fields.
 
 ```ts
 sections: fields.blocks('Sections', {
@@ -12,14 +16,14 @@ sections: fields.blocks('Sections', {
 
 ## In the admin
 
-- One "Add section" button opens a list of the blocks. The list gets a search box when there are more than eight.
-- Editors see only the fields of the block they picked.
-- `block(label, fields, { description })` adds a one-line hint to the list.
-- `fields.blocks(…, { addLabel })` renames the button.
+- "Add section" opens the block list (search box above eight blocks).
+- Editors see only the picked block's fields.
+- `block(label, fields, { description })`: one-line hint in the list.
+- `fields.blocks(…, { addLabel })`: renames the button.
 
 ## Reading
 
-Each item stores its block's key as `kind`. Check `kind` to narrow the type: after `section.kind === 'hero'`, `section.image` is typed.
+Each item stores its block key as `kind`. Check it to narrow the type: after `section.kind === 'hero'`, `section.image` is typed.
 
-- `kind` is reserved. No block can have a field named `kind`.
-- An item whose `kind` is no longer in the config is dropped on read. Remove a block from the config, and it's removed from each entry the next time it's saved.
+- `kind` is reserved: no block field may be named `kind`.
+- A `kind` no longer in the config is dropped on read, and gone from the entry on its next save.

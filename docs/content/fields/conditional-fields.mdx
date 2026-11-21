@@ -1,6 +1,10 @@
+---
+description: "Show a field only when other fields match, with showIf."
+---
+
 # Conditional fields
 
-`showIf` shows a field only while its sibling fields match. Siblings are the fields next to it in the same entry, group, array item or block.
+`showIf` shows a field only while its siblings match (fields next to it in the same entry, group, array item or block).
 
 ```ts
 type: fields.select('Type', ['post', 'link'] as const),
@@ -10,19 +14,19 @@ badge: fields.text('Badge', { showIf: { type: ['link', 'video'], price: { gt: 0 
 
 ## Conditions
 
-| Condition | Matches when the sibling is |
+| Condition | Sibling is |
 | --- | --- |
-| A value | equal to it |
+| A value | equal |
 | A list | any of them |
-| `{ not: … }` | not the value (or not any in the list) |
+| `{ not: … }` | not the value (or none of the list) |
 | `{ gt }`, `{ gte }`, `{ lt }`, `{ lte }` | a number in range |
-| `{ empty: true \| false }` | empty, or not empty |
+| `{ empty: true \| false }` | empty, or not |
 
-- Conditions are plain data, not functions, so the admin can check them as the editor types.
-- A condition that names anything other than a sibling field throws when the config loads.
+- Plain data, not functions, so the admin checks them while typing.
+- Naming a non-sibling throws when the config loads.
 
 ## Hidden fields
 
-- A hidden field isn't validated. A hidden `required` field never blocks a save.
-- Its stored value is kept. Toggle it back and the text is still there.
-- Readers still return it. Check the same condition when you render.
+- Not validated. A hidden `required` field never blocks a save.
+- Value kept. Toggle back, text still there.
+- Readers still return it. Check the same condition when rendering.
