@@ -5,7 +5,7 @@ import { cms } from '@/mnml';
 import { RichText } from '@n3wtou/mnml-cms/rich-text';
 
 const settings = await cms.getSingleton('settings');
-const posts = await cms.listEntries('posts'); // [{ slug, entry, status }]
+const posts = await cms.listEntries('posts'); // [{ slug, entry, status, createdAt, updatedAt }]
 const latest = await cms.listEntries('posts', { orderBy: 'date', order: 'desc', limit: 3 });
 const post = await cms.getEntry('posts', slug);
 const related = await cms.getEntries('posts', post.related); // [{ slug, entry }]
@@ -24,6 +24,8 @@ Every result is fully typed from your config.
 | `order` | `'asc'` or `'desc'` |
 | `filter` | `(entry) => boolean` |
 | `limit`, `offset` | Numbers |
+
+Each item has `createdAt` and `updatedAt` (`Date`). They're `null` for a draft shown in preview that was never saved.
 
 ## `getEntries`
 
