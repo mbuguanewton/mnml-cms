@@ -129,6 +129,7 @@ export const docsIndex: DocsPage[] = [
     "markdown": "https://mnml-cms.vercel.app/drafts-and-publishing.md",
     "description": "Drafts, autosave, Publish, Discard changes and Unpublish, and what the site shows for each.",
     "headings": [
+      "Collection list",
       "Autosave",
       "Only valid data is saved",
       "Someone else edited it",
