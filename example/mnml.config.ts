@@ -122,6 +122,8 @@ export default config({
         ] as const,
         { default: 'news' },
       ),
+      // A checkbox in the admin; featured posts get a badge on their page.
+      featured: fields.boolean('Featured'),
       // A moment in time, stored in UTC; editors see it in their own time zone.
       publishedAt: fields.datetime('Published at', { default: () => new Date().toISOString() }),
       author: fields.reference('Author', 'authors'),

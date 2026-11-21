@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ExternalLinkIcon, LoaderCircleIcon, RotateCwIcon, XIcon } from 'lucide-react';
 import type { EntryInput, PreviewResult } from '../api.js';
-import { Button } from './button.js';
+import { Button } from './ui/button.js';
+import { Tooltip } from './ui/tooltip.js';
 import { useAdmin } from './context.js';
 
 const DEBOUNCE_MS = 500;
@@ -87,31 +88,35 @@ export function LivePreview({
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-mnml-line px-3">
         <span className="min-w-0 flex-1 truncate [font-family:ui-monospace,monospace] text-xs text-mnml-text-soft">{url ?? 'Preview'}</span>
         {status.kind === 'loading' && <LoaderCircleIcon className="size-3.5 animate-spin text-mnml-text-mute" aria-label="Updating" />}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Reload"
-          title="Reload"
-          disabled={!url}
-          onClick={() => frame.current?.contentWindow?.location.reload()}
-        >
-          <RotateCwIcon />
-        </Button>
-        {url && (
-          <a
-            href={url}
-            target="_blank"
-            aria-label="Open in new tab"
-            title="Open in new tab"
-            className="mnml-state flex size-6 items-center justify-center rounded-[6px] text-mnml-text-soft"
+        <Tooltip content="Reload" side="bottom">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Reload"
+            disabled={!url}
+            onClick={() => frame.current?.contentWindow?.location.reload()}
           >
-            <ExternalLinkIcon className="size-3.5" />
-          </a>
+            <RotateCwIcon />
+          </Button>
+        </Tooltip>
+        {url && (
+          <Tooltip content="Open in new tab" side="bottom">
+            <a
+              href={url}
+              target="_blank"
+              aria-label="Open in new tab"
+              className="mnml-state flex size-6 items-center justify-center rounded-[6px] text-mnml-text-soft"
+            >
+              <ExternalLinkIcon className="size-3.5" />
+            </a>
+          </Tooltip>
         )}
-        <Button type="button" variant="ghost" size="icon-xs" aria-label="Close preview" title="Close preview" onClick={onClose}>
-          <XIcon />
-        </Button>
+        <Tooltip content="Close preview" side="bottom">
+          <Button type="button" variant="ghost" size="icon-xs" aria-label="Close preview" onClick={onClose}>
+            <XIcon />
+          </Button>
+        </Tooltip>
       </div>
       {paused && (
         <p role="status" className="border-b border-mnml-line bg-mnml-warn px-3 py-1.5 text-xs text-mnml-on-warn">

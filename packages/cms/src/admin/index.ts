@@ -1,5 +1,21 @@
 // Building blocks for extra admin pages (the `pages` option), so they match the rest of the admin.
-export { Button, buttonVariants } from './button.js';
+export { Button, buttonVariants } from './ui/button.js';
+export { Checkbox, Switch } from './ui/checkbox.js';
+export { Input, Textarea } from './ui/input.js';
+export { Select } from './ui/select.js';
+export { Tooltip } from './ui/tooltip.js';
+export type {
+  ButtonProps,
+  CheckboxProps,
+  InputProps,
+  SelectOption,
+  SelectProps,
+  SwitchProps,
+  TextareaProps,
+  ToastOptions,
+  ToastTone,
+  TooltipProps,
+} from './ui/slots.js';
 export { useAdmin } from './context.js';
 export { AdminHeader, type Crumb } from './header.js';
 export { bodyClass, cardClass, inputClass, labelClass } from './styles.js';

@@ -3,9 +3,11 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckIcon, CircleCheckIcon, CopyIcon, KeyRoundIcon } from 'lucide-react';
-import { Button } from './button.js';
+import { Button } from './ui/button.js';
+import { Checkbox, Switch } from './ui/checkbox.js';
+import { Input } from './ui/input.js';
 import { useAdmin } from './context.js';
-import { cardClass, inputClass, labelClass } from './styles.js';
+import { cardClass, labelClass } from './styles.js';
 
 type Scope = 'read' | 'draft' | 'publish' | 'delete';
 type Token = { id?: string; name: string; scopes: Scope[]; collections: string[] | null; createdAt?: string; lastUsedAt?: string | null };
@@ -49,7 +51,7 @@ export function AgentAccess({
   content: { key: string; label: string }[];
   mcpUrl: string;
 }) {
-  const { post, confirm, alert } = useAdmin();
+  const { post, confirm, alert, toast } = useAdmin();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState('');
@@ -96,6 +98,7 @@ export function AgentAccess({
     startTransition(async () => {
       const r = await post<{ ok: boolean; message?: string }>('tokens/revoke', { id: t.id });
       if (!r.ok) await alert({ title: 'Revoke failed', description: r.message ?? 'Something went wrong.' });
+      else toast({ title: `Token “${t.name}” revoked`, tone: 'success' });
       router.refresh();
     });
   };
@@ -148,13 +151,12 @@ export function AgentAccess({
           <label htmlFor="token-name" className={labelClass}>
             Name
           </label>
-          <input
+          <Input
             id="token-name"
-            className={inputClass}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={setName}
             placeholder="e.g. claude-newton"
-            aria-invalid={!!errors.name}
+            invalid={!!errors.name}
             aria-describedby={errors.name ? 'token-name-error' : undefined}
           />
           {errors.name && (
@@ -166,26 +168,26 @@ export function AgentAccess({
         <fieldset className="flex flex-col gap-2">
           <legend className={`${labelClass} mb-1.5`}>Scopes</legend>
           {SCOPES.map(({ scope, hint }) => (
-            <label key={scope} className="flex items-start gap-2 text-sm">
-              <input type="checkbox" className="mt-0.5" checked={scopes.includes(scope)} onChange={() => setScopes(toggle(scopes, scope))} />
-              <span>
-                <code>{scope}</code> <span className="text-mnml-text-soft">{hint}</span>
-              </span>
-            </label>
+            <Checkbox
+              key={scope}
+              checked={scopes.includes(scope)}
+              onChange={() => setScopes(toggle(scopes, scope))}
+              label={
+                <>
+                  <code>{scope}</code> <span className="text-mnml-text-soft">{hint}</span>
+                </>
+              }
+            />
           ))}
           {errors.scopes && <p className="text-xs text-mnml-danger">{errors.scopes}</p>}
         </fieldset>
         <fieldset className="flex flex-col gap-2">
           <legend className={`${labelClass} mb-1.5`}>Content</legend>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={all} onChange={() => setAll(!all)} /> All content
-          </label>
+          <Switch checked={all} onChange={setAll} label="All content" />
           {!all && (
             <div className="flex flex-wrap gap-x-4 gap-y-2 pl-6">
               {content.map((c) => (
-                <label key={c.key} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={picked.includes(c.key)} onChange={() => setPicked(toggle(picked, c.key))} /> {c.label}
-                </label>
+                <Checkbox key={c.key} checked={picked.includes(c.key)} onChange={() => setPicked(toggle(picked, c.key))} label={c.label} />
               ))}
             </div>
           )}

@@ -68,6 +68,48 @@
 }
 
 @layer components {
+  /* Native inputs (inputClass): the same look in every browser, and pickers that follow light or dark. */
+  .mnml-input {
+    color-scheme: light;
+  }
+  :where(.dark) .mnml-input {
+    color-scheme: dark;
+  }
+  /* Number: no spinners (arrow keys still step), as Firefox otherwise always shows them. */
+  .mnml-input[type='number'] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  .mnml-input::-webkit-inner-spin-button,
+  .mnml-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  /* Date and datetime: one line height everywhere (Safari's is taller), a quiet calendar icon. */
+  .mnml-input[type='date'],
+  .mnml-input[type='datetime-local'] {
+    min-height: 2rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .mnml-input::-webkit-date-and-time-value {
+    min-height: 1.25rem;
+    text-align: left;
+  }
+  .mnml-input::-webkit-datetime-edit {
+    padding: 0;
+  }
+  .mnml-input::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+  .mnml-input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+    margin-left: 0.5rem;
+  }
+  .mnml-input::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+  }
+
   /* Hover state layer for list items and nav links. */
   .mnml-state:hover {
     background-color: color-mix(in srgb, currentColor 8%, transparent);

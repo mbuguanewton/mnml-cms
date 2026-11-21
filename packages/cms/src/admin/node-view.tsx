@@ -4,6 +4,7 @@ import type { Extensions } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { PencilIcon } from 'lucide-react';
 import { useRef } from 'react';
+import { Tooltip } from './ui/tooltip.js';
 import type { EditorTool, NodeFormConfig } from '../editor.js';
 import { useAdmin } from './context.js';
 import { useForm } from './form-context.js';
@@ -43,16 +44,17 @@ function NodeFormView({ node, updateAttributes, selected, config }: NodeViewProp
       </span>
       <span className="shrink-0 font-medium">{config.label}</span>
       {preview && <span className="min-w-0 truncate text-mnml-text-mute">{preview}</span>}
-      <button
-        type="button"
-        aria-label={`Edit ${config.label}`}
-        title="Edit"
-        onClick={() => void edit()}
-        onDoubleClick={(e) => e.stopPropagation()}
-        className="mnml-state ml-1 flex size-6 shrink-0 items-center justify-center rounded-[6px] text-mnml-text-soft"
-      >
-        <PencilIcon />
-      </button>
+      <Tooltip content="Edit">
+        <button
+          type="button"
+          aria-label={`Edit ${config.label}`}
+          onClick={() => void edit()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          className="mnml-state ml-1 flex size-6 shrink-0 items-center justify-center rounded-[6px] text-mnml-text-soft"
+        >
+          <PencilIcon />
+        </button>
+      </Tooltip>
     </NodeViewWrapper>
   );
 }

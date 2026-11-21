@@ -1,8 +1,9 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from './button.js';
+import { Button } from './ui/button.js';
+import { Checkbox } from './ui/checkbox.js';
 import { useAdmin } from './context.js';
 import { inputClass, labelClass } from './styles.js';
 
@@ -15,7 +16,6 @@ export function LoginForm({ error: initialError }: { error?: string }) {
   const [error, setError] = useState<string | null>(initialError ? (redirectErrors[initialError] ?? null) : null);
   const [pending, setPending] = useState(false);
   const [show, setShow] = useState(false);
-  const showId = useId();
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -51,20 +51,7 @@ export function LoginForm({ error: initialError }: { error?: string }) {
           className={inputClass}
           style={{ height: 40 }}
         />
-        <label
-          htmlFor={showId}
-          className="text-mnml-text-soft select-none"
-          style={{ display: 'flex', width: 'fit-content', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-        >
-          <input
-            id={showId}
-            type="checkbox"
-            checked={show}
-            onChange={(e) => setShow(e.target.checked)}
-            style={{ width: 16, height: 16, accentColor: 'var(--mnml-primary)' }}
-          />
-          Show password
-        </label>
+        <Checkbox checked={show} onChange={setShow} label="Show password" className="select-none text-mnml-text-soft" />
       </div>
       {error && (
         <p
