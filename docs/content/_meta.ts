@@ -12,4 +12,6 @@ export default {
   'image-storage': 'Image storage',
   'other-orms': 'Other ORMs',
   'entry-points': 'Entry points',
+  'common-mistakes': 'Common mistakes',
+  upgrading: 'Upgrading',
 };

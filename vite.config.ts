@@ -90,7 +90,15 @@ export default defineConfig({
       // The full check: pre-push (.vite-hooks/pre-push) and GitHub CI both run `vp run ci`.
       // Build first: the example imports @n3wtou/mnml-cms from its dist, which `vp check` type-checks.
       ci: {
-        command: ['pnpm build', 'vp check --deny-warnings', 'pnpm typecheck', 'vp test run', 'pnpm --filter example build', 'pnpm --filter docs build'],
+        command: [
+          'node packages/cms/scripts/build-agent-docs.mjs --check',
+          'pnpm build',
+          'vp check --deny-warnings',
+          'pnpm typecheck',
+          'vp test run',
+          'pnpm --filter example build',
+          'pnpm --filter docs build',
+        ],
         cache: false,
       },
     },
@@ -116,6 +124,7 @@ export default defineConfig({
       '*.css',
       '.playwright',
       'docs/public/_pagefind',
+      'packages/cms/src/server/docs-index.ts',
     ],
   },
 });

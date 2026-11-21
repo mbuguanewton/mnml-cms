@@ -1,0 +1,1434 @@
+# mnml-cms
+
+> A small schema-driven CMS that lives inside your Next.js site.
+
+<!-- https://mnml-cms.vercel.app/index.md -->
+
+# mnml-cms
+
+A small CMS that lives inside your Next.js site.
+
+- **One config file** defines your content.
+- **The admin** is a route in your app (`/admin`).
+- **Entries** live in your Postgres, one JSON table. No migrations when the model changes.
+
+- **AI agents** edit content through the built-in MCP server. Drafts only; an editor approves deletes. ([Agents](https://mnml-cms.vercel.app/agents.md))
+- **Docs for agents:** every page is Markdown at its URL plus `.md`, and the MCP `docs` tool links to them. ([Help your AI agent](https://mnml-cms.vercel.app/getting-started.md#help-your-ai-agent))
+
+Needs Next 16+ (App Router), React 19+ and Tailwind v4.
+
+Start: [Getting started](https://mnml-cms.vercel.app/getting-started.md). Full app: [`example/`](https://github.com/mbuguanewton/mnml-cms/tree/main/example).
+
+---
+
+<!-- https://mnml-cms.vercel.app/getting-started.md -->
+
+# Getting started
+
+## Install
+
+```sh
+pnpm add @n3wtou/mnml-cms drizzle-orm
+```
+
+## Environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Postgres connection string |
+| `ADMIN_PASSWORD` | The shared admin password |
+| `ADMIN_SESSION_SECRET` | Signs the session cookie. 32+ random characters. |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token, for image uploads only ([Image storage](https://mnml-cms.vercel.app/image-storage.md)) |
+
+## 1. Define your content
+
+Plain data, safe to import anywhere.
+
+```ts filename="mnml.config.ts"
+import { collection, config, fields, singleton } from '@n3wtou/mnml-cms';
+
+export default config({
+  settings: singleton({ label: 'Settings', preview: '/', fields: { name: fields.text('Name', { required: true }) } }),
+  posts: collection({
+    label: 'Posts',
+    titleField: 'title',
+    basePath: '/blog', // served at /blog/<slug>
+    preview: true, // live preview next to the editor
+    fields: {
+      title: fields.text('Title', { required: true }),
+      date: fields.date('Date'),
+      content: fields.richtext('Content'),
+    },
+  }),
+});
+```
+
+## 2. Create the CMS
+
+Server only.
+
+```ts filename="src/mnml.ts"
+import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next';
+import config from '../mnml.config';
+
+export const cms = createCms(config, {
+  database: neonDatabase(process.env.DATABASE_URL), // or any Drizzle Postgres database
+  auth: { password: process.env.ADMIN_PASSWORD, secret: process.env.ADMIN_SESSION_SECRET },
+  media: vercelBlobMedia(), // optional
+});
+```
+
+## 3. Mount the admin
+
+```ts filename="app/admin/[[...path]]/page.tsx"
+import { cms } from '@/mnml';
+export default cms.AdminPage;
+```
+
+```ts filename="app/api/mnml/[...route]/route.ts"
+import { cms } from '@/mnml';
+export const { GET, POST } = cms.handlers;
+```
+
+```ts filename="proxy.ts"
+import { adminProxy } from '@n3wtou/mnml-cms/proxy';
+export const proxy = adminProxy({ secret: process.env.ADMIN_SESSION_SECRET });
+export const config = { matcher: ['/admin', '/admin/:path*'] };
+```
+
+Put the site's header and footer in a route group layout (e.g. `app/(site)/layout.tsx`) to keep them out of the admin.
+
+## 4. Add the styles
+
+In your global CSS:
+
+```css
+@import "@n3wtou/mnml-cms/styles.css";
+```
+
+Restyle the admin by overriding `--mnml-*` variables (see `styles.css`).
+
+## 5. Create the table
+
+Point drizzle-kit at the package's schema:
+
+```ts filename="drizzle.config.ts"
+export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3wtou/mnml-cms/dist/server/db.js', dbCredentials: { url: process.env.DATABASE_URL! } });
+```
+
+Run `drizzle-kit push`. Scripts import the same table from `@n3wtou/mnml-cms/schema`.
+
+## Help your AI agent
+
+Add to your `AGENTS.md` or `CLAUDE.md`:
+
+```md
+Read node_modules/@n3wtou/mnml-cms/AGENTS.md before changing anything that uses mnml-cms.
+```
+
+- Every docs page is Markdown at its URL plus `.md`, e.g. [/agents.md](https://mnml-cms.vercel.app/agents.md). Index: [llms.txt](https://mnml-cms.vercel.app/llms.txt). Everything: [llms-full.txt](https://mnml-cms.vercel.app/llms-full.txt).
+- With the [MCP server](https://mnml-cms.vercel.app/agents.md) on, the `docs` tool hands agents the right `.md` links.
+
+---
+
+<!-- https://mnml-cms.vercel.app/fields.md -->
+
+# Field types
+
+Every field takes `{ required, help }`.
+
+| Field | Value |
+| --- | --- |
+| `text`, `textarea` | `string` |
+| `date` (`YYYY-MM-DD`), `url` | `string \| null` |
+| `datetime` | `string \| null`, UTC (`2026-11-18T14:30:00.000Z`). Edited in local time. |
+| `number(label, { min, max, step })` | `number \| null` |
+| `boolean` | `boolean`, default `false` |
+| `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null`. Options can have [labels](https://mnml-cms.vercel.app/fields/select-labels.md). |
+| `reference(label, 'authors')` | `string \| null`: a published entry's slug. Read with `cms.getEntry`. |
+| `references(label, 'posts', { min, max })` | `string[]`: published slugs, in order. Read with `cms.getEntries`. |
+| `image` | `{ url, alt, focalX?, focalY? } \| null`. [Focal point](https://mnml-cms.vercel.app/fields/focal-point.md) optional. |
+| `richtext` | Tiptap JSON. Render with `<RichText>`. |
+| `tags` | `string[]` |
+| `array(label, fields, { itemLabel, min, max })` | Repeatable list of `fields` |
+| `group(label, fields)` | Nested object, one form section: `page.hero.headline` |
+| `blocks(label, { hero: block('Hero', fields), … }, { itemLabel, min, max })` | Sections of different [blocks](https://mnml-cms.vercel.app/fields/blocks.md): `{ kind: 'hero', …fields }[]` |
+| `seo(label?)` | `group` of `title`, `description`, `image` ([SEO](https://mnml-cms.vercel.app/fields/seo.md)) |
+
+## Picking entries
+
+`reference` and `references` use a search box: filter by title or slug, pick with ↓/↑ + Enter or a click.
+
+- `reference`: shows the pick, with a clear (×) button.
+- `references`: shows the picks. Reorder, remove, add up to `max`.
+
+```ts
+related: fields.references('Related posts', 'posts', { max: 3 }),
+authors: fields.references('Authors', 'authors', { required: true }),
+```
+
+`references` validation:
+
+- Slugs trimmed. Blanks and repeats dropped.
+- Then `min` / `max`. `required` = at least one.
+- An entry unpublished later stays, marked "(unavailable)". Readers skip it.
+
+## Groups become tabs
+
+Groups add tabs above the form: **All fields**, **General** (fields outside groups), one per group.
+
+A page with fixed sections: one singleton, a group per section. Editors add pages: a collection.
+
+---
+
+<!-- https://mnml-cms.vercel.app/fields/limits.md -->
+
+# Limits
+
+`array`, `blocks`, `references` take `min` / `max` item counts.
+
+```ts
+links: fields.array('Links', { label: fields.text('Label'), url: fields.url('URL') }, { max: 4 }),
+sections: fields.blocks('Sections', { hero, text }, { min: 1 }),
+```
+
+- `required` = at least one.
+- Out of range: save fails with a field error ("Add at least 1 item"); autosave pauses.
+- At `max`, Add is disabled with a reason.
+- Fields hidden by `showIf` aren't checked.
+
+---
+
+<!-- https://mnml-cms.vercel.app/fields/blocks.md -->
+
+# Blocks
+
+`blocks`: a page of different kinds of sections, each kind with its own fields.
+
+```ts
+sections: fields.blocks('Sections', {
+  hero: block('Hero', { title: fields.text('Title'), image: fields.image('Image') }),
+  posts: block('Posts', { count: fields.number('How many') }),
+  divider: block('Divider', {}),
+}),
+```
+
+## In the admin
+
+- "Add section" opens the block list (search box above eight blocks).
+- Editors see only the picked block's fields.
+- `block(label, fields, { description })`: one-line hint in the list.
+- `fields.blocks(…, { addLabel })`: renames the button.
+
+## Reading
+
+Each item stores its block key as `kind`. Check it to narrow the type: after `section.kind === 'hero'`, `section.image` is typed.
+
+- `kind` is reserved: no block field may be named `kind`.
+- A `kind` no longer in the config is dropped on read, and gone from the entry on its next save.
+
+---
+
+<!-- https://mnml-cms.vercel.app/fields/select-labels.md -->
+
+# Select labels
+
+An option is a value, or a value with a label (shown in the admin). Mix freely.
+
+```ts
+category: fields.select('Category', ['news', { value: 'guide', label: 'How-to guide' }] as const), // 'news' | 'guide' | null
+```
+
+- Types come from the values.
+- Entries, `default`, `showIf`, validation: values, not labels.
+- A repeated value throws at config load.
+
+Label on your site: `selectLabel` with the field from your config:
+
+```ts
+selectLabel(config.posts.fields.category, post.category);
+```
+
+---
+
+<!-- https://mnml-cms.vercel.app/fields/dates-and-times.md -->
+
+# Dates and times
+
+| Field | Stores |
+| --- | --- |
+| `date` | A day (`YYYY-MM-DD`), no time zone |
+| `datetime` | A moment in UTC, one format: `2026-11-18T14:30:00.000Z` |
+
+`datetime`:
+
+- One format, so `listEntries({ orderBy })` sorts by time.
+- Admin edits it in the editor's time zone, named under the input.
+- API values need `Z` or an offset (`2026-11-18T17:30+03:00`). Converted to UTC.
+- `showIf` can test a value or `{ empty: true }`. `gt`, `lt`… are numbers only.
+
+On your site, pick the display time zone. The server's is usually UTC.
+
+```ts
+new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/London' }).format(new Date(post.publishedAt));
+```
+
+---
+
+<!-- https://mnml-cms.vercel.app/fields/focal-point.md -->
+
+# Focal point
+
+The part of an image to keep in frame when cropped.
+
+## In the admin
+
+- **Focal point** (under the image) opens a big preview. Click the spot, or arrow keys (5%; 1% with Shift).
+- **Reset** removes it. A new upload clears it.
+
+## Stored value
+
+`focalX`, `focalY`: 0–1 from left and top, 3 decimals. Both or neither. Old images read as before.
+
+## On your site
+
+`focalPosition(image)` returns CSS `object-position`: `"30% 40%"`, or `"50% 50%"` without a point.
+
+```tsx
+import { focalPosition } from '@n3wtou/mnml-cms';
+
+<img src={post.cover.url} alt={post.cover.alt} className="aspect-[16/9] object-cover" style={{ objectPosition: focalPosition(post.cover) }} />;
+```
+
+With `next/image`:
+
+```tsx
+<Image src={post.cover.url} alt={post.cover.alt} fill className="object-cover" style={{ objectPosition: focalPosition(post.cover) }} />;
+```
+
+By hand: `object-position: ${focalX * 100}% ${focalY * 100}%`, else `50% 50%`.
+
+---
+
+<!-- https://mnml-cms.vercel.app/fields/default-values.md -->
+
+# Default values
+
+`default`: the starting value of a new entry, array item or block. A value, or a function returning one.
+
+```ts
+pageType: fields.select('Type', ['page', 'post'] as const, { default: 'page' }),
+featured: fields.boolean('Featured', { default: false }),
+date: fields.date('Date', { default: () => new Date().toISOString().slice(0, 10) }), // today
+count: fields.number('How many', { default: 3 }),
+```
+
+- **Type-checked.** A `select` default must be an option.
+- **Create only:** new collection entry, never-saved singleton, new item, new block.
+- **Never on read.** Missing stored fields read as empty.
+- **Functions run when the form opens.** Later items in that form reuse that value (functions can't go to the browser).
+
+Takes `default`: `text`, `textarea`, `number`, `boolean`, `select`, `date`, `datetime`, `url`, `reference`, `references`, `tags`. Groups: set defaults on their fields.
+
+---
+
+<!-- https://mnml-cms.vercel.app/fields/conditional-fields.md -->
+
+# Conditional fields
+
+`showIf` shows a field only while its siblings match (fields next to it in the same entry, group, array item or block).
+
+```ts
+type: fields.select('Type', ['post', 'link'] as const),
+url: fields.url('URL', { required: true, showIf: { type: 'link' } }),
+badge: fields.text('Badge', { showIf: { type: ['link', 'video'], price: { gt: 0 } } }), // every key must match
+```
+
+## Conditions
+
+| Condition | Sibling is |
+| --- | --- |
+| A value | equal |
+| A list | any of them |
+| `{ not: … }` | not the value (or none of the list) |
+| `{ gt }`, `{ gte }`, `{ lt }`, `{ lte }` | a number in range |
+| `{ empty: true \| false }` | empty, or not |
+
+- Plain data, not functions, so the admin checks them while typing.
+- Naming a non-sibling throws when the config loads.
+
+## Hidden fields
+
+- Not validated. A hidden `required` field never blocks a save.
+- Value kept. Toggle back, text still there.
+- Readers still return it. Check the same condition when rendering.
+
+---
+
+<!-- https://mnml-cms.vercel.app/fields/derived-values.md -->
+
+# Derived values
+
+Extra values computed from an entry's own fields.
+
+```ts
+import { collection, derive, readingTime } from '@n3wtou/mnml-cms';
+
+posts: collection({
+  // …
+  derived: {
+    readingTime: derive((post) => readingTime(post.content), { after: 'content' }),
+    wordy: (post) => post.title.length > 60, // a plain function works too
+  },
+}),
+```
+
+- Run on every read. Never stored.
+- Typed from the return type.
+- Work in `orderBy` and `filter`.
+- Pure functions of one entry. Can't share a field's name.
+- Shown read-only in the form. `derive(fn, { after, label })` sets the field to show after (default: end) and the label.
+- Rich text helpers: `plainText(doc)`, `readingTime(doc)`.
+
+---
+
+<!-- https://mnml-cms.vercel.app/fields/seo.md -->
+
+# SEO
+
+`fields.seo()`: a group of `title`, `description`, `image`. `seoMetadata(entry.seo, fallback)` makes Next.js `Metadata`; empties use `fallback`.
+
+```ts
+export const generateMetadata = async () => seoMetadata((await cms.getSingleton('home'))?.seo, { title: 'Home' });
+```
+
+---
+
+<!-- https://mnml-cms.vercel.app/reading-content.md -->
+
+# Reading content
+
+```tsx
+import { cms } from '@/mnml';
+import { RichText } from '@n3wtou/mnml-cms/rich-text';
+
+const settings = await cms.getSingleton('settings');
+const posts = await cms.listEntries('posts'); // [{ slug, entry, status, createdAt, updatedAt }]
+const latest = await cms.listEntries('posts', { orderBy: 'date', order: 'desc', limit: 3 });
+const post = await cms.getEntry('posts', slug);
+const related = await cms.getEntries('posts', post.related); // [{ slug, entry }]
+export const generateStaticParams = async () => (await cms.listSlugs('posts')).map((slug) => ({ slug }));
+
+<RichText content={post.content} className="prose" />
+```
+
+Every result is typed from your config.
+
+## A list page and a post page
+
+```tsx
+// app/(site)/blog/page.tsx
+const posts = await cms.listEntries('posts', { orderBy: 'date', order: 'desc', limit: 10 });
+posts.map(({ slug, entry }) => <Link key={slug} href={`/blog/${slug}`}>{entry.title}</Link>);
+```
+
+```tsx
+// app/(site)/blog/[slug]/page.tsx
+import { notFound } from 'next/navigation';
+import { RichText } from '@n3wtou/mnml-cms/rich-text';
+import { seoMetadata } from '@n3wtou/mnml-cms';
+import { cms } from '@/mnml';
+
+type Props = { params: Promise<{ slug: string }> };
+
+export async function generateMetadata({ params }: Props) {
+  const post = await cms.getEntry('posts', (await params).slug);
+  return post ? seoMetadata(post.seo, { title: post.title }) : {};
+}
+
+export default async function Page({ params }: Props) {
+  const post = await cms.getEntry('posts', (await params).slug);
+  if (!post) notFound();
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      {post.cover && <img src={post.cover.url} alt={post.cover.alt} />}
+      <RichText content={post.content} />
+    </article>
+  );
+}
+```
+
+- No `DATABASE_URL` at build? Add `export const dynamic = 'force-dynamic'` to pages reading the CMS.
+- `listSlugs` in `generateStaticParams` returns published slugs only. Previewing a draft needs a dynamic route.
+
+## `listEntries` options
+
+| Option | Value |
+| --- | --- |
+| `orderBy` | Field, derived value, `'slug'`, `'createdAt'`, `'updatedAt'`. Default `'slug'`. Empties last. |
+| `order` | `'asc'` or `'desc'` |
+| `filter` | `(entry) => boolean` |
+| `limit`, `offset` | Numbers |
+
+Items have `createdAt` / `updatedAt` (`Date`; `null` for a never-saved draft in preview).
+
+## `getEntries`
+
+`getEntries(collection, slugs)`: several entries, one query. For `references` fields. Published only, in `slugs` order. Skips missing, unpublished and repeated slugs.
+
+## Live preview
+
+Render `<cms.PreviewBanner />` in your site layout. Only previewing editors see it; pages stay static for everyone else.
+
+Saving revalidates the whole site (`revalidatePath('/', 'layout')`). Change it with `revalidate`.
+
+---
+
+<!-- https://mnml-cms.vercel.app/drafts-and-publishing.md -->
+
+# Drafts and publishing
+
+A collection entry is draft or published. The admin's dot:
+
+- **Green:** published
+- **Grey:** draft
+- **Orange over green:** published, with unpublished changes
+
+## Autosave
+
+Edits to an existing entry save ~1.5 s after typing stops ("Saving…", then "Saved"). No save button for drafts.
+
+| Action | Does |
+| --- | --- |
+| **Publish** | Draft becomes live. |
+| **Discard changes** (⋮) | Drops unpublished changes, back to live. |
+| **Unpublish** (⋮) | Takes it off the site. Content becomes a draft. |
+
+A new entry: **Create draft** stores it, **Publish** puts it live. Autosaves after that.
+
+### Only valid data is saved
+
+- Invalid or empty required field: header says "Not saved: \<field\>: \<problem\>".
+- Unsaved edits live in the browser only. Leaving warns first.
+- So Publish never fails on a stored draft.
+
+### Someone else edited it
+
+Changed since you opened it? Autosave stops and asks you to reload. Never overwrites.
+
+## On your site
+
+Public readers (`listEntries`, `getEntry`, `getEntries`, `listSlugs`) return published entries only. A draft is a 404.
+
+Editors see their draft in live preview, and anywhere on the site while Draft Mode is on for that entry (until "Exit preview").
+
+## Singletons
+
+Live by default: Save publishes. `drafts: true` gives autosave, Publish and Discard changes.
+
+```ts
+settings: singleton({ label: 'Settings', drafts: true, fields: { /* … */ } }),
+```
+
+---
+
+<!-- https://mnml-cms.vercel.app/moving-content.md -->
+
+# Moving content between databases
+
+Seed prod from dev, or pull prod back into dev. `@n3wtou/mnml-cms/sync` exports content to JSON, compares a file with a database, and writes the difference. It runs in a plain script, no Next.js.
+
+The example's `scripts/content.ts`:
+
+| Command | Does |
+| --- | --- |
+| `pnpm db:export` | `DATABASE_URL` to `mnml-content.json` |
+| `pnpm db:import mnml-content.json --mode add` | Dry run: file into `DATABASE_URL` |
+| `pnpm db:sync --from DATABASE_URL --to PROD_DATABASE_URL --mode add --apply --yes` | One database into another |
+| `pnpm db:sync --from-env-file .env.local --to-env-file .env.production --mode add --apply --yes` | Same, URLs read from files |
+
+## Choosing the databases
+
+- `--env`, `--from`, `--to`: name an env var holding a database URL. URLs stay out of shell history.
+- `--env-file`, `--from-env-file`, `--to-env-file`: read the var from a file. Default var `DATABASE_URL`. The file is only read, never loaded into the env.
+- A `BLOB_READ_WRITE_TOKEN` in the target's file powers the missing-image check.
+
+## Modes
+
+| `--mode` | Does |
+| --- | --- |
+| `add` | Adds missing entries. Leaves existing ones. |
+| `overwrite` | Also replaces entries that differ. |
+| `replace` | Target matches the file. Deletes entries not in it. |
+
+## Safety
+
+- Dry run until `--apply`.
+- A database not on localhost also needs `--yes`.
+- Target content is backed up to `.mnml-backups/` first. Undo: `db:import <backup> --mode replace`.
+- Entries are checked against your config. Any misfit: nothing is written.
+- Source and target can't be the same.
+- Running twice is safe.
+- Not atomic (Neon HTTP has no transactions). Stopped halfway? Run again.
+
+## What moves
+
+| Moves | Doesn't |
+| --- | --- |
+| Collections and singletons in the config | Sign-in state |
+| Their autosaved drafts | Preview copies |
+| | **Uploaded images** |
+
+- The script lists images the target's storage lacks. Copy those files yourself.
+- `createdAt` / `updatedAt` are set when written.
+
+## In your own scripts
+
+Exported: `exportContent`, `planImport`, `applyImport`, `describePlan`, `missingMedia`. Connect with `drizzleStorage` or `neonDatabase`.
+
+## Markdown content
+
+`markdownToRichText` turns Markdown (a blog export, another CMS) into Tiptap JSON for a `richtext` field.
+
+```ts
+import { markdownToRichText, richTextToMarkdown } from '@n3wtou/mnml-cms/sync';
+
+const content = markdownToRichText(post.body); // throws on tables and raw HTML
+const { markdown, lossy } = richTextToMarkdown(entry.content); // lossy: some nodes became <!-- mnml:<type> -->
+```
+
+## Rehosting images
+
+Images from another CMS live on its CDN (e.g. `cdn.sanity.io`). `mediaImporter` copies them into this site's storage and returns the URL for an `image` field.
+
+```ts
+import { mediaImporter, vercelBlobMedia } from '@n3wtou/mnml-cms/sync';
+
+const importImage = mediaImporter(vercelBlobMedia()); // pass `apiPath` if it isn't /api/mnml
+const { url } = await importImage('https://cdn.sanity.io/images/…/photo.jpg');
+await storage.upsert('posts', slug, { …post, cover: { url, alt } }, 'published');
+```
+
+- Use the site's storage.
+- Each source URL is stored once (file named after its hash). Later runs find it via `list()` and skip the download. Both built-in storages have `list()`; without it, repeats are only skipped within one importer.
+- Accepts `https://` JPEG, PNG, WebP, GIF, AVIF up to 4 MB (`maxBytes` to raise). Else throws with the reason.
+- `importRemoteMedia(url, storage)`: one image. Use one `mediaImporter` per run.
+- Example script: `pnpm media:import <url…>`.
+
+---
+
+<!-- https://mnml-cms.vercel.app/editor.md -->
+
+# Extending the editor
+
+Add Tiptap extensions and toolbar buttons.
+
+The editor (browser) and `<RichText>` (server) need the same extensions. So the config is a plain module both import (no `'use client'`):
+
+```ts filename="src/mnml-editor.ts"
+import { defineEditor, tools } from '@n3wtou/mnml-cms/editor';
+
+export const editor = defineEditor({
+  extensions: [], // added to the defaults (StarterKit + Image)
+  tools: [tools.underline, tools.strike, tools.horizontalRule],
+});
+```
+
+A client file wraps it for the admin:
+
+```tsx filename="src/mnml-editor-client.tsx"
+'use client';
+import { editorProvider } from '@n3wtou/mnml-cms/admin';
+import { editor } from './mnml-editor';
+export const Editor = editorProvider(editor);
+```
+
+Then pass `editor: Editor` to `createCms`, and `editor={editor}` to every `<RichText>`:
+
+```tsx
+<RichText content={post.content} editor={editor} />
+```
+
+One config for every rich text field. Not per field: extensions can't travel in the schema sent to the admin.
+
+## Ready-made tools
+
+`tools.underline`, `tools.strike`, `tools.horizontalRule`: buttons for StarterKit features. No extension needed.
+
+## Your own tools
+
+A tool is an object:
+
+```ts
+type EditorTool = {
+  name: string;
+  label: string;
+  icon: ReactNode;
+  run: (editor: Editor, admin: ToolContext) => void;
+  isActive?: (editor: Editor) => boolean;
+  disabled?: (editor: Editor) => boolean;
+  visible?: (editor: Editor) => boolean;
+  context?: string;
+  builtIn?: boolean;
+  group?: 'format' | 'block' | 'insert';
+};
+```
+
+| Property | Does |
+| --- | --- |
+| `name` | Unique. React key. |
+| `label` | Tooltip, accessible name |
+| `run` | On click. `admin` has `form()`, `confirm()`, `alert()` ([Nodes with a form](https://mnml-cms.vercel.app/editor/nodes-with-a-form.md)). |
+| `isActive` | Shows pressed |
+| `disabled` | Disables |
+| `visible` | Shown only when true |
+| `context` | A node name: the tool shows in a mini toolbar above that node while the cursor is in it. |
+| `builtIn` | Set on the package's tools |
+| `group` | Toolbar group. None: own group at the end. |
+
+`run`, `isActive`, `disabled`, `visible` get the live Tiptap editor.
+
+## Toolbar groups
+
+In order: undo/redo, text style menu (paragraph, headings, quote), `format` (bold, italic, code), `block` (lists), `insert` (link, image).
+
+- `tools.underline`, `tools.strike`: `format`. `tools.horizontalRule`: `insert`.
+- In each group, package tools (`tools.underline`, `tables.tools`…) first, then yours in listed order.
+
+## Example: code blocks with syntax highlighting
+
+Swap StarterKit's plain code block for [`CodeBlockLowlight`](https://tiptap.dev/docs/editor/extensions/nodes/code-block-lowlight) and add a button. To replace or remove a default extension, pass a function: it gets the defaults and returns the full list.
+
+```tsx filename="src/mnml-editor.tsx"
+import { defineEditor } from '@n3wtou/mnml-cms/editor';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { common, createLowlight } from 'lowlight';
+import { SquareCodeIcon } from 'lucide-react';
+
+export const editor = defineEditor({
+  extensions: (defaults) => [
+    ...defaults.map((ext) => (ext.name === 'starterKit' ? ext.configure({ codeBlock: false }) : ext)),
+    CodeBlockLowlight.configure({ lowlight: createLowlight(common) }),
+  ],
+  tools: [
+    {
+      name: 'codeBlock',
+      label: 'Code block',
+      group: 'block',
+      icon: <SquareCodeIcon />,
+      isActive: (e) => e.isActive('codeBlock'),
+      run: (e) => e.chain().focus().toggleCodeBlock().run(),
+    },
+  ],
+});
+```
+
+Highlighting shows in the editor only. `<RichText>` renders `<pre><code class="language-…">`: highlight it on the site yourself, or leave it plain.
+
+---
+
+<!-- https://mnml-cms.vercel.app/editor/tables.md -->
+
+# Tables
+
+Own entry point, so sites without tables skip the code. Spread its extensions and tools into the editor config:
+
+```tsx filename="src/mnml-editor.tsx"
+import { defineEditor } from '@n3wtou/mnml-cms/editor';
+import { tables } from '@n3wtou/mnml-cms/table';
+
+export const editor = defineEditor({
+  extensions: [...tables.extensions],
+  tools: [...tables.tools],
+});
+```
+
+## In the editor
+
+- **Insert table**: 3×3 with a header row. Before your own insert buttons.
+- Cursor in a table: a mini toolbar above its right end. Add/delete row or column (at the cursor's cell), toggle header row, delete table. Hides when the cursor leaves.
+
+## On your site
+
+`<RichText editor={editor}>` renders a plain `<table>` (`<th>`, `<td>`, no widths). Style it with your prose.
+
+## Your own floating tools
+
+Give a tool `context: 'callout'`: it shows in the same mini toolbar above the nearest `callout` node while the cursor is inside.
+
+---
+
+<!-- https://mnml-cms.vercel.app/editor/nodes-with-a-form.md -->
+
+# Nodes with a form
+
+Some nodes need values: an embed's URL, a callout's tone. `tools.node()` makes a button that opens a form in a dialog, validates it like an entry, and inserts the node.
+
+In the editor, the node is a card with a one-line preview. Double-click or press Edit to change it.
+
+## 1. Define the node
+
+Once, with its form fields, in a plain module the editor config and the site both import. `nodeAttributes(fields)` gives one attribute per field: starts empty, kept in HTML as `data-<name>`.
+
+```ts filename="src/youtube.ts"
+import { Node } from '@tiptap/core';
+import { fields } from '@n3wtou/mnml-cms';
+import { nodeAttributes } from '@n3wtou/mnml-cms/editor';
+
+export const youtubeFields = {
+  url: fields.url('YouTube URL', { required: true }),
+  title: fields.text('Title'),
+};
+
+export const YouTube = Node.create({
+  name: 'youtube',
+  group: 'block',
+  atom: true, // a form node has no editable content of its own
+  addAttributes: () => nodeAttributes(youtubeFields),
+  parseHTML: () => [{ tag: 'div[data-youtube]' }],
+  renderHTML: ({ HTMLAttributes }) => ['div', { 'data-youtube': '', ...HTMLAttributes }],
+});
+```
+
+## 2. Add the button
+
+```tsx filename="src/mnml-editor.tsx"
+export const editor = defineEditor({
+  extensions: [YouTube],
+  tools: [
+    tools.node({
+      name: 'youtube',
+      label: 'YouTube video',
+      icon: <CirclePlayIcon />,
+      group: 'insert',
+      fields: youtubeFields,
+      preview: (attrs) => attrs.url ?? '',
+    }),
+  ],
+  components: { youtube: YouTubeEmbed },
+});
+```
+
+- `name`: the node's name.
+- `preview`: optional, the card's line.
+- `components`: how `<RichText>` renders it on the site ([Custom node rendering](https://mnml-cms.vercel.app/editor/custom-rendering.md)).
+
+## Form fields
+
+- Allowed: `text`, `textarea`, `url`, `number`, `boolean`, `select`, `date`, `reference` (the slug). Values that fit node attributes.
+- `required`, `help`, `showIf` work as in entries.
+
+## Dialogs in any tool
+
+`run` gets the editor and the dialogs `form`, `confirm`, `alert`. Any tool can use them.
+
+```ts
+run: async (editor, { form, confirm, alert }) => {
+  const values = await form({ title: 'Callout', fields: calloutFields, submitLabel: 'Insert' }); // null if cancelled
+  if (values) editor.chain().focus().insertContent({ type: 'callout', attrs: values }).run();
+};
+```
+
+---
+
+<!-- https://mnml-cms.vercel.app/editor/linking-entries.md -->
+
+# Linking entries from rich text
+
+Link another entry from rich text, e.g. a card for another post.
+
+- `tools.reference()`: a button that picks a published entry and inserts `{ type: name, attrs: { collection, slug } }`.
+- `referenceNode({ name })`: a ready-made node for it.
+- Editor shows a card with the entry's title. Double-click to pick another.
+
+```tsx filename="src/mnml-editor.tsx"
+import { defineEditor, referenceNode, tools } from '@n3wtou/mnml-cms/editor';
+
+export const editor = defineEditor({
+  extensions: [referenceNode({ name: 'blockLink' })],
+  tools: [tools.reference({ name: 'blockLink', label: 'Link a post', icon: <FileSymlinkIcon />, collection: 'posts', group: 'insert' })],
+});
+```
+
+## On your site
+
+The node stores only the slug: your site loads the entries. `collectReferences(doc)` returns every link in the doc as `{ collection, slugs }[]`, repeats removed. Load them in one go, then render with a component:
+
+```tsx
+import { collectReferences, RichText } from '@n3wtou/mnml-cms/rich-text';
+
+const slugs = collectReferences(post.content, ['blockLink']).find((r) => r.collection === 'posts')?.slugs ?? [];
+const linked = new Map((await cms.getEntries('posts', slugs)).map((p) => [p.slug, p.entry]));
+
+<RichText
+  content={post.content}
+  editor={editor}
+  components={{ blockLink: ({ attrs }) => <PostCard slug={String(attrs.slug)} post={linked.get(String(attrs.slug))} /> }}
+/>;
+```
+
+- A linked entry can disappear later (unpublished, deleted). Handle a missing one; the example renders nothing.
+- Node forms (`tools.node`) can use a `reference` field too. It offers published entries.
+
+---
+
+<!-- https://mnml-cms.vercel.app/editor/custom-rendering.md -->
+
+# Custom node rendering
+
+`<RichText>` renders nodes with their extension's `renderHTML`. To use your own React component (an embed, highlighted code, a callout, an entry card), map the node's name to it.
+
+The component gets `node` (Tiptap JSON), `attrs`, and `children` (rendered content; none for leaf nodes like images).
+
+```tsx filename="src/components/code-block.tsx"
+import type { RichTextNodeProps } from '@n3wtou/mnml-cms/editor';
+
+export function CodeBlock({ attrs, children }: RichTextNodeProps) {
+  return (
+    <figure>
+      <figcaption>{String(attrs.language ?? '')}</figcaption>
+      <pre><code>{children}</code></pre>
+    </figure>
+  );
+}
+```
+
+## For every `<RichText>`
+
+In the editor config. Keys are node names: `codeBlock`, `image`, `blockquote`, yours…
+
+```ts filename="src/mnml-editor.ts"
+export const editor = defineEditor({
+  components: { codeBlock: CodeBlock },
+});
+```
+
+The admin loads this config in the browser, so these components ship to the client. Keep them plain.
+
+## For one `<RichText>`
+
+Pass `components`. Merged over the editor config's; wins for the same node.
+
+```tsx
+<RichText content={post.content} editor={editor} components={{ blockLink: PostCard }} />
+```
+
+Async server components go here, e.g. a card fetching the linked entry.
+
+## Good to know
+
+- Nodes without a component render as usual.
+- Components for unknown nodes are ignored.
+
+---
+
+<!-- https://mnml-cms.vercel.app/agents.md -->
+
+# Agents (MCP)
+
+Let AI agents (Claude Code, Cursor, Zed) edit your content. The CMS has a built-in MCP server. Agents use the same checks as the admin.
+
+- Agents write drafts. Nothing goes live until `publish`.
+- Agents can't delete or discard alone. An editor approves in the admin.
+- Each agent has its own token. The token's scopes decide what it can do.
+
+## Set up
+
+1. Make a token (32+ random characters):
+
+   ```sh
+   openssl rand -hex 32
+   ```
+
+2. Put it in your env: `.env.local` locally, your host's settings in production.
+
+   ```sh
+   MNML_AGENT_TOKEN=…
+   ```
+
+3. Turn on the server:
+
+   ```ts
+   export const cms = createCms(config, {
+     // …
+     mcp: {
+       tokens: [{ name: 'claude', token: process.env.MNML_AGENT_TOKEN, scopes: ['read', 'draft'] }],
+     },
+   });
+   ```
+
+Done. The server lives at `<apiPath>/mcp`, e.g. `https://your-site.com/api/mnml/mcp`. Your route file (`export const { GET, POST } = cms.handlers`) already serves it.
+
+- No token set: the route is off (404).
+- Token under 32 characters: ignored, with a warning in the log.
+
+## Tokens
+
+The agent sends `Authorization: Bearer <token>`. It must match the value in your site's env exactly.
+
+| Option | What it does |
+| --- | --- |
+| `token` | The secret, e.g. `process.env.MNML_AGENT_TOKEN`. Unset: ignored. |
+| `name` | Shown as `change.by` in `onChange`, and on approval requests. Default `'agent'`. |
+| `scopes` | What the token can do. Default `['read', 'draft']`. |
+| `collections` | Only these keys, e.g. `['posts']`. Default: all. |
+
+One token per agent or person. Then each has its own scopes and name, and you can revoke one alone. To rotate, change the value on the site and in the agent.
+
+```ts
+mcp: {
+  tokens: [
+    { name: 'newton', token: process.env.MNML_TOKEN_NEWTON, scopes: ['read', 'draft', 'publish'] },
+    { name: 'blog-bot', token: process.env.MNML_TOKEN_BOT, collections: ['posts'] },
+  ],
+},
+```
+
+### Scopes
+
+| Scope | Can | Tools |
+| --- | --- | --- |
+| `read` | Read schema and entries, drafts too | `get_schema`, `list_entries`, `get_entry`, `search`, `validate_entry`, `diff_entry`, `get_preview_url` |
+| `draft` | Create entries, save drafts, import images | `create_entry`, `update_entry`, `upload_media_from_url` |
+| `publish` | Go live, go offline, ask to discard | `publish`, `unpublish`, `discard_draft` |
+| `delete` | Ask to delete | `delete_entry` |
+
+- Scopes don't include each other. List each one you want.
+- Agents only see tools they have scopes for. Others fail with the missing scope's name.
+- A singleton without `drafts: true` has no draft: saving it goes live. So `update_entry` on it needs `publish` too.
+
+## Tools
+
+| Tool | What it does |
+| --- | --- |
+| `get_schema` | All content the token can use. Each field as JSON Schema: type, required, options, limits. Call first. |
+| `list_entries` | A collection's entries: `status`, `createdAt`, `updatedAt`, `hasDraftChanges`. Filter, sort, page. |
+| `get_entry` | One entry, latest version, drafts included. Shows a waiting approval request. Rich text as JSON or Markdown. |
+| `search` | Find text in entries, rich text too. |
+| `validate_entry` | Check data, save nothing. Returns errors per field. |
+| `diff_entry` | Fields where the draft differs from live. |
+| `get_preview_url` | Link to see the draft on your site. Editors only. |
+| `create_entry` | New collection entry, as a draft. Slug comes from the title unless given. Missing fields get their default. |
+| `update_entry` | Change some fields. The rest stay. |
+| `upload_media_from_url` | Copy an https image (4 MB max) into your storage. Returns a value for an `image` field. |
+| `publish` | Make the latest version live. |
+| `unpublish` | Take an entry off the site. It becomes a draft. |
+| `discard_draft` | Ask to throw away unpublished changes. |
+| `delete_entry` | Ask to delete an entry. |
+
+- Bad data returns errors per field, same checks as the admin.
+- Unknown field names fail. They are never dropped silently.
+
+### Rich text
+
+Agents write rich text as Markdown. The server turns it into Tiptap JSON.
+
+```json
+{ "title": "Hello", "content": "## Intro\n\nSome **bold** text and a [link](https://x.com).\n\n- one\n- two" }
+```
+
+- Works: headings, **bold**, *italic*, ~~strike~~, `code`, links, lists, quotes, code blocks, images, `---`.
+- Tables and raw HTML: refused with a field error. Send Tiptap JSON (`{ "type": "doc", "content": [...] }`) for those.
+- References and your own editor nodes: Tiptap JSON only.
+- Works in nested fields too (groups, arrays, blocks).
+
+To read rich text as Markdown, pass `richText: 'markdown'` to `get_entry` or `list_entries`. It's shorter than JSON. Nodes Markdown can't show come out as `<!-- mnml:<type> -->`, and the result has `lossy: true`. Don't write that Markdown back, or those nodes are lost.
+
+## Drafts
+
+Same rules as [Drafts and publishing](https://mnml-cms.vercel.app/drafts-and-publishing.md):
+
+- `create_entry`: a draft. 404 on the site.
+- `update_entry` on a published entry: live version stays. The edit waits beside it (orange dot in the admin).
+- `publish`: live, and the site revalidates.
+
+`get_preview_url` gives `<apiPath>/preview/open?key=…&slug=…`. It opens the page in Draft Mode, only for editors signed in to the admin. Everyone else goes to login.
+
+## Approval
+
+`delete_entry` and `discard_draft` change nothing. They create a request and return `status: 'awaiting_approval'` plus `approveUrl` (the entry's admin page).
+
+- The list shows **Awaiting approval**.
+- The entry page shows the request with **Reject** and **Approve**.
+- Discard is refused if the draft changed after the request.
+- One request per entry. A new one replaces the old.
+- Publishing the draft drops a discard request.
+
+`get_entry` returns a waiting request as `awaitingApproval`.
+
+## Connect an agent
+
+Locally, use `http://localhost:3000/api/mnml/mcp`. The header must be `Authorization`, value `Bearer <token>`.
+
+### Claude Code
+
+```sh
+claude mcp add --transport http mnml https://your-site.com/api/mnml/mcp --header "Authorization: Bearer $MNML_AGENT_TOKEN"
+```
+
+Or commit `.mcp.json` so your whole team gets it. The token comes from each person's env, never from git:
+
+```json
+{
+  "mcpServers": {
+    "mnml": {
+      "type": "http",
+      "url": "https://your-site.com/api/mnml/mcp",
+      "headers": { "Authorization": "Bearer ${MNML_AGENT_TOKEN}" }
+    }
+  }
+}
+```
+
+### Zed
+
+In `settings.json`:
+
+```json
+"context_servers": {
+  "mnml": {
+    "url": "https://your-site.com/api/mnml/mcp",
+    "headers": { "Authorization": "Bearer <token>" }
+  }
+}
+```
+
+### Cursor
+
+In `~/.cursor/mcp.json`. It holds the token, so keep it out of git.
+
+```json
+{
+  "mcpServers": {
+    "mnml": {
+      "url": "https://your-site.com/api/mnml/mcp",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+### Claude connectors
+
+Not yet. Connectors in claude.ai and the Claude apps need OAuth, and the server doesn't support it yet. Use a client that can send a header.
+
+## Security
+
+- Tokens live in env vars. Never commit them.
+- Give the fewest scopes. `['read', 'draft']` can't change the live site.
+- Limit with `collections` when you can.
+- `upload_media_from_url` only fetches public https hosts. Private, loopback and link-local addresses are refused, on every redirect too.
+- Browser requests from other sites are refused, same as the admin.
+
+---
+
+<!-- https://mnml-cms.vercel.app/options.md -->
+
+# Options
+
+Second argument of `createCms(config, options)`.
+
+| Option | Purpose |
+| --- | --- |
+| `database` | Drizzle Postgres database, or a function returning one (called on first use) |
+| `table` | Table name, with `database`. Default `entries`. |
+| `storage` | Your own `EntryStorage` instead of `database` ([Other ORMs](https://mnml-cms.vercel.app/other-orms.md)) |
+| `auth` | `{ password, secret }` for the built-in login, or an `AuthAdapter` ([Authentication](https://mnml-cms.vercel.app/authentication.md)) |
+| `media` | Image storage ([Image storage](https://mnml-cms.vercel.app/image-storage.md)) |
+| `adminPath`, `apiPath` | Default `/admin`, `/api/mnml`. Must match the route files. |
+| `brand` | Sidebar title: string or (async) function |
+| `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
+| `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build with `@n3wtou/mnml-cms/admin`. |
+| `editor` | Component from `editorProvider()`: extra extensions and buttons ([Extending the editor](https://mnml-cms.vercel.app/editor.md)) |
+| `mcp` | `{ tokens }`: MCP server for AI agents at `<apiPath>/mcp` ([Agents](https://mnml-cms.vercel.app/agents.md)) |
+| `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
+| `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
+
+## In your own code
+
+- `cms.isAdmin()`: checks the session in your routes. Works with the built-in login and adapters.
+- `useAdmin()` from `@n3wtou/mnml-cms/admin` opens the admin's dialogs in custom admin pages:
+
+```ts
+const { confirm, alert } = useAdmin();
+await confirm({ title: 'Delete?', description: '…', confirmLabel: 'Delete', danger: true }); // true or false
+```
+
+---
+
+<!-- https://mnml-cms.vercel.app/authentication.md -->
+
+# Authentication
+
+## Built-in login
+
+`auth: { password, secret }`: one shared password.
+
+- 5 failed sign-ins lock the IP out for 15 minutes. Counted in the entries table, so it works on serverless.
+- Sessions last 24 h from the last visit. The proxy renews the cookie while active.
+- Changing `ADMIN_PASSWORD` or `ADMIN_SESSION_SECRET` signs everyone out. So does **Sign out everywhere** in the sidebar.
+
+## Your own login
+
+Auth.js, Better Auth, Clerk…: pass an adapter, with a `login` UI or a `loginUrl`.
+
+```tsx
+export const cms = createCms(config, {
+  // …
+  auth: {
+    isAdmin: async () => (await auth.api.getSession({ headers: await headers() }))?.user.role === 'admin',
+    login: <SignInWithSso />,
+    signOut: async () => { await auth.api.signOut({ headers: await headers() }); },
+  },
+});
+```
+
+| Field | Does |
+| --- | --- |
+| `isAdmin` | Is the visitor an admin? The admin page and every API route call it. |
+| `login` | Shown in the login card at `/admin/login`. Server or client component. |
+| `loginUrl` | Instead of `login`: signed-out visitors go to your page, e.g. `'/sign-in'` |
+| `signOut` | Optional |
+
+- Build `login` with `Button`, `inputClass` etc. from `@n3wtou/mnml-cms/admin` to match the admin.
+- Drop `adminProxy`: it only knows the built-in cookie.
+
+---
+
+<!-- https://mnml-cms.vercel.app/image-storage.md -->
+
+# Image storage
+
+Uploads go through a `MediaStorage` adapter, served at `<apiPath>/media/<key>` (so the store can be private) and cached for a year.
+
+```ts
+type MediaStorage = {
+  put(file: File, name: string): Promise<string>;
+  get(key: string): Promise<{ body: ReadableStream<Uint8Array>; contentType?: string; size?: number } | null>;
+  list?(): Promise<{ key: string; size?: number; uploadedAt?: Date }[]>;
+  delete?(key: string): Promise<void>;
+};
+```
+
+| Method | Does |
+| --- | --- |
+| `put` | Stores the file, returns a unique key |
+| `get` | Reads by key |
+| `list` | Optional. Adds the Media screen. |
+| `delete` | Optional. Adds Delete there. |
+
+## The Media screen
+
+With `list`, the admin gets a **Media** screen. Per file: size, date, the entries using it (image fields and rich text images, drafts too), an "Unused" flag, Delete (warns if still used). Both bundled adapters have it.
+
+## Adapters
+
+- `vercelBlobMedia({ prefix = 'cms/', access = 'private', token })`: serves keys under `prefix` only.
+- `localMedia({ dir = '.mnml-uploads' })`: disk. Default in `next dev` without `media`. Not for serverless. Gitignore the folder.
+- S3, R2, anything else: write your own `put` and `get`.
+
+---
+
+<!-- https://mnml-cms.vercel.app/other-orms.md -->
+
+# Other ORMs
+
+Not Drizzle? Pass `storage` instead of `database`: five plain queries. The CMS handles caching, sorting and drafts.
+
+```ts
+type EntryStorage = {
+  readRow(collection: string, slug: string): Promise<{ data: unknown; status: string } | undefined>;
+  readRows(collection: string): Promise<{ slug: string; data: unknown; status: string; createdAt: Date; updatedAt: Date }[]>;
+  upsert(collection: string, slug: string, data: unknown, status: string): Promise<void>;
+  insertIfAbsent(collection: string, slug: string, data: unknown, status: string): Promise<boolean>;
+  remove(collection: string, slug: string): Promise<void>;
+  readRowsBySlug?(collection: string, slugs: string[]): Promise<{ slug: string; data: unknown; status: string }[]>;
+};
+```
+
+| Method | Notes |
+| --- | --- |
+| `upsert` | Set `updatedAt` to now. |
+| `insertIfAbsent` | `false` if the slug exists. |
+| `readRowsBySlug` | Optional. These slugs' rows, one query, any order. Without it, `getEntries` uses `readRows`. |
+
+## The table
+
+Create it yourself, with these names.
+
+```sql
+create table entries (
+  id serial primary key,
+  collection text not null,
+  slug text not null,
+  data jsonb not null,
+  status text not null default 'published',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint entries_collection_slug unique (collection, slug)
+);
+```
+
+## Example: Prisma
+
+```prisma
+model Entry {
+  id         Int      @id @default(autoincrement())
+  collection String
+  slug       String
+  data       Json
+  status     String   @default("published")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([collection, slug], name: "entries_collection_slug")
+  @@map("entries")
+}
+```
+
+```ts
+const at = (collection: string, slug: string) => ({ entries_collection_slug: { collection, slug } });
+
+const storage: EntryStorage = {
+  async readRow(collection, slug) {
+    return (await prisma.entry.findUnique({ where: at(collection, slug), select: { data: true, status: true } })) ?? undefined;
+  },
+  readRows: (collection) =>
+    prisma.entry.findMany({ where: { collection }, select: { slug: true, data: true, status: true, createdAt: true, updatedAt: true } }),
+  async upsert(collection, slug, data, status) {
+    await prisma.entry.upsert({
+      where: at(collection, slug),
+      create: { collection, slug, data: data as object, status },
+      update: { data: data as object, status },
+    });
+  },
+  async insertIfAbsent(collection, slug, data, status) {
+    const { count } = await prisma.entry.createMany({ data: [{ collection, slug, data: data as object, status }], skipDuplicates: true });
+    return count > 0;
+  },
+  async remove(collection, slug) {
+    await prisma.entry.deleteMany({ where: { collection, slug } });
+  },
+  readRowsBySlug: (collection, slugs) =>
+    prisma.entry.findMany({ where: { collection, slug: { in: slugs } }, select: { slug: true, data: true, status: true } }),
+};
+```
+
+`drizzle-orm` is still a peer dependency: install it anyway.
+
+---
+
+<!-- https://mnml-cms.vercel.app/entry-points.md -->
+
+# Entry points
+
+| Import | Contents |
+| --- | --- |
+| `@n3wtou/mnml-cms` | Schema builders, validation, types, `seoMetadata`. Framework-free. |
+| `@n3wtou/mnml-cms/next` | `createCms` (with the MCP server, see [Agents](https://mnml-cms.vercel.app/agents.md)), `neonDatabase`, `drizzleStorage`, `vercelBlobMedia`, `localMedia` |
+| `@n3wtou/mnml-cms/proxy` | `adminProxy` |
+| `@n3wtou/mnml-cms/rich-text` | `RichText` (server renderer), `collectReferences` |
+| `@n3wtou/mnml-cms/editor` | `defineEditor`, `tools` (incl. `tools.node`, `tools.reference`), `nodeAttributes`, `referenceNode`, `collectReferences`, types `RichTextComponents`, `RichTextNodeProps`. Server-safe. |
+| `@n3wtou/mnml-cms/table` | `tables`: table extensions and buttons. Server-safe. |
+| `@n3wtou/mnml-cms/admin` | UI pieces for extra admin pages, `editorProvider` |
+| `@n3wtou/mnml-cms/sync` | Export/import, `mediaImporter`, `markdownToRichText` ([Moving content](https://mnml-cms.vercel.app/moving-content.md)). No Next.js needed. |
+| `@n3wtou/mnml-cms/db`, `@n3wtou/mnml-cms/schema` | The Drizzle table, for scripts and drizzle-kit (same export) |
+| `@n3wtou/mnml-cms/styles.css` | Admin styles and the `--mnml-*` variables |
+
+---
+
+<!-- https://mnml-cms.vercel.app/common-mistakes.md -->
+
+# Common mistakes
+
+## Imports
+
+- `@n3wtou/mnml-cms/next` is server-only. It fails in plain scripts (`tsx`). Scripts use `@n3wtou/mnml-cms/db` for the table and `@n3wtou/mnml-cms/sync` for content.
+- `mnml.config.ts` is plain data. Import it anywhere, client components too.
+
+## Values
+
+- An `image` is `{ url, alt } | null`, not a string. Use `.url`, and pass `alt` to the `<img>`.
+- Never write media URLs by hand. Upload, or use `mediaImporter` ([Moving content](https://mnml-cms.vercel.app/moving-content.md)).
+- Blank inputs are stored as `null` for `date`, `url`, `number`, `select` and `reference`. `boolean` ignores `required`.
+- A `reference` stores a slug only. Read it with `getEntry`. Nothing checks that the entry still exists.
+
+## Blocks and conditional fields
+
+- `kind` is reserved in blocks. A block can't have a field named `kind`.
+- A block removed from the config is dropped from entries on read.
+- `showIf` hides a field, it doesn't delete it. Hidden fields keep their value and skip validation. Readers still return it, so check the same condition on the page.
+
+## Drafts
+
+- Public readers return published entries only. A draft is a 404 on the site.
+- Edits to an existing entry autosave as a draft. They go live on Publish only.
+- A singleton publishes on Save, unless it has `drafts: true`.
+- Render `<cms.PreviewBanner />` in the site layout, or editors can't leave preview.
+
+## Routes and layout
+
+- `apiPath` is `/api/mnml`. Sites upgraded from before 1.0.0 with uploaded images keep `apiPath: '/api/cms'`, or those images 404.
+- Next.js 16 names the middleware file `proxy.ts`.
+- Keep the admin out of the site's header and footer: put them in a route group layout, e.g. `app/(site)/layout.tsx`.
+
+## After upgrading the package
+
+Restart the dev server (`rm -rf .next`) and your editor's TypeScript server. Stale types and hot-reload state look like real errors.
+
+---
+
+<!-- https://mnml-cms.vercel.app/upgrading.md -->
+
+# Upgrading
+
+Check the installed version first:
+
+```sh
+grep '"version"' node_modules/@n3wtou/mnml-cms/package.json
+```
+
+Upgrade one major at a time. Run the type check after each, and click through `/admin` before moving on. The [changelog](https://github.com/mbuguanewton/mnml-cms/blob/main/packages/cms/CHANGELOG.md) has every release.
+
+## Versions
+
+| Version | Adds | Breaking |
+| --- | --- | --- |
+| 0.1.0 | Initial release: singletons and collections; `text`, `textarea`, `date`, `url`, `image` (a string), `richtext`, `tags`, `array`; password login; Postgres JSON table. | |
+| 0.2.0 | `select`, `boolean`, `number`, `reference`, `group`, `seo()` and `seoMetadata()`; `derived` values (`derive`, `plainText`, `readingTime`); `listEntries(key, { orderBy, order, filter, limit, offset })`; draft/published status for collections; `storage` option (own `EntryStorage`, e.g. Prisma); Media screen; `AuthAdapter`; login lockout; image alt text. | New `status` column (run `drizzle-kit push`). Public readers hide drafts, and `listEntries` returns `status`. `image` is `{ url, alt } \| null` (stored strings still read). Sessions are 24 hours and the cookie format changed. |
+| 1.0.0 | `@n3wtou/mnml-cms/editor` (`defineEditor`, extra Tiptap extensions and toolbar tools), `editorProvider`, `<RichText editor>`; grouped toolbar; headings 1–4. | Everything `cms-*` became `mnml-*`: CSS variables (`--mnml-*`), classes, Tailwind tokens; default `apiPath` is `/api/mnml` (was `/api/cms`); upload folder `.mnml-uploads`; cookies `mnml_session` and `mnml_preview`. |
+| 1.1.0 | `fields.blocks()` and `block()`; `showIf` on any field. | |
+| 1.2.0 | Autosave drafts, Discard changes, `drafts: true` on singletons; block picker (`description`, `addLabel`); sign-in form no longer puts the password in the URL. | No "Save draft" button. Behaviour change only; no API or database change. |
+| 1.3.0 | `@n3wtou/mnml-cms/sync`: content export and import between databases. | |
+| 1.4.0 | `fields.references()` + `cms.getEntries()`; `fields.datetime()`; `default` on fields + `initialValues()`; select option labels + `selectLabel()`; `min` / `max` on `array` / `blocks` / `references`; combobox entry pickers; `<RichText components>` and `defineEditor({ components })`; `tools.node()` + `nodeAttributes()`; `tools.reference()`, `referenceNode()`, `collectReferences()`; tool `visible` / `context`; `@n3wtou/mnml-cms/table` (`tables`); `mediaImporter()` / `importRemoteMedia()` in `/sync`; image focal point (`focalX` / `focalY`) + `focalPosition()`. | No API or database change. `required` on `array` / `blocks` now means at least one item; the package's toolbar tools come before the site's own in each group. |
+| 1.4.1 | Docs moved to https://mnml-cms.vercel.app; the README covers install and setup only. | No code change. |
+| 1.5.0 | MCP server for agents (`mcp` option, scoped tokens, approval of deletes and discards, Markdown rich text); `listEntries` returns `createdAt` / `updatedAt`; `change.by`; `markdownToRichText()` / `richTextToMarkdown()` in `/sync`; MCP `docs` tool, docs pages as `.md`, `AGENTS.md` in the package. | No API or database change. |
+
+## Upgrade steps
+
+**0.1.x → 0.2.0**
+1. Add the `status` column before deploying: `drizzle-kit push` against each database. Existing rows stay published.
+2. Search the code for `image` fields used as a URL string and change them to `.url` (add `alt={…alt}`).
+3. Draft entries now 404 publicly. That's expected.
+4. Everyone signs in once.
+
+**0.2.x → 1.0.0**
+1. Rename CSS variables, classes and Tailwind tokens (`--cms-*`, `cms-prose`, `cms-root`, `cms-state`,
+   `bg-cms-*`, `text-cms-*`, `font-cms-brand`) to `mnml-*`.
+2. Either move `app/api/cms/[...route]/route.ts` to `app/api/mnml/[...route]/route.ts`, or keep
+   `apiPath: '/api/cms'` in `createCms` (required if images were uploaded before, since their URLs contain `/api/cms/media/`).
+3. Rename `.cms-uploads` to `.mnml-uploads` (and its `.gitignore` line).
+4. Headings in rich text now go 1–4: add styles for `h1` and `h4`.
+5. Editors sign in again.
+
+**1.0 → 1.x:** no breaking changes. 1.2.0 changes how editors save drafts, which is worth telling them. 1.4.0: check `required: true` on `array` / `blocks` fields, since entries with an empty list won't save until an item is added.
+
+## What a project has
+
+```sh
+grep -n "blocks:\|showIf\|select:\|number:" node_modules/@n3wtou/mnml-cms/dist/define.d.ts
+ls node_modules/@n3wtou/mnml-cms/dist/sync.js 2>/dev/null     # 1.3.0+
+ls node_modules/@n3wtou/mnml-cms/dist/table-entry.js 2>/dev/null  # 1.4.0+
+grep -rn "apiPath" src app 2>/dev/null | head                  # a kept '/api/cms'?
+```

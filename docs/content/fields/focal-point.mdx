@@ -1,23 +1,23 @@
+---
+description: "Keep the important part of an image in frame when it's cropped (focalX, focalY, focalPosition)."
+---
+
 # Focal point
 
-A focal point is the part of an image to keep in frame when it's cropped.
+The part of an image to keep in frame when cropped.
 
 ## In the admin
 
-- **Focal point**, under the image, opens a larger preview.
-- Click the spot. Or focus the preview and use the arrow keys: 5% a step, 1% with Shift.
-- **Reset** removes the point.
-- Uploading a new image clears it.
+- **Focal point** (under the image) opens a big preview. Click the spot, or arrow keys (5%; 1% with Shift).
+- **Reset** removes it. A new upload clears it.
 
 ## Stored value
 
-- `focalX` and `focalY`: 0–1 from the left and top, 3 decimals.
-- Both or neither.
-- Images saved without a point read as before.
+`focalX`, `focalY`: 0–1 from left and top, 3 decimals. Both or neither. Old images read as before.
 
 ## On your site
 
-`focalPosition(image)` returns a CSS `object-position`: `"30% 40%"`, or `"50% 50%"` when there's no point.
+`focalPosition(image)` returns CSS `object-position`: `"30% 40%"`, or `"50% 50%"` without a point.
 
 ```tsx
 import { focalPosition } from '@n3wtou/mnml-cms';
@@ -31,4 +31,4 @@ With `next/image`:
 <Image src={post.cover.url} alt={post.cover.alt} fill className="object-cover" style={{ objectPosition: focalPosition(post.cover) }} />;
 ```
 
-Without the helper: `object-position: ${focalX * 100}% ${focalY * 100}%`. With no point, use `50% 50%` (the CSS default).
+By hand: `object-position: ${focalX * 100}% ${focalY * 100}%`, else `50% 50%`.

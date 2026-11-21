@@ -1,6 +1,10 @@
+---
+description: "Read-only values computed from an entry's fields (derive, readingTime, plainText)."
+---
+
 # Derived values
 
-A singleton or collection can compute extra values from its own fields.
+Extra values computed from an entry's own fields.
 
 ```ts
 import { collection, derive, readingTime } from '@n3wtou/mnml-cms';
@@ -14,14 +18,9 @@ posts: collection({
 }),
 ```
 
-- They run on every read. They are never stored.
-- They are typed from the function's return type.
-- They work in `orderBy` and `filter`.
-- They are pure functions of one entry. They can't share a name with a field.
-
-The admin shows them read-only in the form. Wrap the function in `derive()` to set:
-
-- `after`: the field to show it after. Default: the end of the form.
-- `label`
-
-Helpers for rich text: `plainText(doc)` and `readingTime(doc)`.
+- Run on every read. Never stored.
+- Typed from the return type.
+- Work in `orderBy` and `filter`.
+- Pure functions of one entry. Can't share a field's name.
+- Shown read-only in the form. `derive(fn, { after, label })` sets the field to show after (default: end) and the label.
+- Rich text helpers: `plainText(doc)`, `readingTime(doc)`.

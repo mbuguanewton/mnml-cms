@@ -1,3 +1,7 @@
+---
+description: "Install mnml-cms in a Next.js site: the config, createCms, the admin and API routes, the proxy and the database table."
+---
+
 # Getting started
 
 ## Install
@@ -13,7 +17,7 @@ pnpm add @n3wtou/mnml-cms drizzle-orm
 | `DATABASE_URL` | Postgres connection string |
 | `ADMIN_PASSWORD` | The shared admin password |
 | `ADMIN_SESSION_SECRET` | Signs the session cookie. 32+ random characters. |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token. Only needed for image uploads ([Image storage](/image-storage)). |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token, for image uploads only ([Image storage](/image-storage)) |
 
 ## 1. Define your content
 
@@ -71,7 +75,7 @@ export const proxy = adminProxy({ secret: process.env.ADMIN_SESSION_SECRET });
 export const config = { matcher: ['/admin', '/admin/:path*'] };
 ```
 
-Put your site's header and footer in a route group layout (e.g. `app/(site)/layout.tsx`). That keeps them out of the admin.
+Put the site's header and footer in a route group layout (e.g. `app/(site)/layout.tsx`) to keep them out of the admin.
 
 ## 4. Add the styles
 
@@ -81,7 +85,7 @@ In your global CSS:
 @import "@n3wtou/mnml-cms/styles.css";
 ```
 
-To restyle the admin, override the `--mnml-*` variables (see `styles.css`).
+Restyle the admin by overriding `--mnml-*` variables (see `styles.css`).
 
 ## 5. Create the table
 
@@ -91,4 +95,15 @@ Point drizzle-kit at the package's schema:
 export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3wtou/mnml-cms/dist/server/db.js', dbCredentials: { url: process.env.DATABASE_URL! } });
 ```
 
-Then run `drizzle-kit push`. Scripts can import the same table from `@n3wtou/mnml-cms/schema`.
+Run `drizzle-kit push`. Scripts import the same table from `@n3wtou/mnml-cms/schema`.
+
+## Help your AI agent
+
+Add to your `AGENTS.md` or `CLAUDE.md`:
+
+```md
+Read node_modules/@n3wtou/mnml-cms/AGENTS.md before changing anything that uses mnml-cms.
+```
+
+- Every docs page is Markdown at its URL plus `.md`, e.g. [/agents.md](https://mnml-cms.vercel.app/agents.md). Index: [llms.txt](https://mnml-cms.vercel.app/llms.txt). Everything: [llms-full.txt](https://mnml-cms.vercel.app/llms-full.txt).
+- With the [MCP server](/agents) on, the `docs` tool hands agents the right `.md` links.

@@ -1,0 +1,82 @@
+---
+title: "Reading content"
+description: "Read content on your pages: getSingleton, listEntries, getEntry, getEntries, listSlugs, RichText and live preview."
+url: https://mnml-cms.vercel.app/reading-content
+---
+
+# Reading content
+
+```tsx
+import { cms } from '@/mnml';
+import { RichText } from '@n3wtou/mnml-cms/rich-text';
+
+const settings = await cms.getSingleton('settings');
+const posts = await cms.listEntries('posts'); // [{ slug, entry, status, createdAt, updatedAt }]
+const latest = await cms.listEntries('posts', { orderBy: 'date', order: 'desc', limit: 3 });
+const post = await cms.getEntry('posts', slug);
+const related = await cms.getEntries('posts', post.related); // [{ slug, entry }]
+export const generateStaticParams = async () => (await cms.listSlugs('posts')).map((slug) => ({ slug }));
+
+<RichText content={post.content} className="prose" />
+```
+
+Every result is typed from your config.
+
+## A list page and a post page
+
+```tsx
+// app/(site)/blog/page.tsx
+const posts = await cms.listEntries('posts', { orderBy: 'date', order: 'desc', limit: 10 });
+posts.map(({ slug, entry }) => <Link key={slug} href={`/blog/${slug}`}>{entry.title}</Link>);
+```
+
+```tsx
+// app/(site)/blog/[slug]/page.tsx
+import { notFound } from 'next/navigation';
+import { RichText } from '@n3wtou/mnml-cms/rich-text';
+import { seoMetadata } from '@n3wtou/mnml-cms';
+import { cms } from '@/mnml';
+
+type Props = { params: Promise<{ slug: string }> };
+
+export async function generateMetadata({ params }: Props) {
+  const post = await cms.getEntry('posts', (await params).slug);
+  return post ? seoMetadata(post.seo, { title: post.title }) : {};
+}
+
+export default async function Page({ params }: Props) {
+  const post = await cms.getEntry('posts', (await params).slug);
+  if (!post) notFound();
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      {post.cover && <img src={post.cover.url} alt={post.cover.alt} />}
+      <RichText content={post.content} />
+    </article>
+  );
+}
+```
+
+- No `DATABASE_URL` at build? Add `export const dynamic = 'force-dynamic'` to pages reading the CMS.
+- `listSlugs` in `generateStaticParams` returns published slugs only. Previewing a draft needs a dynamic route.
+
+## `listEntries` options
+
+| Option | Value |
+| --- | --- |
+| `orderBy` | Field, derived value, `'slug'`, `'createdAt'`, `'updatedAt'`. Default `'slug'`. Empties last. |
+| `order` | `'asc'` or `'desc'` |
+| `filter` | `(entry) => boolean` |
+| `limit`, `offset` | Numbers |
+
+Items have `createdAt` / `updatedAt` (`Date`; `null` for a never-saved draft in preview).
+
+## `getEntries`
+
+`getEntries(collection, slugs)`: several entries, one query. For `references` fields. Published only, in `slugs` order. Skips missing, unpublished and repeated slugs.
+
+## Live preview
+
+Render `<cms.PreviewBanner />` in your site layout. Only previewing editors see it; pages stay static for everyone else.
+
+Saving revalidates the whole site (`revalidatePath('/', 'layout')`). Change it with `revalidate`.

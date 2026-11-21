@@ -1,0 +1,36 @@
+---
+title: "Focal point"
+description: "Keep the important part of an image in frame when it's cropped (focalX, focalY, focalPosition)."
+url: https://mnml-cms.vercel.app/fields/focal-point
+---
+
+# Focal point
+
+The part of an image to keep in frame when cropped.
+
+## In the admin
+
+- **Focal point** (under the image) opens a big preview. Click the spot, or arrow keys (5%; 1% with Shift).
+- **Reset** removes it. A new upload clears it.
+
+## Stored value
+
+`focalX`, `focalY`: 0–1 from left and top, 3 decimals. Both or neither. Old images read as before.
+
+## On your site
+
+`focalPosition(image)` returns CSS `object-position`: `"30% 40%"`, or `"50% 50%"` without a point.
+
+```tsx
+import { focalPosition } from '@n3wtou/mnml-cms';
+
+<img src={post.cover.url} alt={post.cover.alt} className="aspect-[16/9] object-cover" style={{ objectPosition: focalPosition(post.cover) }} />;
+```
+
+With `next/image`:
+
+```tsx
+<Image src={post.cover.url} alt={post.cover.alt} fill className="object-cover" style={{ objectPosition: focalPosition(post.cover) }} />;
+```
+
+By hand: `object-position: ${focalX * 100}% ${focalY * 100}%`, else `50% 50%`.

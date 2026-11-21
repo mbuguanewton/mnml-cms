@@ -183,6 +183,30 @@ describe('MCP schema', () => {
   });
 });
 
+describe('MCP docs', () => {
+  it('points to the matching docs pages', async () => {
+    const r = await call(TOKENS.reader, 'docs', { topic: 'blocks sections' });
+    expect(r.pages[0]).toMatchObject({
+      title: 'Blocks',
+      url: 'https://mnml-cms.vercel.app/fields/blocks',
+      markdown: 'https://mnml-cms.vercel.app/fields/blocks.md',
+    });
+    expect(r.pages[0].sections.length).toBeGreaterThan(0);
+  });
+
+  it('lists every page without a topic, and every page has a description', async () => {
+    const r = await call(TOKENS.reader, 'docs');
+    expect(r.pages.length).toBeGreaterThan(20);
+    expect(r.pages.every((p: { markdown: string; description: string }) => p.markdown.endsWith('.md') && p.description.length > 10)).toBe(true);
+  });
+
+  it('falls back to every page when nothing matches', async () => {
+    const r = await call(TOKENS.reader, 'docs', { topic: 'zzzz' });
+    expect(r.pages).toEqual([]);
+    expect(r.all.length).toBeGreaterThan(20);
+  });
+});
+
 describe('MCP reads', () => {
   it('lists entries with status and timestamps', async () => {
     const r = await call(TOKENS.reader, 'list_entries', { collection: 'posts', fields: ['title'] });

@@ -1,10 +1,14 @@
+---
+description: "Link to other entries from rich text with the reference tool and referenceNode."
+---
+
 # Linking entries from rich text
 
-Link to another entry from inside rich text, e.g. a card for another post.
+Link another entry from rich text, e.g. a card for another post.
 
-- `tools.reference()` is a button. It picks a published entry of a collection and inserts a node: `{ type: name, attrs: { collection, slug } }`.
-- `referenceNode({ name })` is a ready-made node for it.
-- In the editor, the node shows as a card with the entry's title. Double-click it to pick another entry.
+- `tools.reference()`: a button that picks a published entry and inserts `{ type: name, attrs: { collection, slug } }`.
+- `referenceNode({ name })`: a ready-made node for it.
+- Editor shows a card with the entry's title. Double-click to pick another.
 
 ```tsx filename="src/mnml-editor.tsx"
 import { defineEditor, referenceNode, tools } from '@n3wtou/mnml-cms/editor';
@@ -17,9 +21,7 @@ export const editor = defineEditor({
 
 ## On your site
 
-The node stores only the slug, so your site loads the linked entries.
-
-`collectReferences(doc)` lists every entry a document links to, as `{ collection, slugs }[]`. It finds them anywhere in the document and removes repeats. Load them in one go, then render the node with a component:
+The node stores only the slug: your site loads the entries. `collectReferences(doc)` returns every link in the doc as `{ collection, slugs }[]`, repeats removed. Load them in one go, then render with a component:
 
 ```tsx
 import { collectReferences, RichText } from '@n3wtou/mnml-cms/rich-text';
@@ -34,6 +36,5 @@ const linked = new Map((await cms.getEntries('posts', slugs)).map((p) => [p.slug
 />;
 ```
 
-A linked entry can be unpublished or deleted later. Your component must handle a missing entry. The example renders nothing.
-
-Node forms (`tools.node`) can also use a `reference` field. The picker offers published entries.
+- A linked entry can disappear later (unpublished, deleted). Handle a missing one; the example renders nothing.
+- Node forms (`tools.node`) can use a `reference` field too. It offers published entries.

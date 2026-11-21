@@ -1,8 +1,10 @@
+---
+description: "Tables in rich text with @n3wtou/mnml-cms/table."
+---
+
 # Tables
 
-Tables have their own entry point. Sites without tables don't load the table code.
-
-Spread its extensions and tools into the editor config:
+Own entry point, so sites without tables skip the code. Spread its extensions and tools into the editor config:
 
 ```tsx filename="src/mnml-editor.tsx"
 import { defineEditor } from '@n3wtou/mnml-cms/editor';
@@ -16,18 +18,13 @@ export const editor = defineEditor({
 
 ## In the editor
 
-- **Insert table** adds a 3×3 table with a header row. The button comes before your own insert buttons.
-- While the cursor is in a table, a small toolbar shows above the table's right end. It can:
-  - add or delete a row or column
-  - toggle the header row
-  - delete the table
-- Row and column buttons act on the cell the cursor is in.
-- The toolbar hides when the cursor leaves the table or the editor.
+- **Insert table**: 3×3 with a header row. Before your own insert buttons.
+- Cursor in a table: a mini toolbar above its right end. Add/delete row or column (at the cursor's cell), toggle header row, delete table. Hides when the cursor leaves.
 
 ## On your site
 
-`<RichText editor={editor}>` renders a plain `<table>` with `<th>` and `<td>` cells, with no column widths. The admin styles it. Style it on your site like the rest of your prose.
+`<RichText editor={editor}>` renders a plain `<table>` (`<th>`, `<td>`, no widths). Style it with your prose.
 
 ## Your own floating tools
 
-Your tools can use the same floating toolbar. Give a tool `context: 'callout'`: it shows above the nearest `callout` node while the cursor is inside it.
+Give a tool `context: 'callout'`: it shows in the same mini toolbar above the nearest `callout` node while the cursor is inside.

@@ -1,21 +1,16 @@
+---
+description: "Custom rich text nodes edited through a form (tools.node, nodeAttributes)."
+---
+
 # Nodes with a form
 
-Some nodes need values from the editor: an embed's URL, a callout's tone. `tools.node()` makes a button that:
+Some nodes need values: an embed's URL, a callout's tone. `tools.node()` makes a button that opens a form in a dialog, validates it like an entry, and inserts the node.
 
-1. opens a form in the admin's dialog
-2. validates it like an entry
-3. inserts the node
-
-In the editor, the node shows as a card with a one-line preview. Double-click it, or press its Edit button, to change the values.
+In the editor, the node is a card with a one-line preview. Double-click or press Edit to change it.
 
 ## 1. Define the node
 
-Define it once, with its form fields. Use a plain module that both the editor config and the site import.
-
-`nodeAttributes(fields)` gives the node one attribute per field:
-
-- It starts at the field's empty value.
-- It's kept in HTML as `data-<name>`.
+Once, with its form fields, in a plain module the editor config and the site both import. `nodeAttributes(fields)` gives one attribute per field: starts empty, kept in HTML as `data-<name>`.
 
 ```ts filename="src/youtube.ts"
 import { Node } from '@tiptap/core';
@@ -56,18 +51,18 @@ export const editor = defineEditor({
 });
 ```
 
-- `name` is the node's name.
-- `preview` is optional. It's the card's one-line preview.
-- `components` sets how `<RichText>` renders the node on the site ([Custom node rendering](/editor/custom-rendering)).
+- `name`: the node's name.
+- `preview`: optional, the card's line.
+- `components`: how `<RichText>` renders it on the site ([Custom node rendering](/editor/custom-rendering)).
 
 ## Form fields
 
-- Allowed: `text`, `textarea`, `url`, `number`, `boolean`, `select`, `date` and `reference` (the slug). These are values that fit in a node's attributes.
-- `required`, `help` and `showIf` work as in entries.
+- Allowed: `text`, `textarea`, `url`, `number`, `boolean`, `select`, `date`, `reference` (the slug). Values that fit node attributes.
+- `required`, `help`, `showIf` work as in entries.
 
 ## Dialogs in any tool
 
-Any tool can use the form. `run` gets the editor and the admin's dialogs: `form`, `confirm` and `alert`.
+`run` gets the editor and the dialogs `form`, `confirm`, `alert`. Any tool can use them.
 
 ```ts
 run: async (editor, { form, confirm, alert }) => {

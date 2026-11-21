@@ -1,9 +1,10 @@
+---
+description: "Where uploaded images are stored: local disk in development, Vercel Blob, or your own storage."
+---
+
 # Image storage
 
-Uploads go through a `MediaStorage` adapter.
-
-- They're served at `<apiPath>/media/<key>`, so the store itself can be private.
-- Responses are cached for a year.
+Uploads go through a `MediaStorage` adapter, served at `<apiPath>/media/<key>` (so the store can be private) and cached for a year.
 
 ```ts
 type MediaStorage = {
@@ -14,29 +15,19 @@ type MediaStorage = {
 };
 ```
 
-| Method | What it does |
+| Method | Does |
 | --- | --- |
-| `put` | Stores the file. Returns a unique key. |
-| `get` | Reads a file by key |
+| `put` | Stores the file, returns a unique key |
+| `get` | Reads by key |
 | `list` | Optional. Adds the Media screen. |
-| `delete` | Optional. Adds Delete to the Media screen. |
+| `delete` | Optional. Adds Delete there. |
 
 ## The Media screen
 
-With `list`, the admin gets a **Media** screen. For every stored file, it shows:
-
-- size and date
-- the entries that use it: image fields and images in rich text, including unpublished changes
-- an "Unused" flag
-- a Delete button. Deleting a file still in use warns first.
-
-Both bundled adapters support it.
+With `list`, the admin gets a **Media** screen. Per file: size, date, the entries using it (image fields and rich text images, drafts too), an "Unused" flag, Delete (warns if still used). Both bundled adapters have it.
 
 ## Adapters
 
-- `vercelBlobMedia({ prefix = 'cms/', access = 'private', token })` only serves keys under `prefix`.
-- `localMedia({ dir = '.mnml-uploads' })` writes to disk.
-  - It's the default in `next dev` when you pass no `media`.
-  - Don't use it on serverless hosting.
-  - Add the folder to `.gitignore`.
-- For S3, R2 or anything else, write your own: implement `put` and `get`.
+- `vercelBlobMedia({ prefix = 'cms/', access = 'private', token })`: serves keys under `prefix` only.
+- `localMedia({ dir = '.mnml-uploads' })`: disk. Default in `next dev` without `media`. Not for serverless. Gitignore the folder.
+- S3, R2, anything else: write your own `put` and `get`.
