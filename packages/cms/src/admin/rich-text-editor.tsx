@@ -239,13 +239,14 @@ function Toolbar({ editor, extra, end, full }: { editor: Editor; extra: EditorTo
         disabled: s.extra[t.name]?.disabled,
         run: () => t.run(editor, { form, confirm, alert }),
       }));
+  // In fullscreen there is room to show each tool's name next to its icon (undo and redo stay icons).
   const item =
-    (group: string, pinned?: boolean) =>
+    (group: string, pinned?: boolean, labelled = full) =>
     (t: Tool): Item => ({
       key: t.name,
       group,
       pinned,
-      node: <ToolButton {...t} />,
+      node: <ToolButton {...t} labelled={labelled} />,
       menu: { id: t.name, label: t.label, icon: t.icon, checked: t.active, disabled: t.disabled, onSelect: t.run },
     });
 
@@ -254,7 +255,7 @@ function Toolbar({ editor, extra, end, full }: { editor: Editor; extra: EditorTo
     ...[
       { name: 'undo', icon: <Undo2Icon />, label: 'Undo', disabled: !s.undo, run: () => chain().undo().run() },
       { name: 'redo', icon: <Redo2Icon />, label: 'Redo', disabled: !s.redo, run: () => chain().redo().run() },
-    ].map(item('history', true)),
+    ].map(item('history', true, false)),
     {
       key: 'style',
       group: 'style',
@@ -264,6 +265,7 @@ function Toolbar({ editor, extra, end, full }: { editor: Editor; extra: EditorTo
           levels={levels}
           quote={hasQuote}
           current={s.quote ? 'quote' : s.heading}
+          labelled={full}
           onPick={(style) => {
             if (style === 'quote') {
               if (!s.quote) chain().setBlockquote().run();
@@ -327,7 +329,7 @@ function Toolbar({ editor, extra, end, full }: { editor: Editor; extra: EditorTo
     observer.observe(r);
     return () => observer.disconnect();
     // oxlint-disable-next-line react/exhaustive-deps
-  }, [shape]);
+  }, [shape, full]);
 
   const shown = items.slice(0, fit);
   const more = items.slice(fit).flatMap((i) => (i.menu ? [i.menu] : []));
@@ -492,6 +494,7 @@ function ToolButton({
   active,
   disabled,
   run,
+  labelled,
 }: {
   name: string;
   icon: React.ReactNode;
@@ -499,22 +502,28 @@ function ToolButton({
   active?: boolean;
   disabled?: boolean;
   run: () => void;
+  /** Show the name next to the icon (fullscreen), so no tooltip is needed. */
+  labelled?: boolean;
 }) {
-  return (
-    <Tooltip content={label}>
-      <button
-        type="button"
-        aria-label={label}
-        aria-pressed={active}
-        disabled={disabled}
-        onClick={run}
-        className={`flex size-7 shrink-0 items-center justify-center rounded-[6px] disabled:opacity-40 [&_svg]:size-4 ${active ? 'bg-mnml-surface text-mnml-text' : 'mnml-state text-mnml-text-soft'}`}
-      >
-        {icon}
-      </button>
-    </Tooltip>
+  const button = (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={run}
+      className={`flex h-7 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[6px] disabled:opacity-40 [&_svg]:size-4 ${labelled ? 'px-2 text-xs' : 'size-7'} ${active ? 'bg-mnml-surface text-mnml-text' : 'mnml-state text-mnml-text-soft'}`}
+    >
+      {icon}
+      {labelled && label}
+    </button>
   );
+  return labelled ? button : <Tooltip content={label}>{button}</Tooltip>;
 }
+
+/** A tooltip, unless there is no content for it (the label is already on screen). */
+const MaybeTooltip = ({ content, children }: { content: string | null; children: React.ReactElement }) =>
+  content === null ? children : <Tooltip content={content}>{children}</Tooltip>;
 
 const toolClass = 'mnml-state flex size-7 shrink-0 items-center justify-center rounded-[6px] text-mnml-text-soft [&_svg]:size-4';
 
@@ -532,7 +541,20 @@ const headingIcons = { 1: Heading1Icon, 2: Heading2Icon, 3: Heading3Icon, 4: Hea
 type BlockStyle = Level | 0 | 'quote';
 
 /** One button for the block type: Paragraph, a heading level or Quote, showing the current one. */
-function BlockMenu({ levels, quote, current, onPick }: { levels: Level[]; quote: boolean; current: BlockStyle; onPick: (style: BlockStyle) => void }) {
+function BlockMenu({
+  levels,
+  quote,
+  current,
+  onPick,
+  labelled,
+}: {
+  levels: Level[];
+  quote: boolean;
+  current: BlockStyle;
+  onPick: (style: BlockStyle) => void;
+  /** Show the current style's name in the button (fullscreen). */
+  labelled?: boolean;
+}) {
   const { open, setOpen, root } = useMenu();
   const options: { style: BlockStyle; label: string; Icon: typeof HeadingIcon }[] = [
     { style: 0, label: 'Paragraph', Icon: PilcrowIcon },
@@ -544,19 +566,21 @@ function BlockMenu({ levels, quote, current, onPick }: { levels: Level[]; quote:
 
   return (
     <div ref={root} className="relative">
-      <Tooltip content={`Text style: ${selected.label}`}>
+      <MaybeTooltip content={labelled ? null : `Text style: ${selected.label}`}>
         <button
           type="button"
           aria-label={`Text style: ${selected.label}`}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => setOpen(!open)}
-          className={`flex h-7 items-center gap-0.5 rounded-[6px] px-1.5 [&>svg:first-child]:size-4 ${current ? 'bg-mnml-surface text-mnml-text' : 'mnml-state text-mnml-text-soft'}`}
+          // A fixed width when labelled, so the toolbar doesn't shift (or need measuring again) as the style changes.
+          className={`flex h-7 items-center gap-0.5 rounded-[6px] px-1.5 [&>svg:first-child]:size-4 ${labelled ? 'w-32 gap-1.5 text-xs' : ''} ${current ? 'bg-mnml-surface text-mnml-text' : 'mnml-state text-mnml-text-soft'}`}
         >
           <Current />
-          <ChevronDownIcon className="size-3" />
+          {labelled && <span className="min-w-0 flex-1 truncate text-left">{selected.label}</span>}
+          <ChevronDownIcon className="size-3 shrink-0" />
         </button>
-      </Tooltip>
+      </MaybeTooltip>
       <div role="menu" hidden={!open} className="absolute left-0 top-full z-20 mt-1 w-40 rounded-[8px] border border-mnml-line bg-mnml-bg p-1 shadow-lg">
         {options.map(({ style, label, Icon }) => (
           <button
