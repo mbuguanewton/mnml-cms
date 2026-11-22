@@ -718,6 +718,7 @@ In order: undo/redo, text style menu (paragraph, headings, quote), `format` (bol
 - The editor box has a fixed height and scrolls. Drag its bottom-right corner to make it taller, like a textarea.
 - The expand button (right end) opens the editor fullscreen. Escape or the button again closes it.
 - Fullscreen header: entry title, field label, save status. Autosave keeps running.
+- In fullscreen each tool shows its name next to its icon (and the text style button its current style). Tools that don't fit go into "More tools".
 
 ## Example: code blocks with syntax highlighting
 
