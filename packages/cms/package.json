@@ -84,7 +84,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "node scripts/build-agent-docs.mjs && rm -rf dist && tsc -p tsconfig.build.json && node scripts/copy-css.mjs",
+    "build": "node scripts/build-agent-docs.mjs && tsc -p tsconfig.build.json && node scripts/prune-dist.mjs && node scripts/copy-css.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "prepack": "pnpm build",
     "test": "vp test run"

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { InfoIcon } from 'lucide-react';
-import { AdminHeader, Button, Checkbox, Select, Switch, Tooltip, bodyClass, cardClass, labelClass, useAdmin } from '@n3wtou/mnml-cms/admin';
+import { InfoIcon, RotateCcwIcon, ShieldCheckIcon } from 'lucide-react';
+import { AdminHeader, Button, Checkbox, Menu, Select, Switch, Tooltip, bodyClass, cardClass, labelClass, useAdmin } from '@n3wtou/mnml-cms/admin';
 import { refreshCache } from './actions';
 
 type Section = 'site' | 'posts' | 'authors';
@@ -25,7 +25,25 @@ export function CacheTool() {
 
   return (
     <>
-      <AdminHeader crumbs={[{ label: 'Cache' }]} />
+      <AdminHeader crumbs={[{ label: 'Cache' }]}>
+        <Menu
+          label="Cache options"
+          items={[
+            { id: 'ask', label: 'Confirm whole-site refresh', icon: <ShieldCheckIcon />, checked: ask, onSelect: () => setAsk(!ask) },
+            {
+              id: 'reset',
+              label: 'Reset form',
+              icon: <RotateCcwIcon />,
+              onSelect: () => {
+                setSection('posts');
+                setWithHome(true);
+                setAsk(true);
+                toast({ title: 'Form reset' });
+              },
+            },
+          ]}
+        />
+      </AdminHeader>
       <div className={`${bodyClass} flex flex-col gap-6`}>
         <form
           className={`${cardClass} flex flex-col gap-4 p-4`}

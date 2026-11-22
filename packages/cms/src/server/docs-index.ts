@@ -161,6 +161,7 @@ export const docsIndex: DocsPage[] = [
       "Ready-made tools",
       "Your own tools",
       "Toolbar groups",
+      "Narrow fields and fullscreen",
       "Example: code blocks with syntax highlighting"
     ]
   },

@@ -46,11 +46,13 @@ Build `pages` with the admin's own controls from `@n3wtou/mnml-cms/admin`. Clien
 | `Select` | `id`, `value` (string or null), `onChange(value)`, `options: { value, label }[]`, `placeholder`, `clearable`, `invalid` |
 | `Checkbox`, `Switch` | `id`, `checked`, `onChange(checked)`, `disabled`, `label` |
 | `Tooltip` | `content`, `side`, one focusable child. Shows on hover and keyboard focus. |
+| `Menu` | `label`, `items: { id, label, icon, checked, disabled, danger, onSelect }[]`, `trigger`, `className` |
 
 - `onChange` gets the value, not the event.
 - `Select`: full width; cap it with a `max-w-*` class. Arrows, Home/End, type-ahead, Enter, Escape. A value that isn't an option shows as "(unavailable)".
+- `Menu`: a "more" icon button by default; pass `trigger` for your own content. Set `checked` for on/off items. Arrows wrap, Home/End, type-ahead, Escape.
 - Label a control with `<label htmlFor={id}>`, the `label` prop, or `aria-label`.
-- Prop types are exported: `SelectProps`, `CheckboxProps`, `ToastOptions`, …
+- Prop types are exported: `SelectProps`, `CheckboxProps`, `MenuProps`, `MenuAction`, `ToastOptions`, …
 
 ```tsx
 'use client';

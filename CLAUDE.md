@@ -15,7 +15,7 @@ that consumes it through `workspace:*`.
 - **The example is the test bed:** `example/mnml.config.ts`, `example/src/mnml.tsx`, `example/src/proxy.ts`,
   `example/src/app/admin/[[...path]]/page.tsx`, `example/src/app/api/mnml/[...route]/route.ts` and the pages in
   `example/src/app/(site)/`. Every feature should be used there so `pnpm --filter example build` exercises it.
-  `pnpm build` rebuilds `packages/cms/dist`, which the example imports; restart its dev server after a rebuild.
+  `pnpm build` rebuilds `packages/cms/dist` in place (no `rm -rf`; `scripts/prune-dist.mjs` drops stale files), so a running example dev server picks it up without a restart.
 - **Example database scripts** (dev database only, via `example/.env.local`): `pnpm --filter example db:push`,
   `db:seed` (safe to rerun), `db:export`, `db:import`, `db:sync`.
 - **Every user-facing change** updates the docs (`docs/content/`, a new page or a section; the README only changes

@@ -80,6 +80,14 @@ In order: undo/redo, text style menu (paragraph, headings, quote), `format` (bol
 - `tools.underline`, `tools.strike`: `format`. `tools.horizontalRule`: `insert`.
 - In each group, package tools (`tools.underline`, `tables.tools`…) first, then yours in listed order.
 
+## Narrow fields and fullscreen
+
+- Toolbar stays one row. Tools that don't fit move into a "More tools" (`…`) menu, from the end. Undo/redo and the text style menu always stay.
+- Tools that can be on or off (with `isActive`) show checked in the menu.
+- The editor box has a fixed height and scrolls. Drag its bottom-right corner to make it taller, like a textarea.
+- The expand button (right end) opens the editor fullscreen. Escape or the button again closes it.
+- Fullscreen header: entry title, field label, save status. Autosave keeps running.
+
 ## Example: code blocks with syntax highlighting
 
 Swap StarterKit's plain code block for [`CodeBlockLowlight`](https://tiptap.dev/docs/editor/extensions/nodes/code-block-lowlight) and add a button. To replace or remove a default extension, pass a function: it gets the defaults and returns the full list.

@@ -22,7 +22,12 @@ export function useMenu() {
   useEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => !root.current?.contains(e.target as Node) && setOpen(false);
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // Closes only this menu, not a fullscreen editor or dialog around it.
+      e.preventDefault();
+      setOpen(false);
+    };
     document.addEventListener('pointerdown', away);
     document.addEventListener('keydown', esc);
     return () => {

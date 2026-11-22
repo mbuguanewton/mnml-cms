@@ -97,3 +97,25 @@ export type TooltipProps = {
   /** Default 'top'. Flips when there is no room. */
   side?: 'top' | 'bottom';
 };
+
+export type MenuAction = {
+  /** Unique within the menu. */
+  id: string;
+  label: string;
+  icon?: ReactNode;
+  /** Set for an on/off item (shown with a check, announced as checked or not); leave out for a plain action. */
+  checked?: boolean;
+  disabled?: boolean;
+  danger?: boolean;
+  onSelect: () => void;
+};
+
+export type MenuProps = {
+  /** Names the menu, and the trigger too when it has no `trigger` content (an icon button with a tooltip). */
+  label: string;
+  items: MenuAction[];
+  /** Content of the trigger button. Default: a "more" icon. */
+  trigger?: ReactNode;
+  /** Classes for the trigger button, replacing the default ghost icon button look. */
+  className?: string;
+};

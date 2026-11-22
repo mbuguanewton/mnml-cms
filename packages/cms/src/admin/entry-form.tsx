@@ -11,6 +11,7 @@ import { Input } from './ui/input.js';
 import { Tooltip } from './ui/tooltip.js';
 import { useAdmin } from './context.js';
 import { FieldRenderer, RefOptionsProvider, type RefOptions } from './fields.js';
+import { EntryContext } from './entry-context.js';
 import { LivePreview } from './live-preview.js';
 import { AdminHeader, type Crumb } from './header.js';
 import { StatusDot, dotLabels } from './status-dot.js';
@@ -233,6 +234,17 @@ export function EntryForm({
       : auto.kind === 'idle'
         ? null
         : { ok: true, short: auto.kind === 'saving' ? 'Saving…' : 'Saved', text: auto.kind === 'saving' ? 'Saving…' : 'Saved' };
+  // For the fullscreen editor's header: the entry's title and save state.
+  const statusText = note?.short ?? (isCollection && mode === 'update' ? dotLabels[dotState] : null);
+  const entryInfo = {
+    title: def.kind === 'collection' ? (typeof data[def.titleField] === 'string' ? (data[def.titleField] as string) : '') : def.label,
+    status: (
+      <span role="status" className={`flex shrink-0 items-center gap-1.5 text-sm ${note && !note.ok ? 'text-mnml-danger' : 'text-mnml-text-soft'}`}>
+        {isCollection && mode === 'update' && <StatusDot state={dotState} />}
+        {statusText}
+      </span>
+    ),
+  };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (pending) return;
@@ -264,136 +276,138 @@ export function EntryForm({
 
   return (
     <RefOptionsProvider value={refOptions}>
-      <form onSubmit={submit} className="flex flex-1 flex-col">
-        <AdminHeader crumbs={crumbs}>
-          {isCollection && mode === 'update' && (
-            <Tooltip content={dotLabels[dotState]} side="bottom">
-              <StatusDot state={dotState} focusable className="mx-1" />
-            </Tooltip>
-          )}
-          <span role="status" className={`min-w-0 truncate text-sm ${note?.ok ? 'text-mnml-text-soft' : 'text-mnml-danger'}`}>
-            {note && (
-              <>
-                <span className="sm:hidden">{note.short}</span>
-                <span className="max-sm:hidden">{note.text}</span>
-              </>
+      <EntryContext value={entryInfo}>
+        <form onSubmit={submit} className="flex flex-1 flex-col">
+          <AdminHeader crumbs={crumbs}>
+            {isCollection && mode === 'update' && (
+              <Tooltip content={dotLabels[dotState]} side="bottom">
+                <StatusDot state={dotState} focusable className="mx-1" />
+              </Tooltip>
             )}
-          </span>
-          {canPreview && (
-            <Button
-              type="button"
-              variant={showPreview ? 'secondary' : 'outline'}
-              aria-pressed={showPreview}
-              className="max-lg:hidden"
-              onClick={() => setPreviewHidden(showPreview)}
-            >
-              <EyeIcon /> Preview
-            </Button>
-          )}
-          {draftable ? (
-            <>
-              {!autosave && (
-                <Button type="button" variant="outline" disabled={pending || !dirty} onClick={() => save('draft')}>
-                  Create draft
-                </Button>
+            <span role="status" className={`min-w-0 truncate text-sm ${note?.ok ? 'text-mnml-text-soft' : 'text-mnml-danger'}`}>
+              {note && (
+                <>
+                  <span className="sm:hidden">{note.short}</span>
+                  <span className="max-sm:hidden">{note.text}</span>
+                </>
               )}
-              {showPublish && (
-                <Button type="submit" disabled={pending || auto.kind === 'saving' || !canPublish} className="px-4">
-                  {pending ? 'Saving…' : 'Publish'}
-                </Button>
-              )}
-            </>
-          ) : (
-            <Button type="submit" disabled={pending || !dirty} className="px-4">
-              {pending ? 'Saving…' : 'Save'}
-            </Button>
-          )}
-          {((isCollection && published) || (autosave && published && changes) || actions) && (
-            <ActionMenu>
-              {autosave && published && changes && (
-                <MenuItem disabled={pending} onClick={discard}>
-                  <Undo2Icon /> Discard changes
-                </MenuItem>
-              )}
-              {isCollection && published && (
-                <MenuItem disabled={pending} onClick={() => save('unpublish')}>
-                  <FileXIcon /> Unpublish
-                </MenuItem>
-              )}
-              {actions}
-            </ActionMenu>
-          )}
-        </AdminHeader>
-        {banner}
-        <div className="flex flex-1">
-          <div className={showPreview ? 'w-[min(36rem,45%)] shrink-0' : 'w-full'}>
-            <div className={`${bodyClass} flex flex-col gap-6`}>
-              {tabs.length > 0 && (
-                <div className="sticky top-14 z-10 -mx-6 border-b border-mnml-line bg-mnml-bg/90 px-6 py-3 backdrop-blur">
-                  <div
-                    role="tablist"
-                    aria-label="Field groups"
-                    className="flex gap-1 overflow-x-auto"
-                    onKeyDown={(e) => {
-                      const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-                      if (!step) return;
-                      e.preventDefault();
-                      const next = tabs[(tabs.findIndex((t) => t.id === tab) + step + tabs.length) % tabs.length];
-                      setTab(next.id);
-                      e.currentTarget.querySelector<HTMLElement>(`[data-tab="${CSS.escape(next.id)}"]`)?.focus();
-                    }}
-                  >
-                    {tabs.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        role="tab"
-                        data-tab={t.id}
-                        aria-selected={tab === t.id}
-                        tabIndex={tab === t.id ? 0 : -1}
-                        onClick={() => setTab(t.id)}
-                        className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-mnml-primary/40 ${
-                          tab === t.id ? 'bg-mnml-primary text-mnml-on-primary' : 'mnml-state text-mnml-text-soft'
-                        }`}
-                      >
-                        {t.label}
-                        {errorTabs.has(t.id) && (
-                          <span role="img" aria-label="Has errors" className="size-1.5 rounded-full bg-mnml-danger ring-2 ring-mnml-bg/60" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {Object.entries(fields)
-                .filter(([k]) => inTab(k))
-                .map(([k, f]) => (
-                  <div key={k} className="contents">
-                    <FieldRenderer field={f} value={data[k]} onChange={(v) => set(k, v)} path={k} errors={errors} siblings={data} />
-                    {def.kind === 'collection' && k === def.titleField && slugField}
-                    {derived
-                      .filter((d) => d.after === k)
-                      .map((d) => (
-                        <DerivedRow key={d.key} label={d.label} value={d.value} />
+            </span>
+            {canPreview && (
+              <Button
+                type="button"
+                variant={showPreview ? 'secondary' : 'outline'}
+                aria-pressed={showPreview}
+                className="max-lg:hidden"
+                onClick={() => setPreviewHidden(showPreview)}
+              >
+                <EyeIcon /> Preview
+              </Button>
+            )}
+            {draftable ? (
+              <>
+                {!autosave && (
+                  <Button type="button" variant="outline" disabled={pending || !dirty} onClick={() => save('draft')}>
+                    Create draft
+                  </Button>
+                )}
+                {showPublish && (
+                  <Button type="submit" disabled={pending || auto.kind === 'saving' || !canPublish} className="px-4">
+                    {pending ? 'Saving…' : 'Publish'}
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button type="submit" disabled={pending || !dirty} className="px-4">
+                {pending ? 'Saving…' : 'Save'}
+              </Button>
+            )}
+            {((isCollection && published) || (autosave && published && changes) || actions) && (
+              <ActionMenu>
+                {autosave && published && changes && (
+                  <MenuItem disabled={pending} onClick={discard}>
+                    <Undo2Icon /> Discard changes
+                  </MenuItem>
+                )}
+                {isCollection && published && (
+                  <MenuItem disabled={pending} onClick={() => save('unpublish')}>
+                    <FileXIcon /> Unpublish
+                  </MenuItem>
+                )}
+                {actions}
+              </ActionMenu>
+            )}
+          </AdminHeader>
+          {banner}
+          <div className="flex flex-1">
+            <div className={showPreview ? 'w-[min(36rem,45%)] shrink-0' : 'w-full'}>
+              <div className={`${bodyClass} flex flex-col gap-6`}>
+                {tabs.length > 0 && (
+                  <div className="sticky top-14 z-10 -mx-6 border-b border-mnml-line bg-mnml-bg/90 px-6 py-3 backdrop-blur">
+                    <div
+                      role="tablist"
+                      aria-label="Field groups"
+                      className="flex gap-1 overflow-x-auto"
+                      onKeyDown={(e) => {
+                        const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+                        if (!step) return;
+                        e.preventDefault();
+                        const next = tabs[(tabs.findIndex((t) => t.id === tab) + step + tabs.length) % tabs.length];
+                        setTab(next.id);
+                        e.currentTarget.querySelector<HTMLElement>(`[data-tab="${CSS.escape(next.id)}"]`)?.focus();
+                      }}
+                    >
+                      {tabs.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          role="tab"
+                          data-tab={t.id}
+                          aria-selected={tab === t.id}
+                          tabIndex={tab === t.id ? 0 : -1}
+                          onClick={() => setTab(t.id)}
+                          className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-mnml-primary/40 ${
+                            tab === t.id ? 'bg-mnml-primary text-mnml-on-primary' : 'mnml-state text-mnml-text-soft'
+                          }`}
+                        >
+                          {t.label}
+                          {errorTabs.has(t.id) && (
+                            <span role="img" aria-label="Has errors" className="size-1.5 rounded-full bg-mnml-danger ring-2 ring-mnml-bg/60" />
+                          )}
+                        </button>
                       ))}
+                    </div>
                   </div>
-                ))}
-              {(tab === ALL || tab === GENERAL) &&
-                derived.filter((d) => !d.after || !(d.after in fields)).map((d) => <DerivedRow key={d.key} label={d.label} value={d.value} />)}
+                )}
+                {Object.entries(fields)
+                  .filter(([k]) => inTab(k))
+                  .map(([k, f]) => (
+                    <div key={k} className="contents">
+                      <FieldRenderer field={f} value={data[k]} onChange={(v) => set(k, v)} path={k} errors={errors} siblings={data} />
+                      {def.kind === 'collection' && k === def.titleField && slugField}
+                      {derived
+                        .filter((d) => d.after === k)
+                        .map((d) => (
+                          <DerivedRow key={d.key} label={d.label} value={d.value} />
+                        ))}
+                    </div>
+                  ))}
+                {(tab === ALL || tab === GENERAL) &&
+                  derived.filter((d) => !d.after || !(d.after in fields)).map((d) => <DerivedRow key={d.key} label={d.label} value={d.value} />)}
+              </div>
             </div>
+            {showPreview && (
+              <div className="sticky top-14 flex h-[calc(100dvh-3.5rem)] min-w-0 flex-1">
+                <LivePreview
+                  input={input()}
+                  onClose={() => setPreviewHidden(true)}
+                  autosaveVersion={autosave ? version : undefined}
+                  pausedMessage={autosave && auto.kind === 'paused' ? auto.message : undefined}
+                />
+              </div>
+            )}
           </div>
-          {showPreview && (
-            <div className="sticky top-14 flex h-[calc(100dvh-3.5rem)] min-w-0 flex-1">
-              <LivePreview
-                input={input()}
-                onClose={() => setPreviewHidden(true)}
-                autosaveVersion={autosave ? version : undefined}
-                pausedMessage={autosave && auto.kind === 'paused' ? auto.message : undefined}
-              />
-            </div>
-          )}
-        </div>
-      </form>
+        </form>
+      </EntryContext>
     </RefOptionsProvider>
   );
 }

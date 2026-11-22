@@ -109,7 +109,7 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
     case 'group':
       return null; // rendered by FieldRenderer as a section
     case 'richtext':
-      return <RichTextEditor value={value as JSONContent} onChange={onChange} invalid={invalid} />;
+      return <RichTextEditor value={value as JSONContent} onChange={onChange} invalid={invalid} label={field.label} />;
     case 'tags':
       return <TagsInput id={id} value={(value as string[]) ?? []} onChange={onChange} />;
     case 'array':
