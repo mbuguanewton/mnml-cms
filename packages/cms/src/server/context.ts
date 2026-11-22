@@ -84,6 +84,9 @@ export type CmsOptions<C extends CmsConfig> = StorageOptions & {
   /** Extra extensions and toolbar buttons for the rich-text editor: the component from `editorProvider(config)`,
    *  exported from a 'use client' file. Pass the same config to `<RichText editor>`. */
   editor?: ComponentType<{ children: ReactNode }>;
+  /** A site's own components for the admin's Button, Input, Select… slots: the component from `uiProvider(slots)`,
+   *  exported from a 'use client' file. Slots left out use the built-in ones. */
+  ui?: ComponentType<{ children: ReactNode }>;
   /** Called after each save or delete. Default: revalidatePath('/', 'layout'). */
   revalidate?: (change: Change) => void;
   /** Turns on the MCP server at <apiPath>/mcp, so agents (Claude Code, Cursor…) can manage content with a token. */

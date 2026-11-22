@@ -55,7 +55,9 @@ const fieldsOnly = (def: Singleton | Collection, entry: AnyEntry): AnyEntry => O
 // The whole admin as one server component, mounted at <adminPath>/[[...path]]:
 //   (none) dashboard · login · <singleton> · <collection> · <collection>/new · <collection>/<slug> · <extra page>
 
-const rootClass = 'mnml-root flex flex-1 flex-col bg-mnml-bg text-sm text-mnml-text [font-family:ui-sans-serif,system-ui,sans-serif]';
+// mnml-admin marks a page that shows the admin (the token bridge in styles.css keys on it; the preview banner on
+// site pages is a mnml-root too, so it can't).
+const rootClass = 'mnml-root mnml-admin flex flex-1 flex-col bg-mnml-bg text-sm text-mnml-text [font-family:ui-sans-serif,system-ui,sans-serif]';
 
 /** The admin screen for MCP tokens (`mcp: { adminTokens: true }`). */
 const AGENT_ACCESS = 'agent-access';
@@ -68,11 +70,17 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
   return async function AdminPage({ params, searchParams }: Props) {
     const path = (await params).path ?? [];
     const Editor = options.editor;
-    const provider = (children: React.ReactNode) => (
-      <AdminProvider value={{ adminPath, apiPath }}>
-        <FormDialogProvider>{Editor ? <Editor>{children}</Editor> : children}</FormDialogProvider>
-      </AdminProvider>
-    );
+    const Ui = options.ui;
+    const withEditor = (children: React.ReactNode) => (Editor ? <Editor>{children}</Editor> : children);
+    // The site's UI slots wrap everything, so the confirm and form dialogs use them too.
+    const provider = (children: React.ReactNode) => {
+      const admin = (
+        <AdminProvider value={{ adminPath, apiPath }}>
+          <FormDialogProvider>{withEditor(children)}</FormDialogProvider>
+        </AdminProvider>
+      );
+      return Ui ? <Ui>{admin}</Ui> : admin;
+    };
 
     if (path.length === 1 && path[0] === 'login') {
       const adapter = ctx.authAdapter;

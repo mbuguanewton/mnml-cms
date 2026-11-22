@@ -6,6 +6,12 @@ import { nodeAttributes } from '@n3wtou/mnml-cms/editor';
 export const youtubeFields = {
   url: fields.url('YouTube URL', { required: true, help: 'A youtube.com/watch or youtu.be link' }),
   title: fields.text('Title', { help: 'For screen readers; shown if the video can’t load' }),
+  // A select inside the node's form dialog (the site's own Select through the `ui` option, see src/mnml-ui.tsx).
+  aspect: fields.select('Aspect ratio', [
+    { value: 'wide', label: 'Widescreen (16:9)' },
+    { value: 'classic', label: 'Classic (4:3)' },
+    { value: 'square', label: 'Square (1:1)' },
+  ]),
 };
 
 /** The video id in a youtube.com/watch?v=…, youtu.be/… or youtube.com/embed/… URL. */

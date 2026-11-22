@@ -9,7 +9,53 @@
   --color-soft: #57534e;
   --color-mute: #a8a29e;
   --color-line: #e7e2d9;
-  --color-accent: #b4451f;
+}
+
+/*
+ * shadcn/ui theme tokens (Tailwind v4), for the components in src/components/ui. The site's values are deliberately
+ * loud (blue primary, orange accent): inside /admin the mnml token bridge swaps them for the admin's own colours.
+ */
+:root {
+  --background: #faf8f4;
+  --foreground: #1c1917;
+  --popover: #ffffff;
+  --popover-foreground: #1c1917;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --muted: #efeae0;
+  --muted-foreground: #78716c;
+  --accent: #b4451f;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --border: #2563eb;
+  --input: #2563eb;
+  --ring: #2563eb;
+  --radius: 12px;
+}
+
+/* shadcn's base border colour, scoped to its components (they carry data-slot) so the rest of the site keeps its own. */
+@layer base {
+  [data-slot] { border-color: var(--color-border); }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  /* Also the site's own accent colour (text-accent on post pages). */
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
 }
 
 body {

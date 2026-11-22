@@ -1,5 +1,6 @@
 'use client';
 
+import { slotted } from '../ui-context.js';
 import { CheckIcon } from 'lucide-react';
 import type { CheckboxProps, SwitchProps } from './slots.js';
 
@@ -20,7 +21,7 @@ function Labelled({ label, className, align, children }: { label: React.ReactNod
 }
 
 /** A native checkbox (focus, forms and screen readers as usual), drawn with the --mnml-* tokens. */
-export function Checkbox({ id, checked, onChange, disabled, invalid, label, name, className = '', ...aria }: CheckboxProps) {
+function CheckboxBase({ id, checked, onChange, disabled, invalid, label, name, className = '', ...aria }: CheckboxProps) {
   return (
     <Labelled label={label} className={className} align="start">
       <span className={`relative inline-grid size-4 shrink-0 place-items-center ${label ? 'mt-0.5' : className}`}>
@@ -46,7 +47,7 @@ export function Checkbox({ id, checked, onChange, disabled, invalid, label, name
 }
 
 /** An on/off switch: a native checkbox with role="switch", so it's announced as on or off. */
-export function Switch({ id, checked, onChange, disabled, invalid, label, name, className = '', ...aria }: SwitchProps) {
+function SwitchBase({ id, checked, onChange, disabled, invalid, label, name, className = '', ...aria }: SwitchProps) {
   return (
     <Labelled label={label} className={className} align="center">
       <span className={`relative inline-grid shrink-0 items-center ${label ? '' : className}`}>
@@ -70,3 +71,7 @@ export function Switch({ id, checked, onChange, disabled, invalid, label, name, 
     </Labelled>
   );
 }
+
+export const Checkbox = slotted('Checkbox', CheckboxBase);
+
+export const Switch = slotted('Switch', SwitchBase);

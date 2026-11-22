@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 
 // The props of each admin UI component ("slot"). Every built-in component takes exactly these, so a site's own
 // component can stand in for one later without the admin changing.
@@ -11,6 +11,9 @@ export type ButtonProps = {
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   children?: ReactNode;
 };
+
+/** What a Button slot gets: `ButtonProps` plus any other `<button>` attribute the admin passes (className, aria-*). */
+export type ButtonSlotProps = ButtonProps & Omit<ComponentProps<'button'>, keyof ButtonProps>;
 
 type FieldBase = {
   id?: string;

@@ -1,5 +1,6 @@
 'use client';
 
+import { PortalHost } from './ui-context.js';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import { Menu } from './ui/menu.js';
@@ -112,57 +113,59 @@ export function RichTextEditor({
       }}
       className="static m-0 block h-auto w-full max-w-none border-0 bg-transparent p-0 text-inherit open:fixed open:inset-0 open:size-full open:max-h-none open:overflow-hidden open:bg-mnml-bg"
     >
-      <div
-        aria-invalid={invalid}
-        className={`flex flex-col bg-mnml-bg ${full ? 'h-full' : 'rounded-[6px] border border-mnml-line focus-within:border-mnml-text-mute/50 aria-invalid:border-mnml-danger'}`}
-      >
-        {full && (
-          <div className="flex h-12 shrink-0 items-center gap-3 border-b border-mnml-line px-4">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-mnml-text">{entry?.title || label}</p>
-              {entry?.title && label && <p className="truncate text-xs text-mnml-text-mute">{label}</p>}
-            </div>
-            {entry?.status}
-          </div>
-        )}
-        {editor && (
-          <Toolbar
-            editor={editor}
-            extra={mainTools}
-            full={full}
-            end={
-              <Tooltip content={full ? 'Exit fullscreen' : 'Fullscreen'}>
-                <button ref={expand} type="button" aria-label={full ? 'Exit fullscreen' : 'Fullscreen'} onClick={toggleFull} className={toolClass}>
-                  {full ? <Minimize2Icon /> : <Maximize2Icon />}
-                </button>
-              </Tooltip>
-            }
-          />
-        )}
-        {/* Inline: a fixed height that scrolls, with a drag handle to make it taller (like a textarea). */}
+      <PortalHost active={full}>
         <div
-          onMouseDown={(e) => {
-            // A press on the empty space under the text puts the cursor at the end. Not on the scrollbar or the
-            // resize corner, which need the press themselves.
-            const box = e.currentTarget;
-            const r = box.getBoundingClientRect();
-            if (e.clientX - r.left >= box.clientWidth || (r.right - e.clientX < 16 && r.bottom - e.clientY < 16)) return;
-            if (editor && !editor.view.dom.contains(e.target as Node) && (e.target as HTMLElement).closest('[role="toolbar"]') === null) {
-              e.preventDefault();
-              editor.commands.focus('end');
-            }
-          }}
-          className={full ? 'min-h-0 flex-1 cursor-text overflow-y-auto' : 'h-72 min-h-32 cursor-text resize-y overflow-y-auto rounded-b-[5px]'}
+          aria-invalid={invalid}
+          className={`flex flex-col bg-mnml-bg ${full ? 'h-full' : 'rounded-[6px] border border-mnml-line focus-within:border-mnml-text-mute/50 aria-invalid:border-mnml-danger'}`}
         >
-          <div ref={content} className={`relative ${full ? 'mx-auto w-full max-w-[70ch] px-2 py-6 [&_.mnml-prose]:min-h-[60vh]' : ''}`}>
-            <EditorContent editor={editor} />
-            {editor &&
-              contexts.map((node) => (
-                <ContextToolbar key={node} editor={editor} node={node} tools={tools.filter((t) => t.context === node)} container={content} />
-              ))}
+          {full && (
+            <div className="flex h-12 shrink-0 items-center gap-3 border-b border-mnml-line px-4">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-mnml-text">{entry?.title || label}</p>
+                {entry?.title && label && <p className="truncate text-xs text-mnml-text-mute">{label}</p>}
+              </div>
+              {entry?.status}
+            </div>
+          )}
+          {editor && (
+            <Toolbar
+              editor={editor}
+              extra={mainTools}
+              full={full}
+              end={
+                <Tooltip content={full ? 'Exit fullscreen' : 'Fullscreen'}>
+                  <button ref={expand} type="button" aria-label={full ? 'Exit fullscreen' : 'Fullscreen'} onClick={toggleFull} className={toolClass}>
+                    {full ? <Minimize2Icon /> : <Maximize2Icon />}
+                  </button>
+                </Tooltip>
+              }
+            />
+          )}
+          {/* Inline: a fixed height that scrolls, with a drag handle to make it taller (like a textarea). */}
+          <div
+            onMouseDown={(e) => {
+              // A press on the empty space under the text puts the cursor at the end. Not on the scrollbar or the
+              // resize corner, which need the press themselves.
+              const box = e.currentTarget;
+              const r = box.getBoundingClientRect();
+              if (e.clientX - r.left >= box.clientWidth || (r.right - e.clientX < 16 && r.bottom - e.clientY < 16)) return;
+              if (editor && !editor.view.dom.contains(e.target as Node) && (e.target as HTMLElement).closest('[role="toolbar"]') === null) {
+                e.preventDefault();
+                editor.commands.focus('end');
+              }
+            }}
+            className={full ? 'min-h-0 flex-1 cursor-text overflow-y-auto' : 'h-72 min-h-32 cursor-text resize-y overflow-y-auto rounded-b-[5px]'}
+          >
+            <div ref={content} className={`relative ${full ? 'mx-auto w-full max-w-[70ch] px-2 py-6 [&_.mnml-prose]:min-h-[60vh]' : ''}`}>
+              <EditorContent editor={editor} />
+              {editor &&
+                contexts.map((node) => (
+                  <ContextToolbar key={node} editor={editor} node={node} tools={tools.filter((t) => t.context === node)} container={content} />
+                ))}
+            </div>
           </div>
         </div>
-      </div>
+      </PortalHost>
     </dialog>
   );
 }

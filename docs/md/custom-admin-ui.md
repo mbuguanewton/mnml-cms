@@ -1,0 +1,105 @@
+---
+title: "Custom admin UI"
+description: "Use your own components (shadcn and others) in the admin with the ui option, uiProvider and the token bridge."
+url: https://mnml-cms.vercel.app/custom-admin-ui
+---
+
+# Custom admin UI
+
+Swap the admin's controls for your own, e.g. your shadcn Select. Slots you leave out keep the built-in ones.
+
+Slots: `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `Tooltip`, `Menu`. Toasts stay built-in.
+
+## Set up
+
+A `'use client'` file maps your components to the slots:
+
+```tsx filename="src/mnml-ui.tsx"
+'use client';
+import { uiProvider, type UiSlotProps } from '@n3wtou/mnml-cms/admin';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const NONE = '__none__'; // Radix items can't use '' as a value
+
+function AdminSelect({ id, value, onChange, options, placeholder = '—', clearable, disabled, invalid, className, ...aria }: UiSlotProps['Select']) {
+  const label = value === null ? placeholder : (options.find((o) => o.value === value)?.label ?? `${value} (unavailable)`);
+  return (
+    <Select value={value ?? (clearable ? NONE : '')} onValueChange={(v) => onChange(v === NONE ? null : v)} disabled={disabled}>
+      <SelectTrigger id={id} aria-invalid={invalid || undefined} className={className} {...aria}>
+        <SelectValue placeholder={placeholder}>{label}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {clearable && <SelectItem value={NONE}>{placeholder}</SelectItem>}
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+export const AdminUi = uiProvider({ Select: AdminSelect });
+```
+
+Pass it to `createCms`:
+
+```tsx filename="src/mnml.tsx"
+import { AdminUi } from './mnml-ui';
+
+export const cms = createCms(config, { /* … */ ui: AdminUi });
+```
+
+Custom admin `pages` that import `Select`, `Button`… from `@n3wtou/mnml-cms/admin` get your components too.
+
+## What a slot gets
+
+Props per slot: `UiSlotProps['Select']`, `UiSlotProps['Button']`, … (also `SelectProps`, `ButtonSlotProps`, …).
+
+- Put `id` and the `aria-*` props on the focusable element. The field's `<label htmlFor>` names it through `id`.
+- `invalid`: set `aria-invalid`.
+- `onChange` gets the value, not the event.
+- `Select`: `value` is `null` when empty. `clearable` adds an empty choice. Show a stored value that isn't an option.
+- `Button`: also any `<button>` attribute (`className`, `aria-label`, `form`…). Variants `default`, `secondary`, `outline`, `ghost`, `danger`, `destructive`. Sizes `default`, `sm`, `icon`, `icon-sm`, `icon-xs`.
+- `Tooltip`: `content`, `side`, one focusable child.
+- `Menu`: `label`, `items` (`{ id, label, icon, checked, disabled, danger, onSelect }`), `trigger`, `className`.
+- Your slot can wrap the admin's own component (e.g. `Select` from `@n3wtou/mnml-cms/admin` plus a class). It gets the built-in, not itself.
+
+## Colours: the token bridge
+
+On admin pages, shadcn's variables point at the admin's tokens. Your components look like the admin there; the rest of your site keeps its theme.
+
+| shadcn | admin |
+| --- | --- |
+| `--background`, `--card`, `--popover` | `--mnml-bg` |
+| `--foreground`, `--card-foreground`, `--popover-foreground`, `--accent-foreground` | `--mnml-text` |
+| `--primary` / `--primary-foreground` | `--mnml-primary` / `--mnml-on-primary` |
+| `--secondary` / `--secondary-foreground` | `--mnml-accent` / `--mnml-on-accent` |
+| `--muted`, `--accent` | `--mnml-surface` |
+| `--muted-foreground` | `--mnml-text-mute` |
+| `--destructive` | `--mnml-danger` |
+| `--border`, `--input` | `--mnml-line` |
+| `--ring` | `--mnml-primary` |
+| `--radius` | `6px` |
+
+- Set on `:root:has(.mnml-admin)`: only pages showing the admin. Beats your `:root` and `.dark` values.
+- Dark mode follows the admin's.
+- Tailwind v4 shadcn (colour values). Tailwind v3 shadcn (`--primary: 222 47% 11%`, HSL channels) doesn't fit.
+- Components that use other variable names keep your theme.
+
+## Popovers in dialogs
+
+The admin opens node forms and confirms in modal `<dialog>`s. A popover portalled to `<body>` sits under them and can't be clicked. Portal into `useAdminPortal()` instead: an element inside the open dialog, `undefined` elsewhere.
+
+```tsx filename="src/components/ui/select.tsx"
+import { useAdminPortal } from '@n3wtou/mnml-cms/admin';
+
+export function SelectContent({ children, ...props }) {
+  return (
+    <SelectPrimitive.Portal container={useAdminPortal()}>
+      <SelectPrimitive.Content {...props}>…</SelectPrimitive.Content>
+    </SelectPrimitive.Portal>
+  );
+}
+```
+
+Same for Tooltip, Popover and DropdownMenu portals.
