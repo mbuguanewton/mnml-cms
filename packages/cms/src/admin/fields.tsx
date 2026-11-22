@@ -21,6 +21,7 @@ import { EntryCombobox } from './entry-combobox.js';
 import { useMenu } from './action-menu.js';
 import { Button } from './ui/button.js';
 import { Checkbox } from './ui/checkbox.js';
+import { DatePicker } from './ui/date-picker.js';
 import { Input as TextInput, Textarea } from './ui/input.js';
 import { Select } from './ui/select.js';
 import { useAdmin } from './context.js';
@@ -66,7 +67,7 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
     case 'textarea':
       return <Textarea id={id} invalid={invalid} value={(value as string) ?? ''} onChange={onChange} />;
     case 'date':
-      return <TextInput id={id} type="date" invalid={invalid} value={(value as string) ?? ''} onChange={(v) => onChange(v || null)} />;
+      return <DatePicker id={id} invalid={invalid} value={(value as string | null) || null} onChange={onChange} />;
     case 'datetime':
       return <DatetimeInput id={id} value={value as string | null} onChange={onChange} invalid={invalid} />;
     case 'url':
@@ -331,15 +332,15 @@ function DatetimeInput({ id, value, onChange, invalid }: { id: string; value: st
   const zone = useSyncExternalStore(noSubscribe, browserTimeZone, () => null);
   return (
     <div className="flex flex-col gap-1">
-      <TextInput
+      <DatePicker
         id={id}
-        type="datetime-local"
+        time
+        timeInCalendar
         invalid={invalid}
         aria-describedby={zone ? `${id}-zone` : undefined}
         disabled={!zone}
-        value={zone ? toLocalInput(value) : ''}
-        onChange={(v) => onChange(fromLocalInput(v))}
-        className="self-start"
+        value={zone ? toLocalInput(value) || null : null}
+        onChange={(v) => onChange(v ? fromLocalInput(v) : null)}
       />
       {zone && (
         <p id={`${id}-zone`} className="text-xs text-mnml-text-mute">

@@ -66,8 +66,10 @@ export const docsIndex: DocsPage[] = [
     "title": "Dates and times",
     "url": "https://mnml-cms.vercel.app/fields/dates-and-times",
     "markdown": "https://mnml-cms.vercel.app/fields/dates-and-times.md",
-    "description": "The date and datetime fields: storage, time zones and sorting.",
-    "headings": []
+    "description": "The date and datetime fields: storage, time zones, sorting and the admin date picker.",
+    "headings": [
+      "In the admin"
+    ]
   },
   {
     "title": "Focal point",
