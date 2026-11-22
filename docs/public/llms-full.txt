@@ -260,6 +260,15 @@ selectLabel(config.posts.fields.category, post.category);
 | `date` | A day (`YYYY-MM-DD`), no time zone |
 | `datetime` | A moment in UTC, one format: `2026-11-18T14:30:00.000Z` |
 
+## In the admin
+
+- Type the date as `YYYY-MM-DD`. A day that doesn't exist (`2026-02-30`) is marked invalid and isn't saved.
+- Or press the calendar button: arrows move by day and week, Home/End to the week's start and end, PageUp/PageDown by month (with Shift by year), Enter picks, Escape closes.
+- The week starts on the browser locale's first day (Monday when unknown).
+- `datetime`: one box, `YYYY-MM-DD HH:mm`. The calendar has a time row (hour and minute lists, type a number to jump) and a Done button; picking a day keeps the time and moves on to it. No native time popup.
+- Touch screens get the browser's own picker.
+- Your own picker: the `DatePicker` slot ([Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md)).
+
 `datetime`:
 
 - One format, so `listEntries({ orderBy })` sorts by time.
@@ -1196,6 +1205,7 @@ Build `pages` with the admin's own controls from `@n3wtou/mnml-cms/admin`. To us
 | `Input`, `Textarea` | `id`, `value`, `onChange(value)`, `placeholder`, `disabled`, `invalid`. `Input` also `type` (number, date, datetime-local stay native, restyled). |
 | `Select` | `id`, `value` (string or null), `onChange(value)`, `options: { value, label }[]`, `placeholder`, `clearable`, `invalid` |
 | `Checkbox`, `Switch` | `id`, `checked`, `onChange(checked)`, `disabled`, `label` |
+| `DatePicker` | `id`, `value` (`YYYY-MM-DD` or null), `onChange(value)`, `time` (adds a time box; value `YYYY-MM-DDTHH:mm`), `timeInCalendar` (with `time`: one box, time row in the calendar), `invalid` |
 | `Tooltip` | `content`, `side`, one focusable child. Shows on hover and keyboard focus. |
 | `Menu` | `label`, `items: { id, label, icon, checked, disabled, danger, onSelect }[]`, `trigger`, `className` |
 
@@ -1222,7 +1232,7 @@ const { toast } = useAdmin();
 
 Swap the admin's controls for your own, e.g. your shadcn Select. Slots you leave out keep the built-in ones.
 
-Slots: `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `Tooltip`, `Menu`. Toasts stay built-in.
+Slots: `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `DatePicker`, `Tooltip`, `Menu`. Toasts stay built-in.
 
 ## Set up
 
@@ -1274,6 +1284,8 @@ Props per slot: `UiSlotProps['Select']`, `UiSlotProps['Button']`, … (also `Sel
 - `onChange` gets the value, not the event.
 - `Select`: `value` is `null` when empty. `clearable` adds an empty choice. Show a stored value that isn't an option.
 - `Button`: also any `<button>` attribute (`className`, `aria-label`, `form`…). Variants `default`, `secondary`, `outline`, `ghost`, `danger`, `destructive`. Sizes `default`, `sm`, `icon`, `icon-sm`, `icon-xs`.
+- `DatePicker`: `value` is `YYYY-MM-DD` or `null`. With `time`, `YYYY-MM-DDTHH:mm` in local time (the admin converts to and from UTC). Return the same shape from `onChange`.
+- `DatePicker` `timeInCalendar`: the admin's datetime fields set it; one box with the time picked in the calendar. Your picker may ignore it. The admin's hour and minute lists are its own `Select`s, so your `Select` slot applies to them; portal its popover with `useAdminPortal()` so it sits above the calendar.
 - `Tooltip`: `content`, `side`, one focusable child.
 - `Menu`: `label`, `items` (`{ id, label, icon, checked, disabled, danger, onSelect }`), `trigger`, `className`.
 - Your slot can wrap the admin's own component (e.g. `Select` from `@n3wtou/mnml-cms/admin` plus a class). It gets the built-in, not itself.

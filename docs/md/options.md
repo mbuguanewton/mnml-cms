@@ -46,6 +46,7 @@ Build `pages` with the admin's own controls from `@n3wtou/mnml-cms/admin`. To us
 | `Input`, `Textarea` | `id`, `value`, `onChange(value)`, `placeholder`, `disabled`, `invalid`. `Input` also `type` (number, date, datetime-local stay native, restyled). |
 | `Select` | `id`, `value` (string or null), `onChange(value)`, `options: { value, label }[]`, `placeholder`, `clearable`, `invalid` |
 | `Checkbox`, `Switch` | `id`, `checked`, `onChange(checked)`, `disabled`, `label` |
+| `DatePicker` | `id`, `value` (`YYYY-MM-DD` or null), `onChange(value)`, `time` (adds a time box; value `YYYY-MM-DDTHH:mm`), `timeInCalendar` (with `time`: one box, time row in the calendar), `invalid` |
 | `Tooltip` | `content`, `side`, one focusable child. Shows on hover and keyboard focus. |
 | `Menu` | `label`, `items: { id, label, icon, checked, disabled, danger, onSelect }[]`, `trigger`, `className` |
 

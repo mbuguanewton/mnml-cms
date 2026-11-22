@@ -29,7 +29,7 @@ export type InputProps = FieldBase & {
   value: string;
   onChange: (value: string) => void;
   /** Native types only; number, date and datetime-local are restyled, not replaced. */
-  type?: 'text' | 'url' | 'email' | 'search' | 'password' | 'number' | 'date' | 'datetime-local';
+  type?: 'text' | 'url' | 'email' | 'search' | 'password' | 'number' | 'date' | 'datetime-local' | 'time';
   placeholder?: string;
   name?: string;
   readOnly?: boolean;
@@ -51,6 +51,16 @@ export type TextareaProps = FieldBase & {
   placeholder?: string;
   rows?: number;
   maxLength?: number;
+};
+
+export type DatePickerProps = FieldBase & {
+  /** `YYYY-MM-DD`, or with `time` the local `YYYY-MM-DDTHH:mm`; null when empty. */
+  value: string | null;
+  onChange: (value: string | null) => void;
+  /** Also pick a time (a datetime field). The admin converts to and from UTC; the value here is local time. */
+  time?: boolean;
+  /** With `time`: one box (`YYYY-MM-DD HH:mm`) and the time picked inside the calendar, instead of a time box beside it. */
+  timeInCalendar?: boolean;
 };
 
 export type SelectOption = { value: string; label: string };

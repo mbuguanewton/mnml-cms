@@ -12,7 +12,7 @@ Each page is Markdown at its URL plus `.md`. Every page in one file: https://mnm
 - [Limits](https://mnml-cms.vercel.app/fields/limits.md): min and max on array, blocks and references fields.
 - [Blocks](https://mnml-cms.vercel.app/fields/blocks.md): Pages made of different kinds of sections with fields.blocks() and block().
 - [Select labels](https://mnml-cms.vercel.app/fields/select-labels.md): Show labels in the admin for select values, and read them with selectLabel().
-- [Dates and times](https://mnml-cms.vercel.app/fields/dates-and-times.md): The date and datetime fields: storage, time zones and sorting.
+- [Dates and times](https://mnml-cms.vercel.app/fields/dates-and-times.md): The date and datetime fields: storage, time zones, sorting and the admin date picker.
 - [Focal point](https://mnml-cms.vercel.app/fields/focal-point.md): Keep the important part of an image in frame when it's cropped (focalX, focalY, focalPosition).
 - [Default values](https://mnml-cms.vercel.app/fields/default-values.md): Starting values for new entries, items and blocks with default.
 - [Conditional fields](https://mnml-cms.vercel.app/fields/conditional-fields.md): Show a field only when other fields match, with showIf.

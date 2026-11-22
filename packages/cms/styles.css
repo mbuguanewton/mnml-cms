@@ -113,9 +113,10 @@
     -webkit-appearance: none;
     margin: 0;
   }
-  /* Date and datetime: one line height everywhere (Safari's is taller), a quiet calendar icon. */
+  /* Date, datetime and time: one line height everywhere (Safari's is taller), a quiet picker icon. */
   .mnml-input[type='date'],
-  .mnml-input[type='datetime-local'] {
+  .mnml-input[type='datetime-local'],
+  .mnml-input[type='time'] {
     min-height: 2rem;
     font-variant-numeric: tabular-nums;
   }
