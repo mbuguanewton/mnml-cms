@@ -1,6 +1,6 @@
 'use client';
 
-import { slotted } from '../ui-context.js';
+import { slotted } from './context.js';
 import { buttonVariants } from './button-variants.js';
 import type { ButtonSlotProps } from './slots.js';
 

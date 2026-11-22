@@ -33,36 +33,36 @@
       "default": "./dist/server/index.js"
     },
     "./proxy": {
-      "types": "./dist/server/proxy.d.ts",
-      "default": "./dist/server/proxy.js"
+      "types": "./dist/server/auth/proxy.d.ts",
+      "default": "./dist/server/auth/proxy.js"
     },
     "./db": {
-      "types": "./dist/server/db.d.ts",
-      "default": "./dist/server/db.js"
+      "types": "./dist/server/content/db.d.ts",
+      "default": "./dist/server/content/db.js"
     },
     "./sync": {
-      "types": "./dist/sync.d.ts",
-      "default": "./dist/sync.js"
+      "types": "./dist/sync/index.d.ts",
+      "default": "./dist/sync/index.js"
     },
     "./schema": {
-      "types": "./dist/server/db.d.ts",
-      "default": "./dist/server/db.js"
+      "types": "./dist/server/content/db.d.ts",
+      "default": "./dist/server/content/db.js"
     },
     "./admin": {
       "types": "./dist/admin/index.d.ts",
       "default": "./dist/admin/index.js"
     },
     "./rich-text": {
-      "types": "./dist/rich-text-render.d.ts",
-      "default": "./dist/rich-text-render.js"
+      "types": "./dist/rich-text/render.d.ts",
+      "default": "./dist/rich-text/render.js"
     },
     "./editor": {
-      "types": "./dist/editor-entry.d.ts",
-      "default": "./dist/editor-entry.js"
+      "types": "./dist/editor/entry.d.ts",
+      "default": "./dist/editor/entry.js"
     },
     "./table": {
-      "types": "./dist/table-entry.d.ts",
-      "default": "./dist/table-entry.js"
+      "types": "./dist/editor/tables.d.ts",
+      "default": "./dist/editor/tables.js"
     },
     "./styles.css": {
       "style": "./styles.css",

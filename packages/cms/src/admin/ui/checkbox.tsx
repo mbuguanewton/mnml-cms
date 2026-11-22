@@ -1,6 +1,6 @@
 'use client';
 
-import { slotted } from '../ui-context.js';
+import { slotted } from './context.js';
 import { CheckIcon } from 'lucide-react';
 import type { CheckboxProps, SwitchProps } from './slots.js';
 

@@ -1,12 +1,12 @@
 import 'server-only';
 import type { ComponentType, ReactNode } from 'react';
-import type { CmsConfig } from '../define.js';
-import type { AuthAdapter, PasswordAuth } from './auth.js';
-import type { Database } from './db.js';
-import { drizzleStorage, type EntryStorage } from './storage.js';
-import { sessionCodec } from './session.js';
-import { createStore } from './store.js';
-import { localMedia, type MediaStorage } from './media.js';
+import type { CmsConfig } from '../schema/define.js';
+import type { AuthAdapter, PasswordAuth } from './auth/auth.js';
+import type { Database } from './content/db.js';
+import { drizzleStorage, type EntryStorage } from './content/storage.js';
+import { sessionCodec } from './auth/session.js';
+import { createStore } from './content/store.js';
+import { localMedia, type MediaStorage } from './media/media.js';
 
 /** A save or delete that reached the site. `by` is the agent token's name when the MCP server made it. */
 export type Change = { type: 'save' | 'delete'; key: string; slug: string; by?: string };

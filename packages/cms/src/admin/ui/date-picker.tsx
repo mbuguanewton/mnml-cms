@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { PortalHost, slotted } from '../ui-context.js';
+import { PortalHost, slotted } from './context.js';
 import { monthGrid, moveDay, parseDate, parseDateTime, sameMonth, shiftMonth, today, weekStartFor, type WeekStart } from './calendar.js';
 import { Button } from './button.js';
 import { Input } from './input.js';

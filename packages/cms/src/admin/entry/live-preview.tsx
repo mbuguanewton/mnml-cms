@@ -1,0 +1,135 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { ExternalLinkIcon, LoaderCircleIcon, RotateCwIcon, XIcon } from 'lucide-react';
+import type { EntryInput, PreviewResult } from '../../api.js';
+import { Button } from '../ui/button.js';
+import { Tooltip } from '../ui/tooltip.js';
+import { useAdmin } from '../shell/context.js';
+
+const DEBOUNCE_MS = 500;
+
+type Status = { kind: 'loading' } | { kind: 'ready' } | { kind: 'paused'; message: string };
+
+/**
+ * The public page in an iframe, kept in sync with the form. Each change is stored as a draft
+ * (with Draft Mode on), then the frame reloads at the same scroll position.
+ *
+ * When the form autosaves, the autosave is the draft: the preview is only set up once (to turn Draft Mode on),
+ * then reloads whenever `autosaveVersion` changes. `pausedMessage` is why autosave isn't saving.
+ */
+export function LivePreview({
+  input,
+  onClose,
+  autosaveVersion,
+  pausedMessage,
+}: {
+  input: EntryInput;
+  onClose: () => void;
+  autosaveVersion?: number;
+  pausedMessage?: string;
+}) {
+  const { post } = useAdmin();
+  const frame = useRef<HTMLIFrameElement>(null);
+  const scrollY = useRef(0);
+  const seq = useRef(0);
+  const [url, setUrl] = useState<string | null>(null);
+  const [status, setStatus] = useState<Status>({ kind: 'loading' });
+  const auto = autosaveVersion !== undefined;
+  // With autosave, the form at mount is all the setup call needs.
+  const [firstKey] = useState(() => JSON.stringify(input));
+  const key = auto ? firstKey : JSON.stringify(input);
+
+  useEffect(() => {
+    const id = ++seq.current;
+    const t = setTimeout(
+      async () => {
+        setStatus({ kind: 'loading' });
+        const r = await post<PreviewResult>('preview', JSON.parse(key));
+        if (id !== seq.current) return; // a newer edit is already on its way
+        if (!r.ok) {
+          // The form only highlights errors on Save, so name the first problem here.
+          const [path, msg] = Object.entries(r.errors)[0] ?? [];
+          return setStatus({ kind: 'paused', message: path ? `${path.replace('$', '')}: ${msg}` : r.message });
+        }
+        const win = frame.current?.contentWindow;
+        if (url === r.url && win) {
+          scrollY.current = win.scrollY;
+          win.location.reload();
+        } else {
+          scrollY.current = 0;
+          setUrl(r.url);
+        }
+      },
+      // Show the first render straight away; debounce the rest.
+      url === null ? 0 : DEBOUNCE_MS,
+    );
+    return () => clearTimeout(t);
+    // `url` is read for the current value only; re-running on it would loop.
+    // oxlint-disable-next-line react/exhaustive-deps
+  }, [key]);
+
+  useEffect(() => {
+    const win = frame.current?.contentWindow;
+    if (!autosaveVersion || !win) return;
+    scrollY.current = win.scrollY;
+    win.location.reload();
+  }, [autosaveVersion]);
+
+  const paused = pausedMessage ?? (status.kind === 'paused' ? status.message : null);
+
+  const onLoad = () => {
+    frame.current?.contentWindow?.scrollTo(0, scrollY.current);
+    setStatus((s) => (s.kind === 'loading' ? { kind: 'ready' } : s));
+  };
+
+  return (
+    <aside className="flex min-h-0 flex-1 flex-col border-l border-mnml-line bg-mnml-panel">
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-mnml-line px-3">
+        <span className="min-w-0 flex-1 truncate [font-family:ui-monospace,monospace] text-xs text-mnml-text-soft">{url ?? 'Preview'}</span>
+        {status.kind === 'loading' && <LoaderCircleIcon className="size-3.5 animate-spin text-mnml-text-mute" aria-label="Updating" />}
+        <Tooltip content="Reload" side="bottom">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Reload"
+            disabled={!url}
+            onClick={() => frame.current?.contentWindow?.location.reload()}
+          >
+            <RotateCwIcon />
+          </Button>
+        </Tooltip>
+        {url && (
+          <Tooltip content="Open in new tab" side="bottom">
+            <a
+              href={url}
+              target="_blank"
+              aria-label="Open in new tab"
+              className="mnml-state flex size-6 items-center justify-center rounded-[6px] text-mnml-text-soft"
+            >
+              <ExternalLinkIcon className="size-3.5" />
+            </a>
+          </Tooltip>
+        )}
+        <Tooltip content="Close preview" side="bottom">
+          <Button type="button" variant="ghost" size="icon-xs" aria-label="Close preview" onClick={onClose}>
+            <XIcon />
+          </Button>
+        </Tooltip>
+      </div>
+      {paused && (
+        <p role="status" className="border-b border-mnml-line bg-mnml-warn px-3 py-1.5 text-xs text-mnml-on-warn">
+          Preview paused: {paused}
+        </p>
+      )}
+      <div className="relative min-h-0 flex-1">
+        {url ? (
+          <iframe ref={frame} src={url} title="Live preview" onLoad={onLoad} className="absolute inset-0 size-full bg-mnml-bg" />
+        ) : (
+          <p className="p-6 text-center text-mnml-text-mute">{paused ? 'Fill in the required fields to see the page.' : 'Loading preview…'}</p>
+        )}
+      </div>
+    </aside>
+  );
+}
