@@ -1,5 +1,6 @@
 'use client';
 
+import { slotted } from '../ui-context.js';
 import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from 'react';
 import { placePopover } from './position.js';
 import type { TooltipProps } from './slots.js';
@@ -12,7 +13,7 @@ const HOVER_MS = 400;
  * Rendered in a `popover`, so it's never clipped. When the content just repeats the button's aria-label it isn't
  * linked again with aria-describedby.
  */
-export function Tooltip({ content, children, side = 'top' }: TooltipProps) {
+function TooltipBase({ content, children, side = 'top' }: TooltipProps) {
   const tipId = useId();
   const wrap = useRef<HTMLSpanElement>(null);
   const tip = useRef<HTMLSpanElement>(null);
@@ -80,3 +81,5 @@ export function Tooltip({ content, children, side = 'top' }: TooltipProps) {
     </span>
   );
 }
+
+export const Tooltip = slotted('Tooltip', TooltipBase);

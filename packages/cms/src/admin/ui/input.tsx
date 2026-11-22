@@ -1,5 +1,6 @@
 'use client';
 
+import { slotted } from '../ui-context.js';
 import { inputClass } from '../styles.js';
 import type { InputProps, TextareaProps } from './slots.js';
 
@@ -8,7 +9,7 @@ import type { InputProps, TextareaProps } from './slots.js';
 const narrow = new Set(['number', 'date', 'datetime-local']);
 
 /** A text input that reports its value, not the event. */
-export function Input({ value, onChange, invalid, type = 'text', className = '', ...rest }: InputProps) {
+function InputBase({ value, onChange, invalid, type = 'text', className = '', ...rest }: InputProps) {
   return (
     <input
       type={type}
@@ -21,7 +22,7 @@ export function Input({ value, onChange, invalid, type = 'text', className = '',
   );
 }
 
-export function Textarea({ value, onChange, invalid, rows = 4, className = '', ...rest }: TextareaProps) {
+function TextareaBase({ value, onChange, invalid, rows = 4, className = '', ...rest }: TextareaProps) {
   return (
     <textarea
       rows={rows}
@@ -33,3 +34,7 @@ export function Textarea({ value, onChange, invalid, rows = 4, className = '', .
     />
   );
 }
+
+export const Input = slotted('Input', InputBase);
+
+export const Textarea = slotted('Textarea', TextareaBase);

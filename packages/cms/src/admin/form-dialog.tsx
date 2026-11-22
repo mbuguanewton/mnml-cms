@@ -1,5 +1,6 @@
 'use client';
 
+import { PortalHost } from './ui-context.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { initialValues, objectSchema, withDefaults } from '../define.js';
 import type { FormOptions, NodeFormFields, ToolContext } from '../editor.js';
@@ -89,45 +90,47 @@ export function FormDialogProvider({ children }: { children: React.ReactNode }) 
         className="w-[min(30rem,calc(100vw-2rem))] rounded-[10px] border border-mnml-line bg-mnml-bg p-0 text-sm text-mnml-text shadow-xl backdrop:bg-black/40 [font-family:ui-sans-serif,system-ui,sans-serif]"
         style={{ margin: 'auto' }}
       >
-        {opts && (
-          <form
-            noValidate
-            className="flex flex-col gap-4"
-            style={{ padding: 20 }}
-            onSubmit={(e) => {
-              e.preventDefault();
-              // The dialog is outside the entry form in the DOM, but React bubbles events through the component tree.
-              e.stopPropagation();
-              submit();
-            }}
-          >
-            <div className="flex flex-col gap-1.5">
-              <h2 id="mnml-form-title" className="text-base font-semibold [font-family:inherit]">
-                {opts.title}
-              </h2>
-              {opts.description && <p className="text-mnml-text-soft">{opts.description}</p>}
-            </div>
-            <RefOptionsProvider value={refOptions}>
-              {Object.entries(opts.fields).map(([key, field]) => (
-                <FieldRenderer
-                  key={key}
-                  field={field}
-                  value={values[key]}
-                  onChange={(v) => setValues((prev) => ({ ...prev, [key]: v }))}
-                  path={`mnml-form.${key}`}
-                  errors={Object.fromEntries(Object.entries(errors).map(([k, m]) => [`mnml-form.${k}`, m]))}
-                  siblings={values}
-                />
-              ))}
-            </RefOptionsProvider>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => close(null)}>
-                Cancel
-              </Button>
-              <Button type="submit">{opts.submitLabel ?? 'Save'}</Button>
-            </div>
-          </form>
-        )}
+        <PortalHost>
+          {opts && (
+            <form
+              noValidate
+              className="flex flex-col gap-4"
+              style={{ padding: 20 }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                // The dialog is outside the entry form in the DOM, but React bubbles events through the component tree.
+                e.stopPropagation();
+                submit();
+              }}
+            >
+              <div className="flex flex-col gap-1.5">
+                <h2 id="mnml-form-title" className="text-base font-semibold [font-family:inherit]">
+                  {opts.title}
+                </h2>
+                {opts.description && <p className="text-mnml-text-soft">{opts.description}</p>}
+              </div>
+              <RefOptionsProvider value={refOptions}>
+                {Object.entries(opts.fields).map(([key, field]) => (
+                  <FieldRenderer
+                    key={key}
+                    field={field}
+                    value={values[key]}
+                    onChange={(v) => setValues((prev) => ({ ...prev, [key]: v }))}
+                    path={`mnml-form.${key}`}
+                    errors={Object.fromEntries(Object.entries(errors).map(([k, m]) => [`mnml-form.${k}`, m]))}
+                    siblings={values}
+                  />
+                ))}
+              </RefOptionsProvider>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => close(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit">{opts.submitLabel ?? 'Save'}</Button>
+              </div>
+            </form>
+          )}
+        </PortalHost>
       </dialog>
     </FormContext>
   );

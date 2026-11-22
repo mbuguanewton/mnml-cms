@@ -27,7 +27,8 @@ Each page is Markdown at its URL plus `.md`. Every page in one file: https://mnm
 - [Linking entries from rich text](https://mnml-cms.vercel.app/editor/linking-entries.md): Link to other entries from rich text with the reference tool and referenceNode.
 - [Custom node rendering](https://mnml-cms.vercel.app/editor/custom-rendering.md): Render rich text nodes with your own React components on the site.
 - [Agents (MCP)](https://mnml-cms.vercel.app/agents.md): Let AI agents (Claude Code, Cursor, Zed) manage content through the built-in MCP server, with scoped tokens, drafts and editor approval.
-- [Options](https://mnml-cms.vercel.app/options.md): Every option of createCms: storage, auth, media, paths, sidebar, editor, MCP, revalidate and onChange.
+- [Options](https://mnml-cms.vercel.app/options.md): Every option of createCms: storage, auth, media, paths, sidebar, editor, ui, MCP, revalidate and onChange.
+- [Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md): Use your own components (shadcn and others) in the admin with the ui option, uiProvider and the token bridge.
 - [Authentication](https://mnml-cms.vercel.app/authentication.md): The built-in password login, or your own auth (Better Auth, Auth.js, Clerk) through an AuthAdapter.
 - [Image storage](https://mnml-cms.vercel.app/image-storage.md): Where uploaded images are stored: local disk in development, Vercel Blob, or your own storage.
 - [Other ORMs](https://mnml-cms.vercel.app/other-orms.md): Store entries without Drizzle by writing your own EntryStorage (Prisma, Kysely, SQL).

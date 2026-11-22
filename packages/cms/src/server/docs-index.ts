@@ -234,10 +234,22 @@ export const docsIndex: DocsPage[] = [
     "title": "Options",
     "url": "https://mnml-cms.vercel.app/options",
     "markdown": "https://mnml-cms.vercel.app/options.md",
-    "description": "Every option of createCms: storage, auth, media, paths, sidebar, editor, MCP, revalidate and onChange.",
+    "description": "Every option of createCms: storage, auth, media, paths, sidebar, editor, ui, MCP, revalidate and onChange.",
     "headings": [
       "In your own code",
       "Admin UI components"
+    ]
+  },
+  {
+    "title": "Custom admin UI",
+    "url": "https://mnml-cms.vercel.app/custom-admin-ui",
+    "markdown": "https://mnml-cms.vercel.app/custom-admin-ui.md",
+    "description": "Use your own components (shadcn and others) in the admin with the ui option, uiProvider and the token bridge.",
+    "headings": [
+      "Set up",
+      "What a slot gets",
+      "Colours: the token bridge",
+      "Popovers in dialogs"
     ]
   },
   {

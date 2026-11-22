@@ -1,5 +1,6 @@
 'use client';
 
+import { slotted } from '../ui-context.js';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { CheckIcon, ChevronDownIcon } from 'lucide-react';
 import { placePopover } from './position.js';
@@ -14,7 +15,7 @@ const TYPEAHEAD_MS = 600;
  * Keyboard as in the WAI-ARIA select-only combobox: arrows, Home/End, PageUp/PageDown, type-ahead, Enter or Space
  * to pick, Escape to close. Focus stays on the button.
  */
-export function Select({
+function SelectBase({
   id,
   value,
   onChange,
@@ -178,3 +179,5 @@ export function Select({
     </>
   );
 }
+
+export const Select = slotted('Select', SelectBase);

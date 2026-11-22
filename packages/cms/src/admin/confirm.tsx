@@ -1,5 +1,6 @@
 'use client';
 
+import { PortalHost } from './ui-context.js';
 import { createContext, use, useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from './button.js';
 
@@ -78,26 +79,28 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
         // Tailwind's reset removes the browser's auto margins, which is what centers a modal dialog.
         style={{ margin: 'auto' }}
       >
-        {opts && (
-          <div className="flex flex-col gap-4" style={{ padding: 20 }}>
-            <div className="flex flex-col gap-1.5">
-              <h2 id="mnml-dialog-title" className="text-base font-semibold [font-family:inherit]">
-                {opts.title}
-              </h2>
-              {opts.description && <div className="text-mnml-text-soft">{opts.description}</div>}
-            </div>
-            <div className="flex justify-end gap-2">
-              {opts.cancelLabel !== false && (
-                <Button ref={opts.danger ? focus : undefined} type="button" variant="outline" onClick={() => close(false)}>
-                  {opts.cancelLabel ?? 'Cancel'}
+        <PortalHost>
+          {opts && (
+            <div className="flex flex-col gap-4" style={{ padding: 20 }}>
+              <div className="flex flex-col gap-1.5">
+                <h2 id="mnml-dialog-title" className="text-base font-semibold [font-family:inherit]">
+                  {opts.title}
+                </h2>
+                {opts.description && <div className="text-mnml-text-soft">{opts.description}</div>}
+              </div>
+              <div className="flex justify-end gap-2">
+                {opts.cancelLabel !== false && (
+                  <Button ref={opts.danger ? focus : undefined} type="button" variant="outline" onClick={() => close(false)}>
+                    {opts.cancelLabel ?? 'Cancel'}
+                  </Button>
+                )}
+                <Button ref={opts.danger ? undefined : focus} type="button" variant={opts.danger ? 'destructive' : 'default'} onClick={() => close(true)}>
+                  {opts.confirmLabel ?? 'Confirm'}
                 </Button>
-              )}
-              <Button ref={opts.danger ? undefined : focus} type="button" variant={opts.danger ? 'destructive' : 'default'} onClick={() => close(true)}>
-                {opts.confirmLabel ?? 'Confirm'}
-              </Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </PortalHost>
       </dialog>
     </DialogContext>
   );

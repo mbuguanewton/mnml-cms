@@ -1,6 +1,6 @@
 ---
 title: "Options"
-description: "Every option of createCms: storage, auth, media, paths, sidebar, editor, MCP, revalidate and onChange."
+description: "Every option of createCms: storage, auth, media, paths, sidebar, editor, ui, MCP, revalidate and onChange."
 url: https://mnml-cms.vercel.app/options
 ---
 
@@ -20,6 +20,7 @@ Second argument of `createCms(config, options)`.
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
 | `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build with `@n3wtou/mnml-cms/admin`. |
 | `editor` | Component from `editorProvider()`: extra extensions and buttons ([Extending the editor](https://mnml-cms.vercel.app/editor.md)) |
+| `ui` | Component from `uiProvider()`: your own Button, Select… in the admin ([Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md)) |
 | `mcp` | `{ tokens, adminTokens }`: MCP server for AI agents at `<apiPath>/mcp`, with tokens from env and/or the admin ([Agents](https://mnml-cms.vercel.app/agents.md)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
@@ -37,7 +38,7 @@ toast({ title: 'Saved', tone: 'success' }); // tone: 'info' | 'success' | 'dange
 
 ## Admin UI components
 
-Build `pages` with the admin's own controls from `@n3wtou/mnml-cms/admin`. Client components. No extra dependencies. Styled with `--mnml-*`.
+Build `pages` with the admin's own controls from `@n3wtou/mnml-cms/admin`. To use your own instead, see [Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md). Client components. No extra dependencies. Styled with `--mnml-*`.
 
 | Component | Props |
 | --- | --- |

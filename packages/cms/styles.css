@@ -67,6 +67,34 @@
   --mnml-pending: #fbbf24;
 }
 
+/*
+ * Token bridge: on pages that show the admin, shadcn-style variables follow the admin's tokens, so a site's own
+ * components passed in through `ui` look like the admin. :root (not .mnml-admin) so portalled popovers match too;
+ * :has(.mnml-admin) keeps the site's pages untouched (the preview banner there is .mnml-root, not .mnml-admin). Unlayered and (0,2,0), so it beats a site's :root and .dark.
+ * Tailwind v4 shadcn (colour values); v3's HSL channel tokens don't fit.
+ */
+:root:has(.mnml-admin) {
+  --background: var(--mnml-bg);
+  --foreground: var(--mnml-text);
+  --card: var(--mnml-bg);
+  --card-foreground: var(--mnml-text);
+  --popover: var(--mnml-bg);
+  --popover-foreground: var(--mnml-text);
+  --primary: var(--mnml-primary);
+  --primary-foreground: var(--mnml-on-primary);
+  --secondary: var(--mnml-accent);
+  --secondary-foreground: var(--mnml-on-accent);
+  --muted: var(--mnml-surface);
+  --muted-foreground: var(--mnml-text-mute);
+  --accent: var(--mnml-surface);
+  --accent-foreground: var(--mnml-text);
+  --destructive: var(--mnml-danger);
+  --border: var(--mnml-line);
+  --input: var(--mnml-line);
+  --ring: var(--mnml-primary);
+  --radius: 6px;
+}
+
 @layer components {
   /* Native inputs (inputClass): the same look in every browser, and pickers that follow light or dark. */
   .mnml-input {

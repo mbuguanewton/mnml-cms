@@ -1,8 +1,9 @@
 'use client';
 
+import { slotted } from '../ui-context.js';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { CheckIcon, MoreHorizontalIcon } from 'lucide-react';
-import { buttonVariants } from './button.js';
+import { buttonVariants } from './button-variants.js';
 import { menuKey } from './menu-keys.js';
 import { placePopover } from './position.js';
 import { isTypeahead, typeahead } from './select-keys.js';
@@ -18,7 +19,7 @@ const itemClass =
  * A button that opens a menu of actions (WAI-ARIA menu button). The menu is a `popover` (never clipped). Arrows
  * (wrapping), Home/End, type-ahead, Enter or Space to run an item, Escape to close; focus returns to the button.
  */
-export function Menu({ label, items, trigger, className }: MenuProps) {
+function MenuBase({ label, items, trigger, className }: MenuProps) {
   const menuId = useId();
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -173,3 +174,5 @@ export function Menu({ label, items, trigger, className }: MenuProps) {
     </>
   );
 }
+
+export const Menu = slotted('Menu', MenuBase);

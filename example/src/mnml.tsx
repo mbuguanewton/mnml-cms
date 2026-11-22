@@ -4,6 +4,7 @@ import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next'
 import config from '../mnml.config';
 import { CacheTool } from './admin/cache-tool';
 import { Editor } from './mnml-editor-client';
+import { AdminUi } from './mnml-ui';
 
 export const cms = createCms(config, {
   database: neonDatabase(process.env.DATABASE_URL),
@@ -13,6 +14,8 @@ export const cms = createCms(config, {
   brand: 'Example',
   icons: { settings: <SettingsIcon />, home: <HouseIcon />, authors: <UserIcon />, posts: <FileTextIcon /> },
   editor: Editor,
+  // The site's own Select (shadcn) in the admin; see src/mnml-ui.tsx.
+  ui: AdminUi,
   // An extra admin screen, built with the components from @n3wtou/mnml-cms/admin.
   pages: [{ path: 'cache', label: 'Cache', icon: <DatabaseZapIcon />, render: () => <CacheTool /> }],
   // The MCP server at /api/mnml/mcp, for agents such as Claude Code.
