@@ -2,6 +2,7 @@
 export { Button } from './ui/button.js';
 export { buttonVariants } from './ui/button-variants.js';
 export { Checkbox, Switch } from './ui/checkbox.js';
+export { DatePicker } from './ui/date-picker.js';
 export { Input, Textarea } from './ui/input.js';
 export { Menu } from './ui/menu.js';
 export { Select } from './ui/select.js';
@@ -12,6 +13,7 @@ export type {
   ButtonProps,
   ButtonSlotProps,
   CheckboxProps,
+  DatePickerProps,
   InputProps,
   MenuAction,
   MenuProps,

@@ -1,7 +1,17 @@
 'use client';
 
 import { createContext, use, useState, type ComponentType, type ReactNode } from 'react';
-import type { ButtonSlotProps, CheckboxProps, InputProps, MenuProps, SelectProps, SwitchProps, TextareaProps, TooltipProps } from './ui/slots.js';
+import type {
+  ButtonSlotProps,
+  CheckboxProps,
+  DatePickerProps,
+  InputProps,
+  MenuProps,
+  SelectProps,
+  SwitchProps,
+  TextareaProps,
+  TooltipProps,
+} from './ui/slots.js';
 
 /** The admin's swappable components, by slot name, with the props each one gets. */
 export type UiSlotProps = {
@@ -10,6 +20,7 @@ export type UiSlotProps = {
   Textarea: TextareaProps;
   Select: SelectProps;
   Checkbox: CheckboxProps;
+  DatePicker: DatePickerProps;
   Switch: SwitchProps;
   Tooltip: TooltipProps;
   Menu: MenuProps;

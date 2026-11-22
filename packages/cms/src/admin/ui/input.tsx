@@ -6,7 +6,7 @@ import type { InputProps, TextareaProps } from './slots.js';
 
 // Number, date and datetime-local keep the browser's own input (its keyboard and pickers); styles.css evens out
 // how they look across browsers (no spinners, a quiet calendar icon, dark-mode pickers).
-const narrow = new Set(['number', 'date', 'datetime-local']);
+const narrow = new Set(['number', 'date', 'datetime-local', 'time']);
 
 /** A text input that reports its value, not the event. */
 function InputBase({ value, onChange, invalid, type = 'text', className = '', ...rest }: InputProps) {

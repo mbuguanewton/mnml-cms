@@ -1,6 +1,6 @@
 ---
 title: "Dates and times"
-description: "The date and datetime fields: storage, time zones and sorting."
+description: "The date and datetime fields: storage, time zones, sorting and the admin date picker."
 url: https://mnml-cms.vercel.app/fields/dates-and-times
 ---
 
@@ -10,6 +10,15 @@ url: https://mnml-cms.vercel.app/fields/dates-and-times
 | --- | --- |
 | `date` | A day (`YYYY-MM-DD`), no time zone |
 | `datetime` | A moment in UTC, one format: `2026-11-18T14:30:00.000Z` |
+
+## In the admin
+
+- Type the date as `YYYY-MM-DD`. A day that doesn't exist (`2026-02-30`) is marked invalid and isn't saved.
+- Or press the calendar button: arrows move by day and week, Home/End to the week's start and end, PageUp/PageDown by month (with Shift by year), Enter picks, Escape closes.
+- The week starts on the browser locale's first day (Monday when unknown).
+- `datetime`: one box, `YYYY-MM-DD HH:mm`. The calendar has a time row (hour and minute lists, type a number to jump) and a Done button; picking a day keeps the time and moves on to it. No native time popup.
+- Touch screens get the browser's own picker.
+- Your own picker: the `DatePicker` slot ([Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md)).
 
 `datetime`:
 

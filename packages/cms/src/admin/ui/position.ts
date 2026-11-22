@@ -7,7 +7,11 @@ const EDGE = 8;
 export function placePopover(
   el: HTMLElement,
   anchor: HTMLElement,
-  { side = 'bottom', matchWidth = false }: { side?: 'top' | 'bottom'; matchWidth?: boolean } = {},
+  {
+    side = 'bottom',
+    matchWidth = false,
+    align = matchWidth ? 'start' : 'center',
+  }: { side?: 'top' | 'bottom'; matchWidth?: boolean; align?: 'start' | 'center' } = {},
 ) {
   const a = anchor.getBoundingClientRect();
   const vw = document.documentElement.clientWidth;
@@ -28,8 +32,8 @@ export function placePopover(
       : below >= r.height || below > above
         ? a.bottom + GAP
         : a.top - GAP - r.height;
-  // Centred over the anchor for tooltips, left-aligned for lists.
-  const left = matchWidth ? a.left : a.left + a.width / 2 - r.width / 2;
+  // Centred over the anchor for tooltips, left-aligned for lists and calendars.
+  const left = align === 'start' ? a.left : a.left + a.width / 2 - r.width / 2;
   el.style.top = `${Math.max(EDGE, top)}px`;
   el.style.left = `${Math.min(Math.max(EDGE, left), vw - EDGE - r.width)}px`;
 }
