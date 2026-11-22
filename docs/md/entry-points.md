@@ -14,7 +14,7 @@ url: https://mnml-cms.vercel.app/entry-points
 | `@n3wtou/mnml-cms/rich-text` | `RichText` (server renderer), `collectReferences` |
 | `@n3wtou/mnml-cms/editor` | `defineEditor`, `tools` (incl. `tools.node`, `tools.reference`), `nodeAttributes`, `referenceNode`, `collectReferences`, types `RichTextComponents`, `RichTextNodeProps`. Server-safe. |
 | `@n3wtou/mnml-cms/table` | `tables`: table extensions and buttons. Server-safe. |
-| `@n3wtou/mnml-cms/admin` | UI pieces for extra admin pages, `editorProvider` |
+| `@n3wtou/mnml-cms/admin` | UI for extra admin pages (`Button`, `Input`, `Select`, `Checkbox`, `Switch`, `Tooltip`, `useAdmin`), `editorProvider` ([Options](https://mnml-cms.vercel.app/options.md#admin-ui-components)) |
 | `@n3wtou/mnml-cms/sync` | Export/import, `mediaImporter`, `markdownToRichText` ([Moving content](https://mnml-cms.vercel.app/moving-content.md)). No Next.js needed. |
 | `@n3wtou/mnml-cms/db`, `@n3wtou/mnml-cms/schema` | The Drizzle table, for scripts and drizzle-kit (same export) |
 | `@n3wtou/mnml-cms/styles.css` | Admin styles and the `--mnml-*` variables |

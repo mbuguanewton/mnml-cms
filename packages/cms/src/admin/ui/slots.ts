@@ -1,0 +1,134 @@
+import type { ComponentProps, ReactNode } from 'react';
+
+// The props of each admin UI component ("slot"). Every built-in component takes exactly these, so a site's own
+// component can stand in for one later without the admin changing.
+
+export type ButtonProps = {
+  variant?: 'default' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'destructive';
+  size?: 'default' | 'sm' | 'icon' | 'icon-sm' | 'icon-xs';
+  type?: 'button' | 'submit' | 'reset';
+  disabled?: boolean;
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  children?: ReactNode;
+};
+
+/** What a Button slot gets: `ButtonProps` plus any other `<button>` attribute the admin passes (className, aria-*). */
+export type ButtonSlotProps = ButtonProps & Omit<ComponentProps<'button'>, keyof ButtonProps>;
+
+type FieldBase = {
+  id?: string;
+  disabled?: boolean;
+  /** Marks the control as failing validation (`aria-invalid`, red border). */
+  invalid?: boolean;
+  'aria-label'?: string;
+  'aria-describedby'?: string;
+  className?: string;
+};
+
+export type InputProps = FieldBase & {
+  value: string;
+  onChange: (value: string) => void;
+  /** Native types only; number, date and datetime-local are restyled, not replaced. */
+  type?: 'text' | 'url' | 'email' | 'search' | 'password' | 'number' | 'date' | 'datetime-local' | 'time';
+  placeholder?: string;
+  name?: string;
+  readOnly?: boolean;
+  required?: boolean;
+  maxLength?: number;
+  min?: number | string;
+  max?: number | string;
+  step?: number | string;
+  inputMode?: 'text' | 'url' | 'email' | 'numeric' | 'decimal' | 'search';
+  autoComplete?: string;
+  autoFocus?: boolean;
+  onBlur?: () => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+};
+
+export type TextareaProps = FieldBase & {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  rows?: number;
+  maxLength?: number;
+};
+
+export type DatePickerProps = FieldBase & {
+  /** `YYYY-MM-DD`, or with `time` the local `YYYY-MM-DDTHH:mm`; null when empty. */
+  value: string | null;
+  onChange: (value: string | null) => void;
+  /** Also pick a time (a datetime field). The admin converts to and from UTC; the value here is local time. */
+  time?: boolean;
+  /** With `time`: one box (`YYYY-MM-DD HH:mm`) and the time picked inside the calendar, instead of a time box beside it. */
+  timeInCalendar?: boolean;
+};
+
+export type SelectOption = { value: string; label: string };
+
+export type SelectProps = FieldBase & {
+  /** The picked option's value, or null for none. A value that isn't an option is shown as-is. */
+  value: string | null;
+  onChange: (value: string | null) => void;
+  options: SelectOption[];
+  /** Shown when nothing is picked. Default '—'. */
+  placeholder?: string;
+  /** Adds a first option that picks nothing (null). */
+  clearable?: boolean;
+};
+
+export type CheckboxProps = {
+  id?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  invalid?: boolean;
+  /** Rendered next to the box, inside its <label>. Without it, label the control yourself (htmlFor / aria-label). */
+  label?: ReactNode;
+  name?: string;
+  'aria-label'?: string;
+  'aria-describedby'?: string;
+  className?: string;
+};
+
+export type SwitchProps = CheckboxProps;
+
+export type ToastTone = 'info' | 'success' | 'danger';
+
+export type ToastOptions = {
+  title: string;
+  description?: ReactNode;
+  /** Default 'info'. 'danger' is announced assertively and stays longer. */
+  tone?: ToastTone;
+  /** Milliseconds before it closes. Default 4000 (8000 for 'danger'); 0 keeps it until dismissed. */
+  duration?: number;
+};
+
+export type TooltipProps = {
+  content: ReactNode;
+  /** One focusable element (a button or link). The tooltip shows on hover and keyboard focus. */
+  children: React.ReactElement;
+  /** Default 'top'. Flips when there is no room. */
+  side?: 'top' | 'bottom';
+};
+
+export type MenuAction = {
+  /** Unique within the menu. */
+  id: string;
+  label: string;
+  icon?: ReactNode;
+  /** Set for an on/off item (shown with a check, announced as checked or not); leave out for a plain action. */
+  checked?: boolean;
+  disabled?: boolean;
+  danger?: boolean;
+  onSelect: () => void;
+};
+
+export type MenuProps = {
+  /** Names the menu, and the trigger too when it has no `trigger` content (an icon button with a tooltip). */
+  label: string;
+  items: MenuAction[];
+  /** Content of the trigger button. Default: a "more" icon. */
+  trigger?: ReactNode;
+  /** Classes for the trigger button, replacing the default ghost icon button look. */
+  className?: string;
+};

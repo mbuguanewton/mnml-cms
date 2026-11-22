@@ -39,7 +39,7 @@ Let AI agents (Claude Code, Cursor, Zed) edit your content. The CMS has a built-
 
 Done. The server lives at `<apiPath>/mcp`, e.g. `https://your-site.com/api/mnml/mcp`. Your route file (`export const { GET, POST } = cms.handlers`) already serves it.
 
-- No token set: the route is off (404).
+- No token set (and no `adminTokens`): the route is off (404).
 - Token under 32 characters: ignored, with a warning in the log.
 
 ## Tokens
@@ -63,6 +63,21 @@ mcp: {
   ],
 },
 ```
+
+### Tokens from the admin
+
+Let editors make tokens in the admin instead of env vars:
+
+```ts
+mcp: { adminTokens: true },
+```
+
+- **Agent access** appears in the sidebar (under Tools).
+- Create: name, scopes (default `read` + `draft`), content (default all). The token (`mnml_…`) shows **once**, with a ready `claude mcp add` command. Copy it then.
+- Stored as a SHA-256 hash in the entries table. No migration.
+- The list shows each token's scopes, content, created and last used (updated at most once a minute).
+- **Revoke** cuts access on the agent's next request.
+- Config tokens still work alongside, and show in the list as "from config". Names are unique across both.
 
 ### Scopes
 

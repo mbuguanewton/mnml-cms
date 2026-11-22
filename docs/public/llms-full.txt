@@ -260,6 +260,15 @@ selectLabel(config.posts.fields.category, post.category);
 | `date` | A day (`YYYY-MM-DD`), no time zone |
 | `datetime` | A moment in UTC, one format: `2026-11-18T14:30:00.000Z` |
 
+## In the admin
+
+- Type the date as `YYYY-MM-DD`. A day that doesn't exist (`2026-02-30`) is marked invalid and isn't saved.
+- Or press the calendar button: arrows move by day and week, Home/End to the week's start and end, PageUp/PageDown by month (with Shift by year), Enter picks, Escape closes.
+- The week starts on the browser locale's first day (Monday when unknown).
+- `datetime`: one box, `YYYY-MM-DD HH:mm`. The calendar has a time row (hour and minute lists, type a number to jump) and a Done button; picking a day keeps the time and moves on to it. No native time popup.
+- Touch screens get the browser's own picker.
+- Your own picker: the `DatePicker` slot ([Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md)).
+
 `datetime`:
 
 - One format, so `listEntries({ orderBy })` sorts by time.
@@ -495,6 +504,12 @@ A collection entry is draft or published. The admin's dot:
 - **Grey:** draft
 - **Orange over green:** published, with unpublished changes
 
+## Collection list
+
+- 25 entries a page, with Previous / Next.
+- The search box filters by title or slug as you type (Enter without JavaScript).
+- Page and search live in the URL (`?q=…&page=2`), so links and the back button work.
+
 ## Autosave
 
 Edits to an existing entry save ~1.5 s after typing stops ("Saving…", then "Saved"). No save button for drafts.
@@ -695,6 +710,15 @@ In order: undo/redo, text style menu (paragraph, headings, quote), `format` (bol
 
 - `tools.underline`, `tools.strike`: `format`. `tools.horizontalRule`: `insert`.
 - In each group, package tools (`tools.underline`, `tables.tools`…) first, then yours in listed order.
+
+## Narrow fields and fullscreen
+
+- Toolbar stays one row. Tools that don't fit move into a "More tools" (`…`) menu, from the end. Undo/redo and the text style menu always stay.
+- Tools that can be on or off (with `isActive`) show checked in the menu.
+- The editor box has a fixed height and scrolls. Drag its bottom-right corner to make it taller, like a textarea.
+- The expand button (right end) opens the editor fullscreen. Escape or the button again closes it.
+- Fullscreen header: entry title, field label, save status. Autosave keeps running.
+- In fullscreen each tool shows its name next to its icon (and the text style button its current style). Tools that don't fit go into "More tools".
 
 ## Example: code blocks with syntax highlighting
 
@@ -960,7 +984,7 @@ Let AI agents (Claude Code, Cursor, Zed) edit your content. The CMS has a built-
 
 Done. The server lives at `<apiPath>/mcp`, e.g. `https://your-site.com/api/mnml/mcp`. Your route file (`export const { GET, POST } = cms.handlers`) already serves it.
 
-- No token set: the route is off (404).
+- No token set (and no `adminTokens`): the route is off (404).
 - Token under 32 characters: ignored, with a warning in the log.
 
 ## Tokens
@@ -984,6 +1008,21 @@ mcp: {
   ],
 },
 ```
+
+### Tokens from the admin
+
+Let editors make tokens in the admin instead of env vars:
+
+```ts
+mcp: { adminTokens: true },
+```
+
+- **Agent access** appears in the sidebar (under Tools).
+- Create: name, scopes (default `read` + `draft`), content (default all). The token (`mnml_…`) shows **once**, with a ready `claude mcp add` command. Copy it then.
+- Stored as a SHA-256 hash in the entries table. No migration.
+- The list shows each token's scopes, content, created and last used (updated at most once a minute).
+- **Revoke** cuts access on the agent's next request.
+- Config tokens still work alongside, and show in the list as "from config". Names are unique across both.
 
 ### Scopes
 
@@ -1141,19 +1180,156 @@ Second argument of `createCms(config, options)`.
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
 | `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build with `@n3wtou/mnml-cms/admin`. |
 | `editor` | Component from `editorProvider()`: extra extensions and buttons ([Extending the editor](https://mnml-cms.vercel.app/editor.md)) |
-| `mcp` | `{ tokens }`: MCP server for AI agents at `<apiPath>/mcp` ([Agents](https://mnml-cms.vercel.app/agents.md)) |
+| `ui` | Component from `uiProvider()`: your own Button, Select… in the admin ([Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md)) |
+| `mcp` | `{ tokens, adminTokens }`: MCP server for AI agents at `<apiPath>/mcp`, with tokens from env and/or the admin ([Agents](https://mnml-cms.vercel.app/agents.md)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
 
 ## In your own code
 
 - `cms.isAdmin()`: checks the session in your routes. Works with the built-in login and adapters.
-- `useAdmin()` from `@n3wtou/mnml-cms/admin` opens the admin's dialogs in custom admin pages:
+- `useAdmin()` from `@n3wtou/mnml-cms/admin` opens the admin's dialogs and toasts in custom admin pages:
 
 ```ts
-const { confirm, alert } = useAdmin();
+const { confirm, alert, toast } = useAdmin();
 await confirm({ title: 'Delete?', description: '…', confirmLabel: 'Delete', danger: true }); // true or false
+toast({ title: 'Saved', tone: 'success' }); // tone: 'info' | 'success' | 'danger'; duration in ms, 0 = stays
 ```
+
+## Admin UI components
+
+Build `pages` with the admin's own controls from `@n3wtou/mnml-cms/admin`. To use your own instead, see [Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md). Client components. No extra dependencies. Styled with `--mnml-*`.
+
+| Component | Props |
+| --- | --- |
+| `Button` | `variant`, `size`, `disabled`, `onClick`, `children` |
+| `Input`, `Textarea` | `id`, `value`, `onChange(value)`, `placeholder`, `disabled`, `invalid`. `Input` also `type` (number, date, datetime-local stay native, restyled). |
+| `Select` | `id`, `value` (string or null), `onChange(value)`, `options: { value, label }[]`, `placeholder`, `clearable`, `invalid` |
+| `Checkbox`, `Switch` | `id`, `checked`, `onChange(checked)`, `disabled`, `label` |
+| `DatePicker` | `id`, `value` (`YYYY-MM-DD` or null), `onChange(value)`, `time` (adds a time box; value `YYYY-MM-DDTHH:mm`), `timeInCalendar` (with `time`: one box, time row in the calendar), `invalid` |
+| `Tooltip` | `content`, `side`, one focusable child. Shows on hover and keyboard focus. |
+| `Menu` | `label`, `items: { id, label, icon, checked, disabled, danger, onSelect }[]`, `trigger`, `className` |
+
+- `onChange` gets the value, not the event.
+- `Select`: full width; cap it with a `max-w-*` class. Arrows, Home/End, type-ahead, Enter, Escape. A value that isn't an option shows as "(unavailable)".
+- `Menu`: a "more" icon button by default; pass `trigger` for your own content. Set `checked` for on/off items. Arrows wrap, Home/End, type-ahead, Escape.
+- Label a control with `<label htmlFor={id}>`, the `label` prop, or `aria-label`.
+- Prop types are exported: `SelectProps`, `CheckboxProps`, `MenuProps`, `MenuAction`, `ToastOptions`, …
+
+```tsx
+'use client';
+import { Select, Switch, useAdmin } from '@n3wtou/mnml-cms/admin';
+
+const { toast } = useAdmin();
+<Select id="section" value={section} onChange={setSection} options={[{ value: 'posts', label: 'Posts' }]} />
+<Switch checked={on} onChange={setOn} label="Confirm first" />
+```
+
+---
+
+<!-- https://mnml-cms.vercel.app/custom-admin-ui.md -->
+
+# Custom admin UI
+
+Swap the admin's controls for your own, e.g. your shadcn Select. Slots you leave out keep the built-in ones.
+
+Slots: `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `DatePicker`, `Tooltip`, `Menu`. Toasts stay built-in.
+
+## Set up
+
+A `'use client'` file maps your components to the slots:
+
+```tsx filename="src/mnml-ui.tsx"
+'use client';
+import { uiProvider, type UiSlotProps } from '@n3wtou/mnml-cms/admin';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const NONE = '__none__'; // Radix items can't use '' as a value
+
+function AdminSelect({ id, value, onChange, options, placeholder = '—', clearable, disabled, invalid, className, ...aria }: UiSlotProps['Select']) {
+  const label = value === null ? placeholder : (options.find((o) => o.value === value)?.label ?? `${value} (unavailable)`);
+  return (
+    <Select value={value ?? (clearable ? NONE : '')} onValueChange={(v) => onChange(v === NONE ? null : v)} disabled={disabled}>
+      <SelectTrigger id={id} aria-invalid={invalid || undefined} className={className} {...aria}>
+        <SelectValue placeholder={placeholder}>{label}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {clearable && <SelectItem value={NONE}>{placeholder}</SelectItem>}
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+export const AdminUi = uiProvider({ Select: AdminSelect });
+```
+
+Pass it to `createCms`:
+
+```tsx filename="src/mnml.tsx"
+import { AdminUi } from './mnml-ui';
+
+export const cms = createCms(config, { /* … */ ui: AdminUi });
+```
+
+Custom admin `pages` that import `Select`, `Button`… from `@n3wtou/mnml-cms/admin` get your components too.
+
+## What a slot gets
+
+Props per slot: `UiSlotProps['Select']`, `UiSlotProps['Button']`, … (also `SelectProps`, `ButtonSlotProps`, …).
+
+- Put `id` and the `aria-*` props on the focusable element. The field's `<label htmlFor>` names it through `id`.
+- `invalid`: set `aria-invalid`.
+- `onChange` gets the value, not the event.
+- `Select`: `value` is `null` when empty. `clearable` adds an empty choice. Show a stored value that isn't an option.
+- `Button`: also any `<button>` attribute (`className`, `aria-label`, `form`…). Variants `default`, `secondary`, `outline`, `ghost`, `danger`, `destructive`. Sizes `default`, `sm`, `icon`, `icon-sm`, `icon-xs`.
+- `DatePicker`: `value` is `YYYY-MM-DD` or `null`. With `time`, `YYYY-MM-DDTHH:mm` in local time (the admin converts to and from UTC). Return the same shape from `onChange`.
+- `DatePicker` `timeInCalendar`: the admin's datetime fields set it; one box with the time picked in the calendar. Your picker may ignore it. The admin's hour and minute lists are its own `Select`s, so your `Select` slot applies to them; portal its popover with `useAdminPortal()` so it sits above the calendar.
+- `Tooltip`: `content`, `side`, one focusable child.
+- `Menu`: `label`, `items` (`{ id, label, icon, checked, disabled, danger, onSelect }`), `trigger`, `className`.
+- Your slot can wrap the admin's own component (e.g. `Select` from `@n3wtou/mnml-cms/admin` plus a class). It gets the built-in, not itself.
+
+## Colours: the token bridge
+
+On admin pages, shadcn's variables point at the admin's tokens. Your components look like the admin there; the rest of your site keeps its theme.
+
+| shadcn | admin |
+| --- | --- |
+| `--background`, `--card`, `--popover` | `--mnml-bg` |
+| `--foreground`, `--card-foreground`, `--popover-foreground`, `--accent-foreground` | `--mnml-text` |
+| `--primary` / `--primary-foreground` | `--mnml-primary` / `--mnml-on-primary` |
+| `--secondary` / `--secondary-foreground` | `--mnml-accent` / `--mnml-on-accent` |
+| `--muted`, `--accent` | `--mnml-surface` |
+| `--muted-foreground` | `--mnml-text-mute` |
+| `--destructive` | `--mnml-danger` |
+| `--border`, `--input` | `--mnml-line` |
+| `--ring` | `--mnml-primary` |
+| `--radius` | `6px` |
+
+- Set on `:root:has(.mnml-admin)`: only pages showing the admin. Beats your `:root` and `.dark` values.
+- Dark mode follows the admin's.
+- Tailwind v4 shadcn (colour values). Tailwind v3 shadcn (`--primary: 222 47% 11%`, HSL channels) doesn't fit.
+- Components that use other variable names keep your theme.
+
+## Popovers in dialogs
+
+The admin opens node forms and confirms in modal `<dialog>`s. A popover portalled to `<body>` sits under them and can't be clicked. Portal into `useAdminPortal()` instead: an element inside the open dialog, `undefined` elsewhere.
+
+```tsx filename="src/components/ui/select.tsx"
+import { useAdminPortal } from '@n3wtou/mnml-cms/admin';
+
+export function SelectContent({ children, ...props }) {
+  return (
+    <SelectPrimitive.Portal container={useAdminPortal()}>
+      <SelectPrimitive.Content {...props}>…</SelectPrimitive.Content>
+    </SelectPrimitive.Portal>
+  );
+}
+```
+
+Same for Tooltip, Popover and DropdownMenu portals.
 
 ---
 
@@ -1331,7 +1507,7 @@ const storage: EntryStorage = {
 | `@n3wtou/mnml-cms/rich-text` | `RichText` (server renderer), `collectReferences` |
 | `@n3wtou/mnml-cms/editor` | `defineEditor`, `tools` (incl. `tools.node`, `tools.reference`), `nodeAttributes`, `referenceNode`, `collectReferences`, types `RichTextComponents`, `RichTextNodeProps`. Server-safe. |
 | `@n3wtou/mnml-cms/table` | `tables`: table extensions and buttons. Server-safe. |
-| `@n3wtou/mnml-cms/admin` | UI pieces for extra admin pages, `editorProvider` |
+| `@n3wtou/mnml-cms/admin` | UI for extra admin pages (`Button`, `Input`, `Select`, `Checkbox`, `Switch`, `Tooltip`, `useAdmin`), `editorProvider` ([Options](https://mnml-cms.vercel.app/options.md#admin-ui-components)) |
 | `@n3wtou/mnml-cms/sync` | Export/import, `mediaImporter`, `markdownToRichText` ([Moving content](https://mnml-cms.vercel.app/moving-content.md)). No Next.js needed. |
 | `@n3wtou/mnml-cms/db`, `@n3wtou/mnml-cms/schema` | The Drizzle table, for scripts and drizzle-kit (same export) |
 | `@n3wtou/mnml-cms/styles.css` | Admin styles and the `--mnml-*` variables |
@@ -1404,6 +1580,7 @@ Upgrade one major at a time. Run the type check after each, and click through `/
 | 1.4.0 | `fields.references()` + `cms.getEntries()`; `fields.datetime()`; `default` on fields + `initialValues()`; select option labels + `selectLabel()`; `min` / `max` on `array` / `blocks` / `references`; combobox entry pickers; `<RichText components>` and `defineEditor({ components })`; `tools.node()` + `nodeAttributes()`; `tools.reference()`, `referenceNode()`, `collectReferences()`; tool `visible` / `context`; `@n3wtou/mnml-cms/table` (`tables`); `mediaImporter()` / `importRemoteMedia()` in `/sync`; image focal point (`focalX` / `focalY`) + `focalPosition()`. | No API or database change. `required` on `array` / `blocks` now means at least one item; the package's toolbar tools come before the site's own in each group. |
 | 1.4.1 | Docs moved to https://mnml-cms.vercel.app; the README covers install and setup only. | No code change. |
 | 1.5.0 | MCP server for agents (`mcp` option, scoped tokens, approval of deletes and discards, Markdown rich text); `listEntries` returns `createdAt` / `updatedAt`; `change.by`; `markdownToRichText()` / `richTextToMarkdown()` in `/sync`; MCP `docs` tool, docs pages as `.md`, `AGENTS.md` in the package. | No API or database change. |
+| 1.6.0 | Agent tokens from the admin (`mcp.adminTokens`); own admin controls (`Select`, `Checkbox`, `Switch`, `Tooltip`, toasts, `Menu`); `ui` option + `uiProvider()` to use your own components (e.g. shadcn) with a token bridge, `useAdminPortal()`, `mnml-admin` class; own date picker (`DatePicker`, time inside the calendar); rich text toolbar overflow menu, fullscreen editor, resizable inline editor; collection list paging and search. | No API or database change. Native selects, checkboxes, date and time popups are replaced by the admin's own. Sites with CSS targeting those native elements in the admin may need a look. |
 
 ## Upgrade steps
 

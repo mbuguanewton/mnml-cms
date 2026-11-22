@@ -67,7 +67,78 @@
   --mnml-pending: #fbbf24;
 }
 
+/*
+ * Token bridge: on pages that show the admin, shadcn-style variables follow the admin's tokens, so a site's own
+ * components passed in through `ui` look like the admin. :root (not .mnml-admin) so portalled popovers match too;
+ * :has(.mnml-admin) keeps the site's pages untouched (the preview banner there is .mnml-root, not .mnml-admin). Unlayered and (0,2,0), so it beats a site's :root and .dark.
+ * Tailwind v4 shadcn (colour values); v3's HSL channel tokens don't fit.
+ */
+:root:has(.mnml-admin) {
+  --background: var(--mnml-bg);
+  --foreground: var(--mnml-text);
+  --card: var(--mnml-bg);
+  --card-foreground: var(--mnml-text);
+  --popover: var(--mnml-bg);
+  --popover-foreground: var(--mnml-text);
+  --primary: var(--mnml-primary);
+  --primary-foreground: var(--mnml-on-primary);
+  --secondary: var(--mnml-accent);
+  --secondary-foreground: var(--mnml-on-accent);
+  --muted: var(--mnml-surface);
+  --muted-foreground: var(--mnml-text-mute);
+  --accent: var(--mnml-surface);
+  --accent-foreground: var(--mnml-text);
+  --destructive: var(--mnml-danger);
+  --border: var(--mnml-line);
+  --input: var(--mnml-line);
+  --ring: var(--mnml-primary);
+  --radius: 6px;
+}
+
 @layer components {
+  /* Native inputs (inputClass): the same look in every browser, and pickers that follow light or dark. */
+  .mnml-input {
+    color-scheme: light;
+  }
+  :where(.dark) .mnml-input {
+    color-scheme: dark;
+  }
+  /* Number: no spinners (arrow keys still step), as Firefox otherwise always shows them. */
+  .mnml-input[type='number'] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  .mnml-input::-webkit-inner-spin-button,
+  .mnml-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  /* Date, datetime and time: one line height everywhere (Safari's is taller), a quiet picker icon. */
+  .mnml-input[type='date'],
+  .mnml-input[type='datetime-local'],
+  .mnml-input[type='time'] {
+    min-height: 2rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .mnml-input::-webkit-date-and-time-value {
+    min-height: 1.25rem;
+    text-align: left;
+  }
+  .mnml-input::-webkit-datetime-edit {
+    padding: 0;
+  }
+  .mnml-input::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+  .mnml-input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+    margin-left: 0.5rem;
+  }
+  .mnml-input::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+  }
+
   /* Hover state layer for list items and nav links. */
   .mnml-state:hover {
     background-color: color-mix(in srgb, currentColor 8%, transparent);

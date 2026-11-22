@@ -6,8 +6,9 @@ export function YouTubeEmbed({ attrs }: RichTextNodeProps) {
   const id = youtubeId(attrs.url);
   const title = typeof attrs.title === 'string' && attrs.title ? attrs.title : 'YouTube video';
   if (!id) return null;
+  const aspect = attrs.aspect === 'classic' ? '4 / 3' : attrs.aspect === 'square' ? '1 / 1' : undefined;
   return (
-    <div className="video">
+    <div className="video" style={aspect ? { aspectRatio: aspect } : undefined}>
       <iframe
         src={`https://www.youtube-nocookie.com/embed/${id}`}
         title={title}

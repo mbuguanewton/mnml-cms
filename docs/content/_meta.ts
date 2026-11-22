@@ -8,6 +8,7 @@ export default {
   editor: 'Editor',
   agents: 'Agents (MCP)',
   options: 'Options',
+  'custom-admin-ui': 'Custom admin UI',
   authentication: 'Authentication',
   'image-storage': 'Image storage',
   'other-orms': 'Other ORMs',

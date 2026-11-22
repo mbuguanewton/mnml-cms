@@ -1,12 +1,12 @@
 import 'server-only';
 import type { ComponentType, ReactNode } from 'react';
-import type { CmsConfig } from '../define.js';
-import type { AuthAdapter, PasswordAuth } from './auth.js';
-import type { Database } from './db.js';
-import { drizzleStorage, type EntryStorage } from './storage.js';
-import { sessionCodec } from './session.js';
-import { createStore } from './store.js';
-import { localMedia, type MediaStorage } from './media.js';
+import type { CmsConfig } from '../schema/define.js';
+import type { AuthAdapter, PasswordAuth } from './auth/auth.js';
+import type { Database } from './content/db.js';
+import { drizzleStorage, type EntryStorage } from './content/storage.js';
+import { sessionCodec } from './auth/session.js';
+import { createStore } from './content/store.js';
+import { localMedia, type MediaStorage } from './media/media.js';
 
 /** A save or delete that reached the site. `by` is the agent token's name when the MCP server made it. */
 export type Change = { type: 'save' | 'delete'; key: string; slug: string; by?: string };
@@ -30,7 +30,12 @@ export type AgentToken = {
 };
 
 /** The MCP server at <apiPath>/mcp, for AI agents. Off unless set. */
-export type McpOptions = { tokens: AgentToken[] };
+export type McpOptions = {
+  /** Tokens from your config (env vars). Good for CI and scripts. */
+  tokens?: AgentToken[];
+  /** Lets signed-in editors create and revoke tokens on an "Agent access" page in the admin. Stored hashed. */
+  adminTokens?: boolean;
+};
 
 /** An extra screen in the admin, e.g. a settings page that isn't content. */
 export type AdminPageDef = {
@@ -79,6 +84,9 @@ export type CmsOptions<C extends CmsConfig> = StorageOptions & {
   /** Extra extensions and toolbar buttons for the rich-text editor: the component from `editorProvider(config)`,
    *  exported from a 'use client' file. Pass the same config to `<RichText editor>`. */
   editor?: ComponentType<{ children: ReactNode }>;
+  /** A site's own components for the admin's Button, Input, Select… slots: the component from `uiProvider(slots)`,
+   *  exported from a 'use client' file. Slots left out use the built-in ones. */
+  ui?: ComponentType<{ children: ReactNode }>;
   /** Called after each save or delete. Default: revalidatePath('/', 'layout'). */
   revalidate?: (change: Change) => void;
   /** Turns on the MCP server at <apiPath>/mcp, so agents (Claude Code, Cursor…) can manage content with a token. */

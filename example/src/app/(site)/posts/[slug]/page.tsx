@@ -34,7 +34,10 @@ export default async function PostPage({ params }: Props) {
         ← All posts
       </Link>
       <header className="mt-8 flex flex-col gap-4">
-        <Category>{post.category}</Category>
+        <p className="flex items-center gap-3">
+          <Category>{post.category}</Category>
+          {post.featured && <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">Featured</span>}
+        </p>
         <h1 className="font-serif text-4xl font-semibold leading-tight tracking-tight md:text-5xl">{post.title}</h1>
         {post.summary && <p className="text-xl text-soft">{post.summary}</p>}
         <p className="text-sm text-mute">

@@ -6,16 +6,20 @@ This repo is a pnpm monorepo: `packages/cms` is the package (`@n3wtou/mnml-cms`)
 that consumes it through `workspace:*`. 
 
 - **Version and docs:** the source of truth is `packages/cms/package.json`, `packages/cms/CHANGELOG.md`,
-  `docs/content/` (the docs site), `packages/cms/README.md` and `packages/cms/src/define.ts`, not `node_modules`. The change you are making is
+  `docs/content/` (the docs site), `packages/cms/README.md` and `packages/cms/src/schema/define.ts`, not `node_modules`. The change you are making is
   "the latest version".
-- **Where things live:** config and field builders in `src/define.ts`; the API routes in `src/server/handlers.ts`
-  (types in `src/api.ts`); `createCms` options in `src/server/context.ts`; storage in `src/server/store.ts`,
-  `storage.ts` and `db.ts` (the entries table); the admin UI in `src/admin/`; public entry points in the
-  `exports` of `packages/cms/package.json`.
+- **Where things live:** `packages/cms/src` is arranged by feature, tests beside the code: `schema/` (config and
+  field builders in `define.ts`, derived values, SEO, datetimes), `rich-text/` (extensions, renderer, Markdown,
+  references), `editor/` (editor config, tools, tables), `sync/`, `server/` (`content/` for the write path and storage:
+  `content.ts`, `store.ts`, `storage.ts`, `db.ts` (the entries table); `auth/`; `media/`; `mcp/`; `admin/` for the
+  admin page and the API route handlers in `handlers.ts`; `context.ts` for the `createCms` options) and `admin/` (`ui/`
+  controls, `entry/` form and fields, `editor/` rich-text editor and node forms, `agent/`, `shell/` navigation and
+  dialogs). Request and response types are in `src/api.ts`. Public entry points are the `exports` of
+  `packages/cms/package.json`, each pointing at a file in `dist`.
 - **The example is the test bed:** `example/mnml.config.ts`, `example/src/mnml.tsx`, `example/src/proxy.ts`,
   `example/src/app/admin/[[...path]]/page.tsx`, `example/src/app/api/mnml/[...route]/route.ts` and the pages in
   `example/src/app/(site)/`. Every feature should be used there so `pnpm --filter example build` exercises it.
-  `pnpm build` rebuilds `packages/cms/dist`, which the example imports; restart its dev server after a rebuild.
+  `pnpm build` rebuilds `packages/cms/dist` in place (no `rm -rf`; `scripts/prune-dist.mjs` drops stale files), so a running example dev server picks it up without a restart.
 - **Example database scripts** (dev database only, via `example/.env.local`): `pnpm --filter example db:push`,
   `db:seed` (safe to rerun), `db:export`, `db:import`, `db:sync`.
 - **Every user-facing change** updates the docs (`docs/content/`, a new page or a section; the README only changes
@@ -35,5 +39,5 @@ that consumes it through `workspace:*`.
   PR; `main` is the release branch and only takes PRs from `develop`.
 - **Agent docs are generated.** `docs/content` is the only source. `packages/cms/scripts/build-agent-docs.mjs` writes each page as
   Markdown to `docs/md/<page>.md` (frontmatter: title, description, url; served at `<page>.md` by `docs/app/md`), `docs/public/llms*.txt`, and the MCP docs index
-  (`packages/cms/src/server/docs-index.ts`). It runs in `pnpm build`; CI fails if they're stale. Every docs page needs a
+  (`packages/cms/src/server/mcp/docs-index.ts`). It runs in `pnpm build`; CI fails if they're stale. Every docs page needs a
   `description` in its frontmatter.

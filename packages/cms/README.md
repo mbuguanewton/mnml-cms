@@ -123,6 +123,7 @@ Everything else is in the docs at **https://mnml-cms.vercel.app**:
 - [Drafts and publishing](https://mnml-cms.vercel.app/drafts-and-publishing)
 - [Agents (MCP)](https://mnml-cms.vercel.app/agents): let Claude Code, Cursor or Zed manage content with scoped tokens
 - [Moving content between databases](https://mnml-cms.vercel.app/moving-content), including rehosting images
+- [Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui): your own (shadcn) components in the admin
 - [Extending the editor](https://mnml-cms.vercel.app/editor): [tables](https://mnml-cms.vercel.app/editor/tables), [nodes with a form](https://mnml-cms.vercel.app/editor/nodes-with-a-form),
   [linking entries](https://mnml-cms.vercel.app/editor/linking-entries), [custom node rendering](https://mnml-cms.vercel.app/editor/custom-rendering)
 - [Options](https://mnml-cms.vercel.app/options)
