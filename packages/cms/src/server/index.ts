@@ -1,18 +1,18 @@
 import 'server-only';
-import type { CmsConfig } from '../define.js';
-import { createAdminPage } from './admin-page.js';
-import { isAdmin } from './auth.js';
+import type { CmsConfig } from '../schema/define.js';
+import { createAdminPage } from './admin/admin-page.js';
+import { isAdmin } from './auth/auth.js';
 import { createContext, type CmsOptions } from './context.js';
-import { createHandlers } from './handlers.js';
-import { createPreviewBanner } from './preview-banner.js';
+import { createHandlers } from './admin/handlers.js';
+import { createPreviewBanner } from './admin/preview-banner.js';
 
 export type { AdminPageDef, AgentScope, AgentToken, Change, CmsOptions, McpOptions } from './context.js';
-export type { AuthAdapter, PasswordAuth } from './auth.js';
-export type { ListOptions, ReadOptions } from './store.js';
-export { neonDatabase, type Database } from './db.js';
-export type { EntryStorage, StoredRow } from './storage.js';
-export { drizzleStorage } from './storage.js';
-export { localMedia, vercelBlobMedia, type MediaFile, type MediaStorage } from './media.js';
+export type { AuthAdapter, PasswordAuth } from './auth/auth.js';
+export type { ListOptions, ReadOptions } from './content/store.js';
+export { neonDatabase, type Database } from './content/db.js';
+export type { EntryStorage, StoredRow } from './content/storage.js';
+export { drizzleStorage } from './content/storage.js';
+export { localMedia, vercelBlobMedia, type MediaFile, type MediaStorage } from './media/media.js';
 
 /**
  * Set up the CMS for a Next.js app.

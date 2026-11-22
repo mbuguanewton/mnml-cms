@@ -1,7 +1,7 @@
 'use client';
 
-import { slotted } from '../ui-context.js';
-import { inputClass } from '../styles.js';
+import { slotted } from './context.js';
+import { inputClass } from './styles.js';
 import type { InputProps, TextareaProps } from './slots.js';
 
 // Number, date and datetime-local keep the browser's own input (its keyboard and pickers); styles.css evens out

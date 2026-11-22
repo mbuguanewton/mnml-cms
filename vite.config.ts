@@ -124,7 +124,7 @@ export default defineConfig({
       '*.css',
       '.playwright',
       'docs/public/_pagefind',
-      'packages/cms/src/server/docs-index.ts',
+      'packages/cms/src/server/mcp/docs-index.ts',
     ],
   },
 });

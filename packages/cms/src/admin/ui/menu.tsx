@@ -1,6 +1,6 @@
 'use client';
 
-import { slotted } from '../ui-context.js';
+import { slotted } from './context.js';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { CheckIcon, MoreHorizontalIcon } from 'lucide-react';
 import { buttonVariants } from './button-variants.js';

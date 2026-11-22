@@ -1,7 +1,7 @@
 // Builds what agents read from the docs (docs/content), so the docs stay the only source:
 //   docs/md/<page>.md                       every page as Markdown (title, description, url in its frontmatter), served at <url>.md
 //   docs/public/llms.txt, llms-full.txt     the index and every page in one file
-//   packages/cms/src/server/docs-index.ts   the index behind the MCP `docs` tool, which links to the .md pages
+//   packages/cms/src/server/mcp/docs-index.ts   the index behind the MCP `docs` tool, which links to the .md pages
 // `--check` writes nothing and fails if any of them is out of date (CI runs it before the build).
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -66,7 +66,7 @@ function build() {
 
   const index = pages.map((p) => ({ title: p.title, url: p.url, markdown: p.markdown, description: p.description, headings: p.headings }));
   files.set(
-    'packages/cms/src/server/docs-index.ts',
+    'packages/cms/src/server/mcp/docs-index.ts',
     `// ${GENERATED}\n\nexport type DocsPage = { title: string; url: string; markdown: string; description: string; headings: string[] };\n\n` +
       `export const DOCS_SITE = ${JSON.stringify(SITE)};\n\nexport const docsIndex: DocsPage[] = ${JSON.stringify(index, null, 2)};\n`,
   );

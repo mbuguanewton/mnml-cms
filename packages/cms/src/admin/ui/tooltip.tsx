@@ -1,6 +1,6 @@
 'use client';
 
-import { slotted } from '../ui-context.js';
+import { slotted } from './context.js';
 import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from 'react';
 import { placePopover } from './position.js';
 import type { TooltipProps } from './slots.js';
