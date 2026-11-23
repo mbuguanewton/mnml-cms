@@ -134,6 +134,7 @@ export const docsIndex: DocsPage[] = [
       "Collection list",
       "Filters",
       "Columns and sorting",
+      "Choosing columns",
       "Bulk actions",
       "Autosave",
       "Only valid data is saved",

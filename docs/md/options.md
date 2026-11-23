@@ -49,7 +49,7 @@ Build `pages` with the admin's own controls from `@n3wtou/mnml-cms/admin`. To us
 | `Checkbox`, `Switch` | `id`, `checked`, `onChange(checked)`, `disabled`, `label` |
 | `DatePicker` | `id`, `value` (`YYYY-MM-DD` or null), `onChange(value)`, `time` (adds a time box; value `YYYY-MM-DDTHH:mm`), `timeInCalendar` (with `time`: one box, time row in the calendar), `invalid` |
 | `Tooltip` | `content`, `side`, one focusable child. Shows on hover and keyboard focus. |
-| `Menu` | `label`, `items: { id, label, icon, checked, disabled, danger, onSelect }[]`, `trigger`, `className` |
+| `Menu` | `label`, `items: { id, label, icon, checked, disabled, danger, keepOpen, onSelect }[]`, `trigger`, `className` |
 
 - `onChange` gets the value, not the event.
 - `Select`: full width; cap it with a `max-w-*` class. Arrows, Home/End, type-ahead, Enter, Escape. A value that isn't an option shows as "(unavailable)".

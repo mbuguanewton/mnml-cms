@@ -16,7 +16,7 @@ A collection entry is draft or published. The admin's dot:
 
 - 25 entries a page, with Previous / Next.
 - The search box filters by title or slug as you type (Enter without JavaScript).
-- **Filters** narrows the list. **Column headers** sort it. **Checkboxes** select rows for bulk actions.
+- **Columns** chooses what the table shows. **Filters** narrows the list. **Column headers** sort it. **Checkboxes** select rows for bulk actions.
 - Page, search, filters and sort live in the URL (`?q=…&status=draft&f.category=news&sort=f.date&dir=desc&page=2`), so links and the back button work.
 
 ### Filters
@@ -62,6 +62,18 @@ The table shows the title, Slug, Status and the first `date` field. Click a head
 
 ```ts
 columns: ['title', 'category', 'date', 'featured'],
+```
+
+### Choosing columns
+
+The **Columns** button opens a menu with a check mark beside each column: Slug, Status and every field that can be shown. Tick one to show it, untick to hide it; the menu stays open while you do. The first column (the link to the entry) is always shown. **Reset to default** goes back to the collection's `columns` (or the standard table).
+
+The choice is kept per collection in this browser, in a cookie named `mnml_cols_<collection>` (set on the admin path, for a year; the server reads it, so the table renders right at once). Nothing is stored in the database, and other editors and browsers keep their own. Columns show in the menu's order: the ones the table shows by default first, then the other fields in config order. A sort on a column you hide is dropped. Filters don't depend on the columns shown.
+
+`columnChoices` on the collection limits what the menu offers, besides Slug and Status. It takes field names, or `false` for no Columns button (the table then always shows `columns` or the default). A name that isn't a field, or isn't one of the shown types, throws when the config loads.
+
+```ts
+columnChoices: ['category', 'date', 'featured'], // default: every field that can be a column
 ```
 
 ### Bulk actions

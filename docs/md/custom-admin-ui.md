@@ -63,7 +63,7 @@ Props per slot: `UiSlotProps['Select']`, `UiSlotProps['Button']`, … (also `Sel
 - `DatePicker`: `value` is `YYYY-MM-DD` or `null`. With `time`, `YYYY-MM-DDTHH:mm` in local time (the admin converts to and from UTC). Return the same shape from `onChange`.
 - `DatePicker` `timeInCalendar`: the admin's datetime fields set it; one box with the time picked in the calendar. Your picker may ignore it. The admin's hour and minute lists are its own `Select`s, so your `Select` slot applies to them; portal its popover with `useAdminPortal()` so it sits above the calendar.
 - `Tooltip`: `content`, `side`, one focusable child.
-- `Menu`: `label`, `items` (`{ id, label, icon, checked, disabled, danger, onSelect }`), `trigger`, `className`.
+- `Menu`: `label`, `items` (`{ id, label, icon, checked, disabled, danger, keepOpen, onSelect }`; `keepOpen` leaves the menu open after the item runs, for on/off items), `trigger`, `className`.
 - Your slot can wrap the admin's own component (e.g. `Select` from `@n3wtou/mnml-cms/admin` plus a class). It gets the built-in, not itself.
 
 ## Colours: the token bridge

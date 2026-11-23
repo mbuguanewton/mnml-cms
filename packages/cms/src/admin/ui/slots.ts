@@ -120,6 +120,8 @@ export type MenuAction = {
   checked?: boolean;
   disabled?: boolean;
   danger?: boolean;
+  /** Keep the menu open after this item runs (for on/off items you toggle one after another). */
+  keepOpen?: boolean;
   onSelect: () => void;
 };
 

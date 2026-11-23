@@ -258,6 +258,11 @@ export type Collection<F extends Fields = Fields, D = NoDerived> = {
    * follow it). Left out: the title and the first `date` field. Every column sorts.
    */
   columns?: readonly (keyof F & string)[];
+  /**
+   * Which columns an editor may show or hide from the list's Columns menu (besides Slug and Status): field names, or
+   * `false` for no Columns menu. Left out, every field that can be a column. The first column always shows.
+   */
+  columnChoices?: readonly (keyof F & string)[] | false;
   fields: F;
   derived?: DerivedFns<F, D>;
 };
@@ -284,15 +289,14 @@ function checkShowIf(label: string, fields: Fields) {
 }
 
 // `filters` and `columns` naming a field the list can't use (or that doesn't exist) would silently show nothing, so fail when the config loads.
-function checkListConfig(label: string, fields: Fields, option: 'filters' | 'columns', names: readonly string[] | false | undefined) {
+function checkListConfig(label: string, fields: Fields, option: 'filters' | 'columns' | 'columnChoices', names: readonly string[] | false | undefined) {
   if (!names) return;
   const allowed = option === 'filters' ? FILTER_TYPES : COLUMN_TYPES;
+  const verb = option === 'filters' ? 'filters' : 'shows';
   for (const [i, k] of names.entries()) {
     if (!Object.hasOwn(fields, k)) throw new Error(`"${label}": ${option} names "${k}", which is not a field.`);
     if (!allowed.has(fields[k].type)) {
-      throw new Error(
-        `"${label}": ${option} names "${k}", a ${fields[k].type} field; the list ${option === 'filters' ? 'filters' : 'shows'} only ${[...allowed].join(', ')}.`,
-      );
+      throw new Error(`"${label}": ${option} names "${k}", a ${fields[k].type} field; the list ${verb} only ${[...allowed].join(', ')}.`);
     }
     if (names.indexOf(k) !== i) throw new Error(`"${label}": ${option} lists "${k}" twice.`);
   }
@@ -304,16 +308,18 @@ export const singleton = <F extends Fields, D = NoDerived>(s: Omit<Singleton<F, 
   return { kind: 'singleton', ...s };
 };
 export const collection = <F extends Fields, D = NoDerived>(
-  c: Omit<Collection<F, D>, 'kind' | 'titleField' | 'derived' | 'filters' | 'columns'> & {
+  c: Omit<Collection<F, D>, 'kind' | 'titleField' | 'derived' | 'filters' | 'columns' | 'columnChoices'> & {
     titleField: NoInfer<keyof F & string>;
     filters?: readonly NoInfer<keyof F & string>[] | false;
     columns?: readonly NoInfer<keyof F & string>[];
+    columnChoices?: readonly NoInfer<keyof F & string>[] | false;
   } & DerivedInput<F, D>,
 ): Collection<F, D> => {
   checkDerived(c.label, c.fields, c.derived);
   checkShowIf(c.label, c.fields);
   checkListConfig(c.label, c.fields, 'filters', c.filters);
   checkListConfig(c.label, c.fields, 'columns', c.columns);
+  checkListConfig(c.label, c.fields, 'columnChoices', c.columnChoices);
   return { kind: 'collection', ...c };
 };
 

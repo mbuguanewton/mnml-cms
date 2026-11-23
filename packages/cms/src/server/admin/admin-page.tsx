@@ -1,7 +1,7 @@
 import 'server-only';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -26,6 +26,7 @@ import { AdminProvider } from '../../admin/shell/context.js';
 import { FormDialogProvider } from '../../admin/editor/form-dialog.js';
 import { AgentAccess } from '../../admin/agent/agent-access.js';
 import { AgentRequest } from '../../admin/agent/agent-request.js';
+import { ListColumns } from '../../admin/entry/list-columns.js';
 import { ListFilters, type FilterControl } from '../../admin/entry/list-filters.js';
 import { ListHeaderCheck, ListRowCheck, ListSelection } from '../../admin/entry/list-selection.js';
 import { ListSearch } from '../../admin/entry/list-search.js';
@@ -33,7 +34,11 @@ import {
   applyFilters,
   activeCount,
   cellText,
+  columnChoices,
+  columnCookie,
   columnSpecs,
+  parseColumnCookie,
+  visibleColumns,
   filterParams,
   filterSpecs,
   filterValues,
@@ -509,7 +514,10 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
 
   async function collectionList(key: string, def: Collection, query: Record<string, string | string[] | undefined>) {
     // Columns (the title and the first date unless `columns` says otherwise) and filters (every filterable field unless `filters` says otherwise).
-    const columns = columnSpecs(def);
+    // The editor's choice of columns (a cookie, if the collection allows it), else the default table.
+    const cookieValue = (await cookies()).get(columnCookie(key))?.value;
+    const columns = visibleColumns(def, cookieValue);
+    const choices = columnChoices(def);
     const specs = filterSpecs(def);
     const dateField = Object.entries(def.fields).find(([, f]) => f.type === 'date')?.[0];
     const all = (await store.listEntries(
@@ -632,6 +640,18 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
               <div className="flex flex-wrap items-center gap-2">
                 <ListSearch q={q} label={def.label} keep={keep} />
                 {filtersOn && <ListFilters controls={controls} values={filterValues(filters, specs)} />}
+                {choices.length > 0 && (
+                  <ListColumns
+                    cookie={columnCookie(key)}
+                    primary={columnSpecs(def)[0].label}
+                    choices={choices.map(({ key: k, label }) => ({ key: k, label }))}
+                    visible={columns.filter((c) => choices.some((x) => x.key === c.key)).map((c) => c.key)}
+                    defaults={columnSpecs(def)
+                      .filter((c) => choices.some((x) => x.key === c.key))
+                      .map((c) => c.key)}
+                    customized={parseColumnCookie(cookieValue) !== undefined}
+                  />
+                )}
               </div>
             )}
             <div className={`${cardClass} overflow-x-auto`}>
