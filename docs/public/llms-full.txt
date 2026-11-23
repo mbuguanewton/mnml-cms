@@ -1118,6 +1118,7 @@ mcp: { adminTokens: true },
 - The list shows each token's scopes, content, created and last used (updated at most once a minute).
 - **Revoke** cuts access on the agent's next request.
 - Config tokens still work alongside, and show in the list as "from config". Names are unique across both.
+- **Revoke** on a config token only explains what to do: remove it from the `mcp.tokens` option (or its environment variable) and redeploy. It keeps working until then, since it lives in your config, not in the database.
 
 ### Scopes
 
