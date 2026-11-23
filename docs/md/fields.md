@@ -18,7 +18,7 @@ Every field takes `{ required, help }`.
 | `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null`. Options can have [labels](https://mnml-cms.vercel.app/fields/select-labels.md). |
 | `reference(label, 'authors')` | `string \| null`: a published entry's slug. Read with `cms.getEntry`. |
 | `references(label, 'posts', { min, max })` | `string[]`: published slugs, in order. Read with `cms.getEntries`. |
-| `image` | `{ url, alt, focalX?, focalY? } \| null`. [Focal point](https://mnml-cms.vercel.app/fields/focal-point.md) optional. |
+| `image` | `{ url, alt, focalX?, focalY? } \| null`. [Focal point](https://mnml-cms.vercel.app/fields/focal-point.md) optional. In the admin: an empty field is a drop zone (drop, click or browse); a filled one is a preview with an icon toolbar (Replace, Choose from uploads, Focal point, Remove) and a `filename · width×height` chip. |
 | `richtext` | Tiptap JSON. Render with `<RichText>`. |
 | `tags` | `string[]` |
 | `array(label, fields, { itemLabel, min, max })` | Repeatable list of `fields` |
