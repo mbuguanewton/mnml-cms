@@ -88,6 +88,15 @@ export function AgentAccess({
   };
 
   const revoke = async (t: Token) => {
+    // A config token lives in code, not in the database: there is nothing to delete here, so say how to remove it.
+    if (!t.id) {
+      await alert({
+        title: `Remove “${t.name}” from your config`,
+        description:
+          'This token comes from the server config (the mcp.tokens option, often an environment variable), so it can’t be revoked here. Remove it there and redeploy. It keeps working until you do.',
+      });
+      return;
+    }
     const ok = await confirm({
       title: `Revoke “${t.name}”?`,
       description: 'Agents using this token lose access on their next request. This cannot be undone.',
@@ -222,11 +231,9 @@ export function AgentAccess({
                     </p>
                   )}
                 </div>
-                {t.id && (
-                  <Button size="sm" variant="danger" disabled={pending} onClick={() => revoke(t)} className="self-start">
-                    Revoke
-                  </Button>
-                )}
+                <Button size="sm" variant="danger" disabled={pending} onClick={() => revoke(t)} className="self-start">
+                  Revoke
+                </Button>
               </li>
             ))}
           </ul>
