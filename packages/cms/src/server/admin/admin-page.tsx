@@ -41,6 +41,7 @@ import {
   visibleColumns,
   filterParams,
   filterSpecs,
+  filtersFollowColumns,
   filterValues,
   listQuery,
   nextSort,
@@ -518,7 +519,9 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const cookieValue = (await cookies()).get(columnCookie(key))?.value;
     const columns = visibleColumns(def, cookieValue);
     const choices = columnChoices(def);
-    const specs = filterSpecs(def);
+    // Once an editor has chosen columns, filters follow them: a hidden column's filter is not shown or applied.
+    const follow = filtersFollowColumns(filterSpecs(def), columns, def.columnChoices !== false && parseColumnCookie(cookieValue) !== undefined);
+    const specs = follow.specs;
     const dateField = Object.entries(def.fields).find(([, f]) => f.type === 'date')?.[0];
     const all = (await store.listEntries(
       key as never,
@@ -538,7 +541,8 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     // Filters, sort, search (title or slug) and paging, all from the URL.
     // `filters: false` turns the whole control off, the status filter too.
     const filtersOn = def.filters !== false;
-    const filters = filtersOn ? parseFilters(query, specs) : { fields: {} };
+    const parsed = filtersOn ? parseFilters(query, specs) : { fields: {} };
+    const filters = follow.status ? parsed : { ...parsed, status: undefined };
     const sort = parseSort(query, columns);
     const q = typeof query.q === 'string' ? query.q : '';
     const narrowed = sortItems(applyFilters(all, filters, specs, pending), sort, columns, cell);
@@ -561,20 +565,21 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
           : f.type === 'reference'
             ? (refOptions[f.collection] ?? []).map((o) => ({ value: o.slug, label: o.label }))
             : undefined;
+    const statusControl: FilterControl = {
+      name: 'status',
+      label: 'Status',
+      kind: 'select',
+      options: [
+        { value: 'draft', label: 'Draft' },
+        { value: 'changes', label: 'Changes' },
+        { value: 'published', label: 'Published' },
+      ],
+      eq: 'status',
+      from: '',
+      to: '',
+    };
     const controls: FilterControl[] = [
-      {
-        name: 'status',
-        label: 'Status',
-        kind: 'select',
-        options: [
-          { value: 'draft', label: 'Draft' },
-          { value: 'changes', label: 'Changes' },
-          { value: 'published', label: 'Published' },
-        ],
-        eq: 'status',
-        from: '',
-        to: '',
-      },
+      ...(follow.status ? [statusControl] : []),
       ...specs.map((s): FilterControl => {
         const p = filterParams(s);
         return {
@@ -640,7 +645,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
             {all.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 <ListSearch q={q} label={def.label} keep={keep} />
-                {filtersOn && <ListFilters controls={controls} values={filterValues(filters, specs)} />}
+                {filtersOn && controls.length > 0 && <ListFilters controls={controls} values={filterValues(filters, specs)} />}
                 {choices.length > 0 && (
                   <ListColumns
                     cookie={columnCookie(key)}

@@ -8,6 +8,7 @@ import {
   columnCookie,
   columnSpecs,
   filterSpecs,
+  filtersFollowColumns,
   listQuery,
   nextSort,
   parseColumnCookie,
@@ -361,5 +362,28 @@ describe('column choices', () => {
     const cols = visibleColumns(posts, 'slug');
     expect(parseSort({ sort: 'f.category' }, cols)).toBeUndefined();
     expect(parseSort({ sort: 'slug' }, cols)).toEqual({ key: 'slug', dir: 'asc' });
+  });
+});
+
+describe('filtersFollowColumns', () => {
+  const names = (r: { specs: { name: string }[] }) => r.specs.map((s) => s.name);
+  it('keeps every filter before an editor has chosen columns', () => {
+    const r = filtersFollowColumns(specs, columnSpecs(posts), false);
+    expect(names(r)).toEqual(['date', 'category', 'featured', 'rating', 'publishedAt', 'author']);
+    expect(r.status).toBe(true);
+  });
+  it('keeps only the filters whose column shows once they have, and Status with its column', () => {
+    const r = filtersFollowColumns(specs, visibleColumns(posts, 'f.category,f.featured'), true);
+    expect(names(r)).toEqual(['category', 'featured']);
+    expect(r.status).toBe(false);
+    expect(filtersFollowColumns(specs, visibleColumns(posts, 'status'), true)).toMatchObject({ status: true, specs: [] });
+  });
+  it('brings a filter back when its column does', () => {
+    expect(names(filtersFollowColumns(specs, visibleColumns(posts, 'f.category,f.rating'), true))).toEqual(['category', 'rating']);
+  });
+  it('drops the filter of a hidden column from the URL it reads', () => {
+    const shown = filtersFollowColumns(specs, visibleColumns(posts, 'f.featured'), true);
+    const filters = parseFilters({ 'f.category': 'news', 'f.featured': 'yes' }, shown.specs);
+    expect(filters.fields).toEqual({ featured: { eq: 'yes' } });
   });
 });

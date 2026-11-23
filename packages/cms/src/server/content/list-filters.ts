@@ -160,6 +160,17 @@ export function columnChoices(def: Collection): Column[] {
 
 const COLUMN_KEY = /^(slug|status|f\.[\w-]+)$/;
 
+/**
+ * Filters follow the columns once an editor has chosen them: a field's filter shows only while its column does, and
+ * Status only with the Status column. A hidden column's filter is ignored (like a sort on it), not applied. Before
+ * a choice (or with `columnChoices: false`) every filter shows as configured.
+ */
+export function filtersFollowColumns(specs: readonly FilterSpec[], columns: readonly Column[], chosen: boolean): { specs: FilterSpec[]; status: boolean } {
+  if (!chosen) return { specs: [...specs], status: true };
+  const shown = new Set(columns.map((c) => c.key));
+  return { specs: specs.filter((s) => shown.has(`f.${s.name}`)), status: shown.has('status') };
+}
+
 /** Reads the cookie: the chosen column keys (`-` is none), or undefined when there is none or it is junk. */
 export function parseColumnCookie(value: string | undefined): Set<string> | undefined {
   if (value === undefined) return undefined;
