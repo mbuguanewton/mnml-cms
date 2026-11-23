@@ -132,6 +132,8 @@ export const docsIndex: DocsPage[] = [
     "description": "Drafts, autosave, Publish, Discard changes and Unpublish, and what the site shows for each.",
     "headings": [
       "Collection list",
+      "Filters",
+      "Columns and sorting",
       "Autosave",
       "Only valid data is saved",
       "Someone else edited it",

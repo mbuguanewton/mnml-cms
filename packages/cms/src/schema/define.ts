@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { normalizeDatetime } from './datetime.js';
+import { COLUMN_TYPES, FILTER_TYPES } from './list-config.js';
 import type { JSONContent } from '@tiptap/core';
 
 // The building blocks for a mnml.config.ts. One definition there drives the admin forms,
@@ -247,6 +248,16 @@ export type Collection<F extends Fields = Fields, D = NoDerived> = {
   titleField: keyof F & string;
   basePath: string;
   preview?: boolean;
+  /**
+   * The admin list's filters: field names (in this order) or `false` for none. Left out, every field that can be
+   * filtered gets one: `select`, `boolean`, `date`, `datetime`, `number` and `reference`. Status is always there.
+   */
+  filters?: readonly (keyof F & string)[] | false;
+  /**
+   * The fields the admin list shows as columns, in this order (the first is the link to the entry; Slug and Status
+   * follow it). Left out: the title and the first `date` field. Every column sorts.
+   */
+  columns?: readonly (keyof F & string)[];
   fields: F;
   derived?: DerivedFns<F, D>;
 };
@@ -272,16 +283,37 @@ function checkShowIf(label: string, fields: Fields) {
   }
 }
 
+// `filters` and `columns` naming a field the list can't use (or that doesn't exist) would silently show nothing, so fail when the config loads.
+function checkListConfig(label: string, fields: Fields, option: 'filters' | 'columns', names: readonly string[] | false | undefined) {
+  if (!names) return;
+  const allowed = option === 'filters' ? FILTER_TYPES : COLUMN_TYPES;
+  for (const [i, k] of names.entries()) {
+    if (!Object.hasOwn(fields, k)) throw new Error(`"${label}": ${option} names "${k}", which is not a field.`);
+    if (!allowed.has(fields[k].type)) {
+      throw new Error(
+        `"${label}": ${option} names "${k}", a ${fields[k].type} field; the list ${option === 'filters' ? 'filters' : 'shows'} only ${[...allowed].join(', ')}.`,
+      );
+    }
+    if (names.indexOf(k) !== i) throw new Error(`"${label}": ${option} lists "${k}" twice.`);
+  }
+}
+
 export const singleton = <F extends Fields, D = NoDerived>(s: Omit<Singleton<F, D>, 'kind' | 'derived'> & DerivedInput<F, D>): Singleton<F, D> => {
   checkDerived(s.label, s.fields, s.derived);
   checkShowIf(s.label, s.fields);
   return { kind: 'singleton', ...s };
 };
 export const collection = <F extends Fields, D = NoDerived>(
-  c: Omit<Collection<F, D>, 'kind' | 'titleField' | 'derived'> & { titleField: NoInfer<keyof F & string> } & DerivedInput<F, D>,
+  c: Omit<Collection<F, D>, 'kind' | 'titleField' | 'derived' | 'filters' | 'columns'> & {
+    titleField: NoInfer<keyof F & string>;
+    filters?: readonly NoInfer<keyof F & string>[] | false;
+    columns?: readonly NoInfer<keyof F & string>[];
+  } & DerivedInput<F, D>,
 ): Collection<F, D> => {
   checkDerived(c.label, c.fields, c.derived);
   checkShowIf(c.label, c.fields);
+  checkListConfig(c.label, c.fields, 'filters', c.filters);
+  checkListConfig(c.label, c.fields, 'columns', c.columns);
   return { kind: 'collection', ...c };
 };
 
