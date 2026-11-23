@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, use, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ChevronRightIcon, ImagesIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
 import {
   initialValues,
@@ -26,6 +26,7 @@ import { Input as TextInput, Textarea } from '../ui/input.js';
 import { Select } from '../ui/select.js';
 import { useAdmin } from '../shell/context.js';
 import { RichTextEditor } from '../editor/rich-text-editor.js';
+import { MediaPicker } from '../editor/media-picker.js';
 import { uploadImage } from '../editor/upload.js';
 import { inputClass, labelClass } from '../ui/styles.js';
 
@@ -190,11 +191,12 @@ function ReferenceInput({
 }
 
 function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | null; onChange: (v: ImageValue | null) => void }) {
-  const { apiPath } = useAdmin();
+  const { apiPath, mediaLibrary } = useAdmin();
   const file = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [choosing, setChoosing] = useState(false);
 
   const upload = async (f: File) => {
     setBusy(true);
@@ -224,6 +226,11 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
             <Button id={id} type="button" variant="outline" size="sm" disabled={busy} onClick={() => file.current?.click()}>
               <UploadIcon /> {busy ? 'Uploading…' : value ? 'Replace' : 'Upload'}
             </Button>
+            {mediaLibrary && (
+              <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => setChoosing(true)}>
+                <ImagesIcon /> Choose from uploads
+              </Button>
+            )}
             {value && (
               <Button type="button" variant="outline" size="sm" aria-expanded={picking} aria-controls={`${id}-focal`} onClick={() => setPicking(!picking)}>
                 Focal point
@@ -248,6 +255,17 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
           }}
         />
       </div>
+      {mediaLibrary && (
+        <MediaPicker
+          open={choosing}
+          onClose={() => setChoosing(false)}
+          // Like a fresh upload: no alt text, no focal point (those belonged to the old image).
+          onPick={(url) => {
+            setChoosing(false);
+            onChange({ url, alt: '' });
+          }}
+        />
+      )}
       {error && <p className="break-words text-mnml-danger">{error}</p>}
       {value && picking && <FocalPointPicker id={`${id}-focal`} value={value} onChange={onChange} />}
       {value && (

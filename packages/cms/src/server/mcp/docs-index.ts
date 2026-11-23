@@ -273,6 +273,7 @@ export const docsIndex: DocsPage[] = [
     "description": "Where uploaded images are stored: local disk in development, Vercel Blob, or your own storage.",
     "headings": [
       "The Media screen",
+      "Choose from uploads",
       "Adapters"
     ]
   },

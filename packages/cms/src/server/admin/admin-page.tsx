@@ -47,6 +47,8 @@ import { listView, parsePage } from '../content/list-view.js';
 import { agentTokens } from '../mcp/tokens.js';
 import { DeleteButton } from '../../admin/entry/delete-button.js';
 import { MediaDeleteButton } from '../../admin/shell/media-delete-button.js';
+import { mediaName } from '../../admin/shell/media-name.js';
+import { MediaSelectBox, MediaSelection, type MediaItem } from '../../admin/shell/media-selection.js';
 import { EntryForm } from '../../admin/entry/entry-form.js';
 import { AdminHeader } from '../../admin/shell/header.js';
 import { LoginForm } from '../../admin/shell/login-form.js';
@@ -103,7 +105,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     // The site's UI slots wrap everything, so the confirm and form dialogs use them too.
     const provider = (children: React.ReactNode) => {
       const admin = (
-        <AdminProvider value={{ adminPath, apiPath }}>
+        <AdminProvider value={{ adminPath, apiPath, mediaLibrary: options.media?.list ? true : false }}>
           <FormDialogProvider>{withEditor(children)}</FormDialogProvider>
         </AdminProvider>
       );
@@ -403,11 +405,11 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const size = (n?: number) => (n === undefined ? '' : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 
     const card = (f: { key: string; size?: number; uploadedAt?: Date }) => {
-      // Uploaded names carry a random prefix or suffix; show the readable part.
-      const name = (f.key.split('/').pop() ?? f.key).replace(/^[0-9a-f]{8}-/, '');
+      const name = mediaName(f.key);
       const meta = [size(f.size), f.uploadedAt?.toLocaleDateString('en-US', { dateStyle: 'medium' })].filter(Boolean).join(' · ');
       return (
-        <li key={f.key} className="flex flex-col overflow-hidden rounded-[8px] bg-mnml-panel">
+        <li key={f.key} className="relative flex flex-col overflow-hidden rounded-[8px] bg-mnml-panel">
+          {media?.delete && <MediaSelectBox mediaKey={f.key} name={name} />}
           {/* Plain <img>: served by the CMS media route. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={`${apiPath}/media/${f.key}`} alt="" loading="lazy" className="aspect-[4/3] w-full bg-mnml-surface object-cover" />
@@ -426,6 +428,8 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       );
     };
 
+    const items: MediaItem[] = (files ?? []).map((f) => ({ key: f.key, name: mediaName(f.key), usedIn: (usage.get(f.key) ?? []).length }));
+    const summary = `${files?.length ?? 0} ${files?.length === 1 ? 'file' : 'files'} · ${unused.length} unused`;
     const grid = 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
     const section = (title: string, hint: string | null, list: React.ReactNode[], count: number) => (
       <section key={title} className="flex flex-col gap-3">
@@ -447,10 +451,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
           ) : files.length === 0 ? (
             <p className="text-mnml-text-mute">No files yet. Images you upload in the editor appear here.</p>
           ) : (
-            <>
-              <p className="text-mnml-text-mute">
-                {files.length} {files.length === 1 ? 'file' : 'files'} · {unused.length} unused
-              </p>
+            <MediaSelection items={items} summary={summary} canSelect={media?.delete ? true : false}>
               {sections.map((g) =>
                 section(
                   g.label,
@@ -466,7 +467,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                   unused.map((f) => card(f)),
                   unused.length,
                 )}
-            </>
+            </MediaSelection>
           )}
         </main>
       </>
