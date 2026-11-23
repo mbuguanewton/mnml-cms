@@ -38,6 +38,7 @@ import { useEditorConfig } from './editor-context.js';
 import { useEntry } from '../entry/entry-context.js';
 import { useForm } from './form-context.js';
 import { withNodeForms } from './node-view.js';
+import { MediaPicker } from './media-picker.js';
 import { uploadImage } from './upload.js';
 
 export function RichTextEditor({
@@ -107,7 +108,9 @@ export function RichTextEditor({
         e.preventDefault();
         d.close();
       }}
-      onClose={() => {
+      onClose={(e) => {
+        // A dialog opened from inside (the image picker) also reaches this through React's tree: only our own close counts.
+        if (e.target !== e.currentTarget) return;
         setFull(false);
         expand.current?.focus();
       }}
@@ -182,9 +185,10 @@ const DIVIDER = 13 + GAP;
 const MORE = 28 + GAP;
 
 function Toolbar({ editor, extra, end, full }: { editor: Editor; extra: EditorTool[]; end: React.ReactNode; full: boolean }) {
-  const { apiPath, alert, confirm } = useAdmin();
+  const { apiPath, mediaLibrary, alert, confirm } = useAdmin();
   const form = useForm();
   const file = useRef<HTMLInputElement>(null);
+  const [choosing, setChoosing] = useState(false);
   // The heading extension's levels (1–4 by default; a site can change them), or none if it was removed.
   const levels = useMemo(() => (editor.extensionManager.extensions.find((e) => e.name === 'heading')?.options.levels as Level[] | undefined) ?? [], [editor]);
   const hasQuote = useMemo(() => editor.extensionManager.extensions.some((e) => e.name === 'blockquote'), [editor]);
@@ -291,7 +295,8 @@ function Toolbar({ editor, extra, end, full }: { editor: Editor; extra: EditorTo
     ].map(item('block')),
     ...[
       { name: 'link', icon: <LinkIcon />, label: 'Link', active: s.link, run: setLink },
-      { name: 'image', icon: <ImageIcon />, label: 'Image', run: () => file.current?.click() },
+      // With a media library the picker opens (it has "Upload new" too); else straight to the file chooser.
+      { name: 'image', icon: <ImageIcon />, label: 'Image', run: () => (mediaLibrary ? setChoosing(true) : file.current?.click()) },
       ...own('insert'),
     ].map(item('insert')),
     ...own(undefined).map(item('rest')),
@@ -384,6 +389,19 @@ function Toolbar({ editor, extra, end, full }: { editor: Editor; extra: EditorTo
             if (f) void addImage(f);
           }}
         />
+        {mediaLibrary && (
+          <MediaPicker
+            open={choosing}
+            onClose={() => {
+              setChoosing(false);
+              editor.commands.focus();
+            }}
+            onPick={(src) => {
+              setChoosing(false);
+              chain().setImage({ src, alt: '' }).run();
+            }}
+          />
+        )}
       </div>
       {s.imageAlt !== null && (
         <div className="flex shrink-0 items-center border-b border-mnml-line bg-mnml-panel px-1 pb-1">

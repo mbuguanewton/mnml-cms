@@ -80,3 +80,75 @@ describe('POST references', () => {
     expect((await call({ collections: ['posts'] })).status).toBe(401);
   });
 });
+
+describe('POST media/list and media/delete', () => {
+  const files = new Map<string, { size: number; uploadedAt: Date }>([
+    ['old.png', { size: 10, uploadedAt: new Date('2026-01-01') }],
+    ['new.png', { size: 20, uploadedAt: new Date('2026-03-01') }],
+    ['mid.png', { size: 30, uploadedAt: new Date('2026-02-01') }],
+    ['broken.png', { size: 40, uploadedAt: new Date('2026-02-15') }],
+  ]);
+  let signedIn = true;
+  const build = (media: Partial<import('../media/media.js').MediaStorage> | undefined) =>
+    createHandlers(
+      createContext(cmsConfig, { storage: memoryStorage([]), auth: { isAdmin: async () => signedIn, loginUrl: '/sign-in' }, media: media as never }) as never,
+    );
+  const withList = build({
+    list: async () => [...files].map(([key, f]) => ({ key, ...f })),
+    delete: async (key) => {
+      if (key === 'broken.png') throw new Error('Storage said no');
+      files.delete(key);
+    },
+  });
+  const post = async (h: typeof withList, route: string, body: unknown) => {
+    const res = await h.POST(new Request(`http://x/api/mnml/${route}`, { method: 'POST', body: JSON.stringify(body) }), {
+      params: Promise.resolve({ route: route.split('/') }),
+    });
+    return { status: res.status, body: await res.json() };
+  };
+
+  beforeEach(() => {
+    signedIn = true;
+  });
+
+  it('lists the files newest first, with their URLs', async () => {
+    const r = await post(withList, 'media/list', {});
+    expect(r.status).toBe(200);
+    expect(r.body.files.map((f: { key: string }) => f.key)).toEqual(['new.png', 'broken.png', 'mid.png', 'old.png']);
+    expect(r.body.files[0]).toEqual({ key: 'new.png', url: '/api/mnml/media/new.png', size: 20, uploadedAt: '2026-03-01T00:00:00.000Z' });
+  });
+
+  it('needs an admin, and a storage that can list', async () => {
+    signedIn = false;
+    expect((await post(withList, 'media/list', {})).status).toBe(401);
+    expect((await post(withList, 'media/delete', { keys: ['old.png'] })).status).toBe(401);
+    signedIn = true;
+    expect((await post(build({ get: async () => null }), 'media/list', {})).status).toBe(501);
+  });
+
+  it('still deletes one file by key, and rejects a bad key', async () => {
+    expect(await post(withList, 'media/delete', { key: 'old.png' })).toEqual({ status: 200, body: { ok: true } });
+    expect(files.has('old.png')).toBe(false);
+    expect((await post(withList, 'media/delete', { key: '../secret' })).status).toBe(400);
+    expect((await post(withList, 'media/delete', { key: 5 })).status).toBe(400);
+  });
+
+  it('deletes a batch, and reports the files that failed', async () => {
+    const r = await post(withList, 'media/delete', { keys: ['new.png', 'broken.png', 'new.png', 'mid.png'] });
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ ok: false, deleted: ['new.png', 'mid.png'], failed: [{ key: 'broken.png', message: 'Storage said no' }] });
+    expect([...files.keys()]).toEqual(['broken.png']);
+  });
+
+  it('rejects an empty batch, a batch over 100, and any bad key in it', async () => {
+    for (const keys of [[], Array.from({ length: 101 }, (_, i) => `f${i}.png`), ['ok.png', '../secret'], ['ok.png', 3], 'ok.png']) {
+      const r = await post(withList, 'media/delete', { keys });
+      expect(r.status, JSON.stringify(keys).slice(0, 40)).toBe(400);
+    }
+    expect([...files.keys()]).toEqual(['broken.png']);
+  });
+
+  it('says so when the storage cannot delete', async () => {
+    expect((await post(build({ list: async () => [] }), 'media/delete', { keys: ['a.png'] })).status).toBe(501);
+  });
+});

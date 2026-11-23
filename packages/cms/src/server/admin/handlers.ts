@@ -23,10 +23,12 @@ import { loadRefOptions } from '../content/ref-options.js';
 import { PREVIEW_COOKIE } from '../content/store.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
-//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · references · upload · media/delete · request · tokens/create · tokens/revoke · mcp
+//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · references · upload · media/list · media/delete · request · tokens/create · tokens/revoke · mcp
 //   GET:  media/<key> (uploaded images, public) · preview/open (admins only)
 
 const MEDIA_KEY = /^[\w.\-/]+$/;
+/** The most files one `media/delete` call takes. */
+const MAX_BULK_DELETE = 100;
 
 const json = (data: unknown, status = 200) => Response.json(data, { status });
 const unauthorized = () => json({ ok: false, message: 'Unauthorized', errors: {} }, 401);
@@ -183,14 +185,45 @@ export function createHandlers(ctx: Context) {
       return json({ ok: true, options: await loadRefOptions(ctx, collections as string[]) });
     },
 
-    /** Deletes a stored file. The admin warns first if entries still use it. */
+    /** The stored files, newest first: what the image picker offers. */
+    async 'media/list'() {
+      if (!(await isAdmin(ctx))) return unauthorized();
+      const media = ctx.options.media;
+      if (!media?.list) return json({ ok: false, message: 'This storage cannot list files.' }, 501);
+      const files = (await media.list()).sort((a, b) => (b.uploadedAt?.getTime() ?? 0) - (a.uploadedAt?.getTime() ?? 0));
+      return json({
+        ok: true,
+        files: files.map((f) => ({ key: f.key, url: `${ctx.apiPath}/media/${f.key}`, size: f.size ?? null, uploadedAt: f.uploadedAt?.toISOString() ?? null })),
+      });
+    },
+
+    /**
+     * Deletes stored files: one (`{ key }`) or up to MAX_BULK_DELETE (`{ keys }`). The admin warns first if entries
+     * still use them. A batch deletes what it can and reports the rest in `failed`.
+     */
     async 'media/delete'(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
       const media = ctx.options.media;
       if (!media?.delete) return json({ ok: false, message: 'This storage does not support deleting files.' }, 501);
-      const { key } = await request.json().catch(() => ({}));
-      if (typeof key !== 'string' || !MEDIA_KEY.test(key) || key.includes('..')) return json({ ok: false, message: 'Unknown file.' }, 400);
-      await media.delete(key);
+      const body = (await request.json().catch(() => ({}))) as { key?: unknown; keys?: unknown };
+      const valid = (k: unknown): k is string => typeof k === 'string' && MEDIA_KEY.test(k) && !k.includes('..');
+      if (body.keys !== undefined) {
+        const keys = body.keys;
+        if (!Array.isArray(keys) || keys.length === 0 || keys.length > MAX_BULK_DELETE || !keys.every(valid)) {
+          return json({ ok: false, message: `Pick between 1 and ${MAX_BULK_DELETE} files.` }, 400);
+        }
+        const unique = [...new Set(keys)];
+        const results = await Promise.allSettled(unique.map((k) => media.delete!(k)));
+        const deleted: string[] = [];
+        const failed: { key: string; message: string }[] = [];
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled') deleted.push(unique[i]);
+          else failed.push({ key: unique[i], message: r.reason instanceof Error ? r.reason.message : 'Could not delete.' });
+        });
+        return json({ ok: failed.length === 0, deleted, failed });
+      }
+      if (!valid(body.key)) return json({ ok: false, message: 'Unknown file.' }, 400);
+      await media.delete(body.key);
       return json({ ok: true });
     },
 

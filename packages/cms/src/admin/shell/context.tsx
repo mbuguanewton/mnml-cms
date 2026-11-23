@@ -4,7 +4,8 @@ import { createContext, use, useCallback } from 'react';
 import { DialogProvider, useDialogs } from './confirm.js';
 import { ToastProvider, useToasts } from '../ui/toast.js';
 
-type AdminContextValue = { adminPath: string; apiPath: string };
+/** `mediaLibrary`: the media storage can list its files, so the image picker can offer them. */
+type AdminContextValue = { adminPath: string; apiPath: string; mediaLibrary?: boolean };
 
 const AdminContext = createContext<AdminContextValue>({ adminPath: '/admin', apiPath: '/api/mnml' });
 
