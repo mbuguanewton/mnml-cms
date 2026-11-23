@@ -95,8 +95,9 @@ export default config({
     titleField: 'name',
     basePath: '/authors',
     preview: true,
-    // A short list: no filters, just the search box.
+    // A short list: no filters, no Columns menu, just the search box.
     filters: false,
+    columnChoices: false,
     fields: {
       name: fields.text('Name', { required: true }),
       role: fields.text('Role'),

@@ -1,7 +1,7 @@
 // Filters, sortable columns and the URL for the admin's collection list. Pure and in memory, like `listView`.
 import type { EntryStatus } from '../../api.js';
 import type { Collection, Field } from '../../schema/define.js';
-import { FILTER_TYPES } from '../../schema/list-config.js';
+import { COLUMN_TYPES, FILTER_TYPES } from '../../schema/list-config.js';
 import { displayText } from '../../schema/text.js';
 
 export type ListItem = { slug: string; entry: Record<string, unknown>; status: EntryStatus };
@@ -135,6 +135,66 @@ export function columnSpecs(def: Collection): Column[] {
   );
   const fieldCols = names.map((n): Column => ({ key: `f.${n}`, label: def.fields[n].label, field: def.fields[n] }));
   return [...fieldCols.slice(0, 1), { key: 'slug', label: 'Slug' }, { key: 'status', label: 'Status' }, ...fieldCols.slice(1)];
+}
+
+// ── Column choices (the Columns menu) ───────────────────────────────────────
+
+/** The cookie holding an editor's visible columns for a collection. */
+export const columnCookie = (key: string) => `mnml_cols_${key}`;
+
+/**
+ * The columns an editor may show or hide: Slug, Status, then the fields (see `columnChoices`): the ones the table shows
+ * by default in their order first, then the rest in config order, so hiding one never reshuffles the others. The first
+ * default column is not one of them: it always shows.
+ */
+export function columnChoices(def: Collection): Column[] {
+  if (def.columnChoices === false) return [];
+  const defaults = columnSpecs(def);
+  const primary = defaults[0]?.key;
+  const allowed = new Set(def.columnChoices ?? Object.keys(def.fields).filter((k) => COLUMN_TYPES.has(def.fields[k].type)));
+  const byDefault = defaults.filter((c) => c.field && c.key !== primary).map((c) => c.key.slice(2));
+  const names = [...new Set([...byDefault, ...Object.keys(def.fields)])].filter((k) => allowed.has(k) && `f.${k}` !== primary);
+  const fieldCols = names.map((k): Column => ({ key: `f.${k}`, label: def.fields[k].label, field: def.fields[k] }));
+  return [{ key: 'slug', label: 'Slug' }, { key: 'status', label: 'Status' }, ...fieldCols];
+}
+
+const COLUMN_KEY = /^(slug|status|f\.[\w-]+)$/;
+
+/**
+ * Filters follow the columns once an editor has chosen them: a field's filter shows only while its column does, and
+ * Status only with the Status column. A hidden column's filter is ignored (like a sort on it), not applied. Before
+ * a choice (or with `columnChoices: false`) every filter shows as configured.
+ */
+export function filtersFollowColumns(specs: readonly FilterSpec[], columns: readonly Column[], chosen: boolean): { specs: FilterSpec[]; status: boolean } {
+  if (!chosen) return { specs: [...specs], status: true };
+  const shown = new Set(columns.map((c) => c.key));
+  return { specs: specs.filter((s) => shown.has(`f.${s.name}`)), status: shown.has('status') };
+}
+
+/** Reads the cookie: the chosen column keys (`-` is none), or undefined when there is none or it is junk. */
+export function parseColumnCookie(value: string | undefined): Set<string> | undefined {
+  if (value === undefined) return undefined;
+  if (value === '-') return new Set();
+  const keys = value
+    .split(',')
+    .slice(0, 64)
+    .filter((k) => COLUMN_KEY.test(k));
+  return keys.length ? new Set(keys) : undefined;
+}
+
+/** The cookie value for these visible column keys. */
+export const serializeColumns = (keys: readonly string[]) => (keys.length ? keys.join(',') : '-');
+
+/**
+ * The columns to show: the editor's choice (the first column, then the chosen ones in the order Slug, Status, fields),
+ * or `columnSpecs` when they haven't chosen, or the developer turned the choice off with `columnChoices: false`.
+ * Keys that aren't a choice are ignored.
+ */
+export function visibleColumns(def: Collection, cookie: string | undefined): Column[] {
+  const defaults = columnSpecs(def);
+  const chosen = def.columnChoices === false ? undefined : parseColumnCookie(cookie);
+  if (!chosen) return defaults;
+  return [defaults[0], ...columnChoices(def).filter((c) => chosen.has(c.key))];
 }
 
 /** Reads `?sort=&dir=`. An unknown column is ignored; `dir` is `asc` unless `desc`. */
