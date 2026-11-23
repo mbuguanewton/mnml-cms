@@ -16,7 +16,7 @@ A collection entry is draft or published. The admin's dot:
 
 - 25 entries a page, with Previous / Next.
 - The search box filters by title or slug as you type (Enter without JavaScript).
-- **Filters** narrows the list. **Column headers** sort it.
+- **Filters** narrows the list. **Column headers** sort it. **Checkboxes** select rows for bulk actions.
 - Page, search, filters and sort live in the URL (`?q=…&status=draft&f.category=news&sort=f.date&dir=desc&page=2`), so links and the back button work.
 
 ### Filters
@@ -63,6 +63,41 @@ The table shows the title, Slug, Status and the first `date` field. Click a head
 ```ts
 columns: ['title', 'category', 'date', 'featured'],
 ```
+
+### Bulk actions
+
+A checkbox on each row (and one in the header for the whole page) selects entries. A bar appears at the bottom with the actions that apply:
+
+| Action | Does |
+| --- | --- |
+| **Publish** | Makes drafts, and entries with unpublished changes, live. Asks for nothing. |
+| **Unpublish** | Takes live entries off the site; their content becomes a draft. Asks first. |
+| **Delete** | Deletes the entries. Asks first, and says how many are published. |
+
+A button is disabled when it would do nothing to the selection (Publish when everything is live). Each entry is handled like a single save: validated, and `revalidate` / `onChange` run for it. An entry that can't be published (a required field is empty) is reported and left alone; the rest still go through. Entries already in the target state are skipped. Up to 100 at a time. A new search, filter, sort or page starts with nothing selected.
+
+#### Your own actions
+
+`listActions` in `createCms` adds buttons to the bar for a collection. Each runs once per selected entry, on the server. It's a server option because `mnml.config.ts` is plain data.
+
+```ts
+export const cms = createCms(config, {
+  // …
+  listActions: {
+    posts: [
+      {
+        name: 'refresh', // unique in the collection; not publish, unpublish or delete
+        label: 'Refresh on site',
+        // danger: true,                    // red button
+        // confirm: 'Rebuilds each page.',  // asks first (the admin adds how many)
+        run: ({ key, slug, entry }) => revalidatePath(`/posts/${slug}`), // entry: its latest data
+      },
+    ],
+  },
+});
+```
+
+Throw an error to mark that entry as failed; the message is shown. A site action applies to every selected entry, whatever its status.
 
 ## Autosave
 

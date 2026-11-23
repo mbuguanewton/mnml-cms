@@ -1,6 +1,6 @@
 ---
 title: "Options"
-description: "Every option of createCms: storage, auth, media, paths, sidebar, editor, ui, MCP, revalidate and onChange."
+description: "Every option of createCms: storage, auth, media, paths, sidebar, list actions, editor, ui, MCP, revalidate and onChange."
 url: https://mnml-cms.vercel.app/options
 ---
 
@@ -19,6 +19,7 @@ Second argument of `createCms(config, options)`.
 | `brand` | Sidebar title: string or (async) function |
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
 | `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build with `@n3wtou/mnml-cms/admin`. |
+| `listActions` | Your own actions in a collection list's bar, per key: `{ posts: [{ name, label, danger?, confirm?, run }] }` ([Bulk actions](https://mnml-cms.vercel.app/drafts-and-publishing.md#bulk-actions)) |
 | `editor` | Component from `editorProvider()`: extra extensions and buttons ([Extending the editor](https://mnml-cms.vercel.app/editor.md)) |
 | `ui` | Component from `uiProvider()`: your own Button, Select… in the admin ([Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md)) |
 | `mcp` | `{ tokens, adminTokens }`: MCP server for AI agents at `<apiPath>/mcp`, with tokens from env and/or the admin ([Agents](https://mnml-cms.vercel.app/agents.md)) |

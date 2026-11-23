@@ -14,6 +14,7 @@ import {
   type PasswordAuth,
 } from '../auth/auth.js';
 import { agentTokens } from '../mcp/tokens.js';
+import { runBulk } from '../content/bulk.js';
 import { createContentService, previewTarget, validate } from '../content/content.js';
 import type { Context } from '../context.js';
 import { createMcpHandler } from '../mcp/server.js';
@@ -23,7 +24,7 @@ import { loadRefOptions } from '../content/ref-options.js';
 import { PREVIEW_COOKIE } from '../content/store.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
-//   POST: login · logout · logout-all · save · autosave · discard · delete · preview · preview/exit · references · upload · media/list · media/delete · request · tokens/create · tokens/revoke · mcp
+//   POST: login · logout · logout-all · save · autosave · discard · bulk · delete · preview · preview/exit · references · upload · media/list · media/delete · request · tokens/create · tokens/revoke · mcp
 //   GET:  media/<key> (uploaded images, public) · preview/open (admins only)
 
 const MEDIA_KEY = /^[\w.\-/]+$/;
@@ -114,6 +115,13 @@ export function createHandlers(ctx: Context) {
       const { key, slug } = await request.json();
       const result = await content.discard(key, slug);
       return result.ok ? json({ ok: true }) : json(result, 400);
+    },
+
+    /** Runs publish, unpublish, delete or a site's own list action on several entries of a collection. */
+    async bulk(request) {
+      if (!(await isAdmin(ctx))) return unauthorized();
+      const { status, ...result } = await runBulk(ctx, content, (await request.json().catch(() => ({}))) as { key: unknown; slugs: unknown; action: unknown });
+      return json(result, status);
     },
 
     async delete(request) {
