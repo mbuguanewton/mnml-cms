@@ -82,7 +82,7 @@ the `--mnml-*` variables (see `styles.css`).
 
 ```ts
 // drizzle.config.ts
-export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3wtou/mnml-cms/dist/server/db.js', dbCredentials: { url: process.env.DATABASE_URL! } });
+export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3wtou/mnml-cms/dist/server/content/db.js', dbCredentials: { url: process.env.DATABASE_URL! } });
 ```
 
 Then run `drizzle-kit push`. `@n3wtou/mnml-cms/schema` exports the same table for scripts.

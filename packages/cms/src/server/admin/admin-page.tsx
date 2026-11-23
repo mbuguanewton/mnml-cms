@@ -110,7 +110,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       return provider(
         <main
           className={`${rootClass} bg-mnml-panel`}
-          style={{ position: 'relative', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}
+          style={{ position: 'relative', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: '40px 16px', minHeight: '100dvh' }}
         >
           <title>{`Sign in — ${brand}`}</title>
           {/* Decorative: a soft accent glow, and a dashed grid that fades out toward the edges. */}
