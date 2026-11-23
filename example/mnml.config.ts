@@ -95,6 +95,8 @@ export default config({
     titleField: 'name',
     basePath: '/authors',
     preview: true,
+    // A short list: no filters, just the search box.
+    filters: false,
     fields: {
       name: fields.text('Name', { required: true }),
       role: fields.text('Role'),
@@ -107,6 +109,8 @@ export default config({
     titleField: 'title',
     basePath: '/posts',
     preview: true,
+    // The list's columns (every one sorts). Filters are on for all the filterable fields: category, featured, date, published at, author.
+    columns: ['title', 'category', 'date', 'featured'],
     fields: {
       title: fields.text('Title', { required: true }),
       summary: fields.textarea('Summary'),

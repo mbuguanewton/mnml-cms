@@ -2,7 +2,19 @@ import 'server-only';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { headers } from 'next/headers';
-import { ChevronLeftIcon, ChevronRightIcon, ExternalLinkIcon, FileTextIcon, ImageIcon, KeyRoundIcon, PlusIcon, SettingsIcon } from 'lucide-react';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ChevronsUpDownIcon,
+  ExternalLinkIcon,
+  FileTextIcon,
+  ImageIcon,
+  KeyRoundIcon,
+  PlusIcon,
+  SettingsIcon,
+} from 'lucide-react';
 import { initialValues, plainDef, referenceTargets, withDefaults, type Collection, type CmsConfig, type Singleton } from '../../schema/define.js';
 import { displayText } from '../../schema/text.js';
 import type { EntryStatus } from '../../api.js';
@@ -14,7 +26,23 @@ import { AdminProvider } from '../../admin/shell/context.js';
 import { FormDialogProvider } from '../../admin/editor/form-dialog.js';
 import { AgentAccess } from '../../admin/agent/agent-access.js';
 import { AgentRequest } from '../../admin/agent/agent-request.js';
+import { ListFilters, type FilterControl } from '../../admin/entry/list-filters.js';
 import { ListSearch } from '../../admin/entry/list-search.js';
+import {
+  applyFilters,
+  activeCount,
+  cellText,
+  columnSpecs,
+  filterParams,
+  filterSpecs,
+  filterValues,
+  listQuery,
+  nextSort,
+  parseFilters,
+  parseSort,
+  sortItems,
+  type Column,
+} from '../content/list-filters.js';
 import { listView, parsePage } from '../content/list-view.js';
 import { agentTokens } from '../mcp/tokens.js';
 import { DeleteButton } from '../../admin/entry/delete-button.js';
@@ -478,7 +506,9 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
   }
 
   async function collectionList(key: string, def: Collection, query: Record<string, string | string[] | undefined>) {
-    // Columns: the title field, the slug, and the first date field if there is one (newest first).
+    // Columns (the title and the first date unless `columns` says otherwise) and filters (every filterable field unless `filters` says otherwise).
+    const columns = columnSpecs(def);
+    const specs = filterSpecs(def);
     const dateField = Object.entries(def.fields).find(([, f]) => f.type === 'date')?.[0];
     const all = (await store.listEntries(
       key as never,
@@ -488,14 +518,64 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         ...(dateField && { orderBy: dateField, order: 'desc' }),
       } as never,
     )) as { slug: string; entry: AnyEntry; status: EntryStatus }[];
-    // Search (title or slug) and paging, both from the URL.
+    const pending = await store.listPending(key);
+    // References show their target's title; the filter lists the same options.
+    const refTargets = [...specs.map((s) => s.field), ...columns.flatMap((c) => (c.field ? [c.field] : []))].flatMap((f) =>
+      f.type === 'reference' ? [f.collection] : [],
+    );
+    const refOptions = refTargets.length ? await loadRefOptions(ctx, refTargets) : {};
+    const cell = { pending, refLabel: (c: string, slug: string) => refOptions[c]?.find((o) => o.slug === slug)?.label ?? slug };
+    // Filters, sort, search (title or slug) and paging, all from the URL.
+    // `filters: false` turns the whole control off, the status filter too.
+    const filtersOn = def.filters !== false;
+    const filters = filtersOn ? parseFilters(query, specs) : { fields: {} };
+    const sort = parseSort(query, columns);
     const q = typeof query.q === 'string' ? query.q : '';
-    const view = listView(all, { q, page: parsePage(query.page), title: (i) => displayText(i.entry[def.titleField]) });
+    const narrowed = sortItems(applyFilters(all, filters, specs, pending), sort, columns, cell);
+    const view = listView(narrowed, { q, page: parsePage(query.page), title: (i) => displayText(i.entry[def.titleField]) });
     const items = view.items;
-    const pageHref = (n: number) => {
-      const p = new URLSearchParams({ ...(q.trim() && { q: q.trim() }), ...(n > 1 && { page: String(n) }) }).toString();
-      return `${adminPath}/${key}${p ? `?${p}` : ''}`;
-    };
+    const filtered = activeCount(filters) > 0;
+    const listBase = `${adminPath}/${key}`;
+    const hrefFor = (o: { q?: string; filters?: typeof filters; sort?: typeof sort; page?: number }) =>
+      `${listBase}${listQuery({ q: 'q' in o ? o.q : q, filters: o.filters ?? filters, sort: 'sort' in o ? o.sort : sort, page: o.page }, specs)}`;
+    const pageHref = (n: number) => hrefFor({ page: n });
+    const keep = [...new URLSearchParams(listQuery({ filters, sort }, specs))] as [string, string][];
+    const optionsOf = (f: (typeof specs)[number]['field']) =>
+      f.type === 'select'
+        ? f.options.map((o) => ({ value: o, label: f.optionLabels?.[o] ?? o }))
+        : f.type === 'boolean'
+          ? [
+              { value: 'yes', label: 'Yes' },
+              { value: 'no', label: 'No' },
+            ]
+          : f.type === 'reference'
+            ? (refOptions[f.collection] ?? []).map((o) => ({ value: o.slug, label: o.label }))
+            : undefined;
+    const controls: FilterControl[] = [
+      {
+        name: 'status',
+        label: 'Status',
+        kind: 'select',
+        options: [
+          { value: 'draft', label: 'Draft' },
+          { value: 'changes', label: 'Changes' },
+          { value: 'published', label: 'Published' },
+        ],
+        eq: 'status',
+        from: '',
+        to: '',
+      },
+      ...specs.map((s): FilterControl => {
+        const p = filterParams(s);
+        return {
+          name: s.name,
+          label: s.label,
+          kind: s.field.type === 'date' || s.field.type === 'datetime' ? 'date' : s.field.type === 'number' ? 'number' : 'select',
+          options: optionsOf(s.field),
+          ...p,
+        };
+      }),
+    ];
     const pageLink = (n: number, label: string, icon: React.ReactNode, disabled: boolean) =>
       disabled ? (
         <span aria-disabled="true" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'pointer-events-none opacity-50' })}>
@@ -510,9 +590,25 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
           {icon} {label}
         </Link>
       );
-    const pending = await store.listPending(key);
+    // A sortable column header: a link that cycles ascending, descending, default order.
+    const heading = (col: Column) => {
+      const active = sort?.key === col.key;
+      const Icon = !active ? ChevronsUpDownIcon : sort.dir === 'asc' ? ArrowUpIcon : ArrowDownIcon;
+      return (
+        <th
+          key={col.key}
+          aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+          className={`px-4 py-2 font-medium ${col.key === 'slug' ? 'max-sm:hidden' : col.key === 'status' ? 'w-28' : ''}`}
+        >
+          <Link href={hrefFor({ sort: nextSort(sort, col.key) })} className="inline-flex items-center gap-1 text-inherit no-underline hover:text-mnml-text">
+            {col.label}
+            <Icon className={`size-3.5 ${active ? 'text-mnml-text' : 'text-mnml-text-mute opacity-60'}`} />
+          </Link>
+        </th>
+      );
+    };
     const requests = await store.listRequests(key);
-    const cols = dateField ? 4 : 3;
+    const cols = columns.length;
     return (
       <>
         <AdminHeader crumbs={[home, { label: def.label }]}>
@@ -521,16 +617,16 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
           </Link>
         </AdminHeader>
         <main className={`${bodyClass} flex flex-col gap-4`}>
-          {all.length > 0 && <ListSearch q={q} label={def.label} />}
-          <div className={`${cardClass} overflow-hidden`}>
+          {all.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <ListSearch q={q} label={def.label} keep={keep} />
+              {filtersOn && <ListFilters controls={controls} values={filterValues(filters, specs)} />}
+            </div>
+          )}
+          <div className={`${cardClass} overflow-x-auto`}>
             <table className="w-full text-left">
               <thead className="border-b border-mnml-line bg-mnml-panel text-mnml-text-soft">
-                <tr>
-                  <th className="px-4 py-2 font-medium">{def.fields[def.titleField]?.label ?? 'Title'}</th>
-                  <th className="px-4 py-2 font-medium max-sm:hidden">Slug</th>
-                  <th className="w-28 px-4 py-2 font-medium">Status</th>
-                  {dateField && <th className="w-32 px-4 py-2 font-medium">{def.fields[dateField].label}</th>}
-                </tr>
+                <tr>{columns.map(heading)}</tr>
               </thead>
               <tbody className="divide-y divide-mnml-line">
                 {items.length === 0 && (
@@ -540,38 +636,52 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                         'No entries yet.'
                       ) : (
                         <>
-                          No entries match “{q.trim()}”.{' '}
-                          <Link href={`${adminPath}/${key}`} className="text-mnml-link">
-                            Clear search
+                          No entries match {q.trim() && filtered ? 'this search and these filters' : q.trim() ? `“${q.trim()}”` : 'these filters'}.{' '}
+                          <Link href={hrefFor({ q: '', filters: { fields: {} } })} className="text-mnml-link">
+                            {q.trim() && filtered ? 'Clear all' : q.trim() ? 'Clear search' : 'Clear filters'}
                           </Link>
                         </>
                       )}
                     </td>
                   </tr>
                 )}
-                {items.map(({ slug, entry, status }) => (
-                  // The title link's overlay makes the whole row clickable.
-                  <tr key={slug} className="relative hover:bg-mnml-panel">
-                    <td className="px-4 py-2.5">
-                      <Link href={`${adminPath}/${key}/${slug}`} className="font-medium no-underline after:absolute after:inset-0">
-                        {displayText(entry[def.titleField]) || slug}
-                      </Link>
-                      {requests.has(slug) && (
-                        <span className="mt-1 block w-fit rounded-full bg-mnml-warn px-2 py-0.5 text-xs font-medium whitespace-nowrap text-mnml-on-warn sm:mt-0 sm:ml-2 sm:inline-block">
-                          Awaiting approval
-                        </span>
+                {items.map((item) => {
+                  const { slug, status } = item;
+                  return (
+                    // The title link's overlay makes the whole row clickable.
+                    <tr key={slug} className="relative hover:bg-mnml-panel">
+                      {columns.map((col, i) =>
+                        col.key === 'slug' ? (
+                          <td key={col.key} className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs text-mnml-text-mute max-sm:hidden">
+                            {slug}
+                          </td>
+                        ) : col.key === 'status' ? (
+                          <td key={col.key} className="px-4 py-2.5">
+                            <span className="flex items-center gap-2 text-mnml-text-soft">
+                              <StatusDot state={status === 'draft' ? 'draft' : pending.has(slug) ? 'changes' : 'published'} />
+                              {status === 'draft' ? 'Draft' : pending.has(slug) ? 'Changes' : 'Published'}
+                            </span>
+                          </td>
+                        ) : i === 0 ? (
+                          <td key={col.key} className="px-4 py-2.5">
+                            <Link href={`${adminPath}/${key}/${slug}`} className="font-medium no-underline after:absolute after:inset-0">
+                              {cellText(item, col, cell) || slug}
+                            </Link>
+                            {requests.has(slug) && (
+                              <span className="mt-1 block w-fit rounded-full bg-mnml-warn px-2 py-0.5 text-xs font-medium whitespace-nowrap text-mnml-on-warn sm:mt-0 sm:ml-2 sm:inline-block">
+                                Awaiting approval
+                              </span>
+                            )}
+                          </td>
+                        ) : (
+                          <td key={col.key} className="px-4 py-2.5 tabular-nums whitespace-nowrap text-mnml-text-soft">
+                            {cellText(item, col, cell) || '—'}
+                          </td>
+                        ),
                       )}
-                    </td>
-                    <td className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs text-mnml-text-mute max-sm:hidden">{slug}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="flex items-center gap-2 text-mnml-text-soft">
-                        <StatusDot state={status === 'draft' ? 'draft' : pending.has(slug) ? 'changes' : 'published'} />
-                        {status === 'draft' ? 'Draft' : pending.has(slug) ? 'Changes' : 'Published'}
-                      </span>
-                    </td>
-                    {dateField && <td className="px-4 py-2.5 tabular-nums text-mnml-text-soft">{displayText(entry[dateField]) || '—'}</td>}
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
