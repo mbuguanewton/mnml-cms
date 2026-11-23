@@ -634,7 +634,8 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
             <PlusIcon /> Create
           </Link>
         </AdminHeader>
-        <main className={`${bodyClass} flex flex-col gap-4`}>
+        {/* A table wants the whole width (the form width cap is for readable lines). */}
+        <main className={`${bodyClass.replace('max-w-3xl', 'max-w-none')} flex flex-col gap-4`}>
           <ListSelection key={hrefFor({ page: view.page })} collection={key} rows={rows} actions={customActions}>
             {all.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
@@ -691,7 +692,10 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                         </td>
                         {columns.map((col, i) =>
                           col.key === 'slug' ? (
-                            <td key={col.key} className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs text-mnml-text-mute max-sm:hidden">
+                            <td
+                              key={col.key}
+                              className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs whitespace-nowrap text-mnml-text-mute max-sm:hidden"
+                            >
                               {slug}
                             </td>
                           ) : col.key === 'status' ? (
