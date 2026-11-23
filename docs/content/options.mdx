@@ -1,5 +1,5 @@
 ---
-description: "Every option of createCms: storage, auth, media, paths, sidebar, editor, ui, MCP, revalidate and onChange."
+description: "Every option of createCms: storage, auth, media, paths, sidebar, list actions, editor, ui, MCP, revalidate and onChange."
 ---
 
 # Options
@@ -17,6 +17,7 @@ Second argument of `createCms(config, options)`.
 | `brand` | Sidebar title: string or (async) function |
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
 | `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build with `@n3wtou/mnml-cms/admin`. |
+| `listActions` | Your own actions in a collection list's bar, per key: `{ posts: [{ name, label, danger?, confirm?, run }] }` ([Bulk actions](/drafts-and-publishing#bulk-actions)) |
 | `editor` | Component from `editorProvider()`: extra extensions and buttons ([Extending the editor](/editor)) |
 | `ui` | Component from `uiProvider()`: your own Button, Select… in the admin ([Custom admin UI](/custom-admin-ui)) |
 | `mcp` | `{ tokens, adminTokens }`: MCP server for AI agents at `<apiPath>/mcp`, with tokens from env and/or the admin ([Agents](/agents)) |

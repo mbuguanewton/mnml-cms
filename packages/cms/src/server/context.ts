@@ -48,6 +48,22 @@ export type AdminPageDef = {
   render: () => ReactNode | Promise<ReactNode>;
 };
 
+/**
+ * An action a site adds to the collection list's bar (next to Publish, Unpublish and Delete). It runs once for each
+ * selected entry, on the server; a thrown error marks that entry as failed and the message is shown.
+ */
+export type ListAction = {
+  /** Unique in its collection, and not publish, unpublish or delete. */
+  name: string;
+  label: string;
+  /** Styles the button as destructive. */
+  danger?: boolean;
+  /** Asks first, with this text (the admin adds how many entries are selected). */
+  confirm?: string;
+  /** `entry` is the entry's latest stored data (unpublished changes included). */
+  run: (target: { key: string; slug: string; entry: Record<string, unknown> }) => void | Promise<void>;
+};
+
 /** Where entries are stored: a Drizzle database (the built-in adapter), or your own `EntryStorage`. */
 type StorageOptions =
   | {
@@ -79,6 +95,8 @@ export type CmsOptions<C extends CmsConfig> = StorageOptions & {
   brand?: string | (() => string | Promise<string>);
   /** Sidebar icons per singleton/collection, e.g. { posts: <FileTextIcon /> }. */
   icons?: Partial<Record<keyof C, ReactNode>>;
+  /** Actions for the collection list's bar, per collection key: `{ posts: [{ name: 'feature', label: 'Mark featured', run }] }`. */
+  listActions?: Partial<Record<keyof C & string, ListAction[]>>;
   /** Extra admin screens, listed in the sidebar. */
   pages?: AdminPageDef[];
   /** Extra extensions and toolbar buttons for the rich-text editor: the component from `editorProvider(config)`,

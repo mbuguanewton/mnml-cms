@@ -27,6 +27,7 @@ import { FormDialogProvider } from '../../admin/editor/form-dialog.js';
 import { AgentAccess } from '../../admin/agent/agent-access.js';
 import { AgentRequest } from '../../admin/agent/agent-request.js';
 import { ListFilters, type FilterControl } from '../../admin/entry/list-filters.js';
+import { ListHeaderCheck, ListRowCheck, ListSelection } from '../../admin/entry/list-selection.js';
 import { ListSearch } from '../../admin/entry/list-search.js';
 import {
   applyFilters,
@@ -58,7 +59,7 @@ import { isAdmin } from '../auth/auth.js';
 import { loadRefOptions } from '../content/ref-options.js';
 import { revOf } from '../content/rev.js';
 import { SINGLETON_SLUG } from '../content/store.js';
-import type { Context } from '../context.js';
+import type { Context, ListAction } from '../context.js';
 
 type Props = { params: Promise<{ path?: string[] }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 type AnyEntry = Record<string, unknown>;
@@ -610,6 +611,14 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     };
     const requests = await store.listRequests(key);
     const cols = columns.length;
+    // The selection's rows (what each one's status is), and the site's own actions for this collection.
+    const rows = items.map((i) => ({
+      slug: i.slug,
+      status: i.status === 'draft' ? ('draft' as const) : pending.has(i.slug) ? ('changes' as const) : ('published' as const),
+    }));
+    const customActions = ((options.listActions as Record<string, ListAction[] | undefined> | undefined)?.[key] ?? []).map(
+      ({ name, label, danger, confirm }) => ({ name, label, danger, confirm }),
+    );
     return (
       <>
         <AdminHeader crumbs={[home, { label: def.label }]}>
@@ -618,85 +627,95 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
           </Link>
         </AdminHeader>
         <main className={`${bodyClass} flex flex-col gap-4`}>
-          {all.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <ListSearch q={q} label={def.label} keep={keep} />
-              {filtersOn && <ListFilters controls={controls} values={filterValues(filters, specs)} />}
-            </div>
-          )}
-          <div className={`${cardClass} overflow-x-auto`}>
-            <table className="w-full text-left">
-              <thead className="border-b border-mnml-line bg-mnml-panel text-mnml-text-soft">
-                <tr>{columns.map(heading)}</tr>
-              </thead>
-              <tbody className="divide-y divide-mnml-line">
-                {items.length === 0 && (
+          <ListSelection key={hrefFor({ page: view.page })} collection={key} rows={rows} actions={customActions}>
+            {all.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <ListSearch q={q} label={def.label} keep={keep} />
+                {filtersOn && <ListFilters controls={controls} values={filterValues(filters, specs)} />}
+              </div>
+            )}
+            <div className={`${cardClass} overflow-x-auto`}>
+              <table className="w-full text-left">
+                <thead className="border-b border-mnml-line bg-mnml-panel text-mnml-text-soft">
                   <tr>
-                    <td colSpan={cols} className="px-4 py-6 text-center text-mnml-text-mute">
-                      {all.length === 0 ? (
-                        'No entries yet.'
-                      ) : (
-                        <>
-                          No entries match {q.trim() && filtered ? 'this search and these filters' : q.trim() ? `“${q.trim()}”` : 'these filters'}.{' '}
-                          <Link href={hrefFor({ q: '', filters: { fields: {} } })} className="text-mnml-link">
-                            {q.trim() && filtered ? 'Clear all' : q.trim() ? 'Clear search' : 'Clear filters'}
-                          </Link>
-                        </>
-                      )}
-                    </td>
+                    <th className="w-10 px-3 py-2">
+                      <ListHeaderCheck label={def.label.toLowerCase()} />
+                    </th>
+                    {columns.map(heading)}
                   </tr>
-                )}
-                {items.map((item) => {
-                  const { slug, status } = item;
-                  return (
-                    // The title link's overlay makes the whole row clickable.
-                    <tr key={slug} className="relative hover:bg-mnml-panel">
-                      {columns.map((col, i) =>
-                        col.key === 'slug' ? (
-                          <td key={col.key} className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs text-mnml-text-mute max-sm:hidden">
-                            {slug}
-                          </td>
-                        ) : col.key === 'status' ? (
-                          <td key={col.key} className="px-4 py-2.5">
-                            <span className="flex items-center gap-2 text-mnml-text-soft">
-                              <StatusDot state={status === 'draft' ? 'draft' : pending.has(slug) ? 'changes' : 'published'} />
-                              {status === 'draft' ? 'Draft' : pending.has(slug) ? 'Changes' : 'Published'}
-                            </span>
-                          </td>
-                        ) : i === 0 ? (
-                          <td key={col.key} className="px-4 py-2.5">
-                            <Link href={`${adminPath}/${key}/${slug}`} className="font-medium no-underline after:absolute after:inset-0">
-                              {cellText(item, col, cell) || slug}
-                            </Link>
-                            {requests.has(slug) && (
-                              <span className="mt-1 block w-fit rounded-full bg-mnml-warn px-2 py-0.5 text-xs font-medium whitespace-nowrap text-mnml-on-warn sm:mt-0 sm:ml-2 sm:inline-block">
-                                Awaiting approval
-                              </span>
-                            )}
-                          </td>
+                </thead>
+                <tbody className="divide-y divide-mnml-line">
+                  {items.length === 0 && (
+                    <tr>
+                      <td colSpan={cols + 1} className="px-4 py-6 text-center text-mnml-text-mute">
+                        {all.length === 0 ? (
+                          'No entries yet.'
                         ) : (
-                          <td key={col.key} className="px-4 py-2.5 tabular-nums whitespace-nowrap text-mnml-text-soft">
-                            {cellText(item, col, cell) || '—'}
-                          </td>
-                        ),
-                      )}
+                          <>
+                            No entries match {q.trim() && filtered ? 'this search and these filters' : q.trim() ? `“${q.trim()}”` : 'these filters'}.{' '}
+                            <Link href={hrefFor({ q: '', filters: { fields: {} } })} className="text-mnml-link">
+                              {q.trim() && filtered ? 'Clear all' : q.trim() ? 'Clear search' : 'Clear filters'}
+                            </Link>
+                          </>
+                        )}
+                      </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {view.pages > 1 && (
-            <nav aria-label="Pages" className="flex flex-wrap items-center justify-between gap-2 text-sm text-mnml-text-soft">
-              <span className="tabular-nums">
-                {view.from}–{view.to} of {view.total}
-              </span>
-              <span className="flex gap-2">
-                {pageLink(view.page - 1, 'Previous', <ChevronLeftIcon />, view.page <= 1)}
-                {pageLink(view.page + 1, 'Next', <ChevronRightIcon />, view.page >= view.pages)}
-              </span>
-            </nav>
-          )}
+                  )}
+                  {items.map((item) => {
+                    const { slug, status } = item;
+                    return (
+                      // The title link's overlay makes the whole row clickable.
+                      <tr key={slug} className="relative hover:bg-mnml-panel">
+                        <td className="w-10 px-3 py-2.5">
+                          <ListRowCheck slug={slug} name={cellText(item, columns[0], cell) || slug} />
+                        </td>
+                        {columns.map((col, i) =>
+                          col.key === 'slug' ? (
+                            <td key={col.key} className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs text-mnml-text-mute max-sm:hidden">
+                              {slug}
+                            </td>
+                          ) : col.key === 'status' ? (
+                            <td key={col.key} className="px-4 py-2.5">
+                              <span className="flex items-center gap-2 text-mnml-text-soft">
+                                <StatusDot state={status === 'draft' ? 'draft' : pending.has(slug) ? 'changes' : 'published'} />
+                                {status === 'draft' ? 'Draft' : pending.has(slug) ? 'Changes' : 'Published'}
+                              </span>
+                            </td>
+                          ) : i === 0 ? (
+                            <td key={col.key} className="px-4 py-2.5">
+                              <Link href={`${adminPath}/${key}/${slug}`} className="font-medium no-underline after:absolute after:inset-0">
+                                {cellText(item, col, cell) || slug}
+                              </Link>
+                              {requests.has(slug) && (
+                                <span className="mt-1 block w-fit rounded-full bg-mnml-warn px-2 py-0.5 text-xs font-medium whitespace-nowrap text-mnml-on-warn sm:mt-0 sm:ml-2 sm:inline-block">
+                                  Awaiting approval
+                                </span>
+                              )}
+                            </td>
+                          ) : (
+                            <td key={col.key} className="px-4 py-2.5 tabular-nums whitespace-nowrap text-mnml-text-soft">
+                              {cellText(item, col, cell) || '—'}
+                            </td>
+                          ),
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {view.pages > 1 && (
+              <nav aria-label="Pages" className="flex flex-wrap items-center justify-between gap-2 text-sm text-mnml-text-soft">
+                <span className="tabular-nums">
+                  {view.from}–{view.to} of {view.total}
+                </span>
+                <span className="flex gap-2">
+                  {pageLink(view.page - 1, 'Previous', <ChevronLeftIcon />, view.page <= 1)}
+                  {pageLink(view.page + 1, 'Next', <ChevronRightIcon />, view.page >= view.pages)}
+                </span>
+              </nav>
+            )}
+          </ListSelection>
         </main>
       </>
     );

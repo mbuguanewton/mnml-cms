@@ -16,3 +16,9 @@ export type SaveResult = { ok: true; message: string; redirect?: string; rev?: s
 /** `changes`: the draft now differs from the live version. */
 export type AutosaveResult = { ok: true; rev: string; changes: boolean } | (Invalid & { conflict?: true });
 export type PreviewResult = { ok: true; url: string } | Invalid;
+/** A bulk action on list rows: `action` is publish, unpublish, delete, or the name of a site's `listActions` entry. */
+export type BulkInput = { key: string; slugs: string[]; action: string };
+/** What happened to each entry: `done`, `skipped` (nothing to do, e.g. already published) or `failed` (with why). */
+export type BulkResult =
+  | { ok: true; results: { done: string[]; skipped: { slug: string; message: string }[]; failed: { slug: string; message: string }[] } }
+  | { ok: false; message: string };
