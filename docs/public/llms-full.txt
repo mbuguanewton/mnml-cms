@@ -113,7 +113,7 @@ Restyle the admin by overriding `--mnml-*` variables (see `styles.css`).
 Point drizzle-kit at the package's schema:
 
 ```ts filename="drizzle.config.ts"
-export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3wtou/mnml-cms/dist/server/db.js', dbCredentials: { url: process.env.DATABASE_URL! } });
+export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3wtou/mnml-cms/dist/server/content/db.js', dbCredentials: { url: process.env.DATABASE_URL! } });
 ```
 
 Run `drizzle-kit push`. Scripts import the same table from `@n3wtou/mnml-cms/schema`.
@@ -147,7 +147,7 @@ Every field takes `{ required, help }`.
 | `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null`. Options can have [labels](https://mnml-cms.vercel.app/fields/select-labels.md). |
 | `reference(label, 'authors')` | `string \| null`: a published entry's slug. Read with `cms.getEntry`. |
 | `references(label, 'posts', { min, max })` | `string[]`: published slugs, in order. Read with `cms.getEntries`. |
-| `image` | `{ url, alt, focalX?, focalY? } \| null`. [Focal point](https://mnml-cms.vercel.app/fields/focal-point.md) optional. |
+| `image` | `{ url, alt, focalX?, focalY? } \| null`. [Focal point](https://mnml-cms.vercel.app/fields/focal-point.md) optional. In the admin: an empty field is a drop zone (drop, click or browse); a filled one is a preview with an icon toolbar (Replace, Choose from uploads, Focal point, Remove) and a `filename · width×height` chip. |
 | `richtext` | Tiptap JSON. Render with `<RichText>`. |
 | `tags` | `string[]` |
 | `array(label, fields, { itemLabel, min, max })` | Repeatable list of `fields` |
@@ -172,6 +172,16 @@ authors: fields.references('Authors', 'authors', { required: true }),
 - Slugs trimmed. Blanks and repeats dropped.
 - Then `min` / `max`. `required` = at least one.
 - An entry unpublished later stays, marked "(unavailable)". Readers skip it.
+
+### Create new
+
+Next to the search box, **Create new** opens a panel on the right with the target collection's form. Make the entry without leaving the one you're editing.
+
+- **Publish** creates it live and picks it. **Save draft** creates a draft and picks it, shown as "(draft)". The picker doesn't list drafts, and readers skip them, until you publish.
+- Slug follows the title until you edit it. Errors show per field and keep the panel open.
+- Close or Cancel asks first if you typed anything.
+- A reference field inside the panel has its own **Create new**.
+- Turn it off per field: `fields.reference('Author', 'authors', { createNew: false })`.
 
 ## Groups become tabs
 
@@ -292,8 +302,8 @@ The part of an image to keep in frame when cropped.
 
 ## In the admin
 
-- **Focal point** (under the image) opens a big preview. Click the spot, or arrow keys (5%; 1% with Shift).
-- **Reset** removes it. A new upload clears it.
+- **Focal point** (crosshair button in the toolbar over the image) shows the whole image over the preview. Click the spot, or arrow keys (5%; 1% with Shift).
+- **Reset** removes it. **X** (or Escape) closes focal mode. A new upload clears it.
 
 ## Stored value
 
@@ -468,8 +478,26 @@ export default async function Page({ params }: Props) {
 }
 ```
 
-- No `DATABASE_URL` at build? Add `export const dynamic = 'force-dynamic'` to pages reading the CMS.
-- `listSlugs` in `generateStaticParams` returns published slugs only. Previewing a draft needs a dynamic route.
+## Static rendering
+
+Pages that read the CMS render static. Reads only touch `cookies()` and `headers()` in Draft Mode, so visitors get the cached page. Same for `<cms.PreviewBanner />`.
+
+To go static:
+
+- Don't set `export const dynamic = 'force-dynamic'`.
+- Have `DATABASE_URL` at build time. No database at build? Keep `force-dynamic` on pages reading the CMS.
+- Optional: prebuild dynamic routes. Without it a route renders on its first visit, then is cached.
+
+```tsx
+export const generateStaticParams = async () => (await cms.listSlugs('posts')).map((slug) => ({ slug }));
+```
+
+What to know:
+
+- **Edits go live.** Each save or delete revalidates `'/'` (layout) by default. Publish refreshes the page and lists; unpublish gives a 404. Narrow it with the `revalidate` option.
+- **Drafts preview fine** on static routes. Leave `dynamicParams` at its default: `listSlugs` returns published slugs only, so `dynamicParams = false` would 404 a draft.
+- **Keep request APIs off public pages.** `cms.isAdmin()`, `cookies()`, `headers()` and `searchParams` make that page dynamic.
+- `/admin` and the API route are always dynamic.
 
 ## `listEntries` options
 
@@ -508,7 +536,102 @@ A collection entry is draft or published. The admin's dot:
 
 - 25 entries a page, with Previous / Next.
 - The search box filters by title or slug as you type (Enter without JavaScript).
-- Page and search live in the URL (`?q=…&page=2`), so links and the back button work.
+- **Columns** chooses what the table shows. **Filters** narrows the list. **Column headers** sort it. **Checkboxes** select rows for bulk actions.
+- Page, search, filters and sort live in the URL (`?q=…&status=draft&f.category=news&sort=f.date&dir=desc&page=2`), so links and the back button work.
+
+### Filters
+
+The Filters button opens a panel with one filter per field that can be filtered, in config order. Status (Draft, Changes, Published) is always first. A chip under the button shows each set filter, and **Clear filters** removes them all. Changing a filter starts again at page 1. Filters need JavaScript. The search box doesn't.
+
+| Field | Filter |
+| --- | --- |
+| `select` | A dropdown of its options (with their labels). |
+| `boolean` | Any, Yes or No. No also matches entries where it was never set. |
+| `date`, `datetime` | From and to, both included. Entries without a date never match. A `datetime` is compared by its UTC day. |
+| `number` | Min and max. Entries without a number never match. |
+| `reference` | A dropdown of the target collection's published entries. |
+
+Pick which filters show with `filters` on the collection. It takes field names, shown in that order. `filters: false` hides the whole control, status too.
+
+```ts
+posts: collection({
+  label: 'Posts',
+  titleField: 'title',
+  basePath: '/blog',
+  filters: ['category', 'featured', 'date'], // default: every filterable field
+  fields: {
+    title: fields.text('Title'),
+    category: fields.select('Category', ['news', 'guide'] as const),
+    featured: fields.boolean('Featured'),
+    date: fields.date('Date'),
+  },
+});
+```
+
+A name that isn't a field, or is a field type that can't be filtered (`text`, `richtext`, `image`, `tags`, `references`, groups, blocks, arrays), throws when the config loads, and TypeScript flags a misspelt name.
+
+### Columns and sorting
+
+The table shows the title, Slug, Status and the first `date` field. Click a header to sort ascending, again for descending, a third time for the default order (newest `date` first). The header's arrow and `aria-sort` show the state.
+
+- Text sorts without regard to case, numbers as numbers, dates as dates.
+- A `select` sorts by its label, a `reference` by the target's title, a `boolean` with No first, Status as Draft, Changes, Published.
+- Empty values come last in both directions. Equal values keep their order.
+
+`columns` on the collection chooses the field columns, in order. The first is the link to the entry, then come Slug and Status, then the rest. Every column sorts. Shown: `text`, `url`, `date`, `datetime`, `number`, `boolean`, `select` and `reference`.
+
+```ts
+columns: ['title', 'category', 'date', 'featured'],
+```
+
+### Choosing columns
+
+The **Columns** button opens a menu with a check mark beside each column: Slug, Status and every field that can be shown. Tick one to show it, untick to hide it; the menu stays open while you do. The first column (the link to the entry) is always shown. **Reset to default** goes back to the collection's `columns` (or the standard table).
+
+The choice is kept per collection in this browser, in a cookie named `mnml_cols_<collection>` (set on the admin path, for a year; the server reads it, so the table renders right at once). Nothing is stored in the database, and other editors and browsers keep their own. Columns show in the menu's order: the ones the table shows by default first, then the other fields in config order. A sort on a column you hide is dropped.
+
+**Filters follow the columns once you have chosen them.** A field's filter shows only while its column does, and Status only while the Status column does. Hide Category and its filter goes; show it again and it returns. A filter that was set on a hidden column is ignored (not applied), like a sort, and comes back with the column. Before you choose columns, every filter shows as configured; **Reset to default** returns to that. With no filters left (only the first column showing) the Filters button is hidden. `columnChoices: false` turns this off along with the choice.
+
+`columnChoices` on the collection limits what the menu offers, besides Slug and Status. It takes field names, or `false` for no Columns button (the table then always shows `columns` or the default). A name that isn't a field, or isn't one of the shown types, throws when the config loads.
+
+```ts
+columnChoices: ['category', 'date', 'featured'], // default: every field that can be a column
+```
+
+### Bulk actions
+
+A checkbox on each row (and one in the header for the whole page) selects entries. A bar appears at the bottom with the actions that apply:
+
+| Action | Does |
+| --- | --- |
+| **Publish** | Makes drafts, and entries with unpublished changes, live. Asks for nothing. |
+| **Unpublish** | Takes live entries off the site; their content becomes a draft. Asks first. |
+| **Delete** | Deletes the entries. Asks first, and says how many are published. |
+
+A button is disabled when it would do nothing to the selection (Publish when everything is live). Each entry is handled like a single save: validated, and `revalidate` / `onChange` run for it. An entry that can't be published (a required field is empty) is reported and left alone; the rest still go through. Entries already in the target state are skipped. Up to 100 at a time. A new search, filter, sort or page starts with nothing selected.
+
+#### Your own actions
+
+`listActions` in `createCms` adds buttons to the bar for a collection. Each runs once per selected entry, on the server. It's a server option because `mnml.config.ts` is plain data.
+
+```ts
+export const cms = createCms(config, {
+  // …
+  listActions: {
+    posts: [
+      {
+        name: 'refresh', // unique in the collection; not publish, unpublish or delete
+        label: 'Refresh on site',
+        // danger: true,                    // red button
+        // confirm: 'Rebuilds each page.',  // asks first (the admin adds how many)
+        run: ({ key, slug, entry }) => revalidatePath(`/posts/${slug}`), // entry: its latest data
+      },
+    ],
+  },
+});
+```
+
+Throw an error to mark that entry as failed; the message is shown. A site action applies to every selected entry, whatever its status.
 
 ## Autosave
 
@@ -1023,6 +1146,7 @@ mcp: { adminTokens: true },
 - The list shows each token's scopes, content, created and last used (updated at most once a minute).
 - **Revoke** cuts access on the agent's next request.
 - Config tokens still work alongside, and show in the list as "from config". Names are unique across both.
+- **Revoke** on a config token only explains what to do: remove it from the `mcp.tokens` option (or its environment variable) and redeploy. It keeps working until then, since it lives in your config, not in the database.
 
 ### Scopes
 
@@ -1176,14 +1300,33 @@ Second argument of `createCms(config, options)`.
 | `auth` | `{ password, secret }` for the built-in login, or an `AuthAdapter` ([Authentication](https://mnml-cms.vercel.app/authentication.md)) |
 | `media` | Image storage ([Image storage](https://mnml-cms.vercel.app/image-storage.md)) |
 | `adminPath`, `apiPath` | Default `/admin`, `/api/mnml`. Must match the route files. |
-| `brand` | Sidebar title: string or (async) function |
+| `brand` | Name and logo of the sidebar and sign-in page: a string, `{ name, logo }`, or an (async) function returning either ([Brand and logo](#brand-and-logo)) |
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
 | `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build with `@n3wtou/mnml-cms/admin`. |
+| `listActions` | Your own actions in a collection list's bar, per key: `{ posts: [{ name, label, danger?, confirm?, run }] }` ([Bulk actions](https://mnml-cms.vercel.app/drafts-and-publishing.md#bulk-actions)) |
 | `editor` | Component from `editorProvider()`: extra extensions and buttons ([Extending the editor](https://mnml-cms.vercel.app/editor.md)) |
 | `ui` | Component from `uiProvider()`: your own Button, Select… in the admin ([Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md)) |
 | `mcp` | `{ tokens, adminTokens }`: MCP server for AI agents at `<apiPath>/mcp`, with tokens from env and/or the admin ([Agents](https://mnml-cms.vercel.app/agents.md)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
+
+## Brand and logo
+
+`brand` is the name in the sidebar and on the sign-in page. Give it an object to add your logo:
+
+```ts
+createCms(config, {
+  brand: { name: 'Example', logo: '/logo.svg' },
+});
+```
+
+`logo` is one of:
+
+- A URL (a file in `public/`, or any absolute URL). Replaces the letter tile; the name stays beside it.
+- `{ src, dark?, alt?, wordmark? }`. `dark` is shown in the admin's dark theme. `wordmark: true` hides the name and sizes the image by its height, for a logo that already contains it. `alt` defaults to empty, or to the name with `wordmark`.
+- A React element, e.g. an inline SVG using `currentColor`.
+
+If the image fails to load, the letter tile is shown. A plain string, or a function returning a string or object, works as before.
 
 ## In your own code
 
@@ -1208,7 +1351,7 @@ Build `pages` with the admin's own controls from `@n3wtou/mnml-cms/admin`. To us
 | `Checkbox`, `Switch` | `id`, `checked`, `onChange(checked)`, `disabled`, `label` |
 | `DatePicker` | `id`, `value` (`YYYY-MM-DD` or null), `onChange(value)`, `time` (adds a time box; value `YYYY-MM-DDTHH:mm`), `timeInCalendar` (with `time`: one box, time row in the calendar), `invalid` |
 | `Tooltip` | `content`, `side`, one focusable child. Shows on hover and keyboard focus. |
-| `Menu` | `label`, `items: { id, label, icon, checked, disabled, danger, onSelect }[]`, `trigger`, `className` |
+| `Menu` | `label`, `items: { id, label, icon, checked, disabled, danger, keepOpen, onSelect }[]`, `trigger`, `className` |
 
 - `onChange` gets the value, not the event.
 - `Select`: full width; cap it with a `max-w-*` class. Arrows, Home/End, type-ahead, Enter, Escape. A value that isn't an option shows as "(unavailable)".
@@ -1288,7 +1431,7 @@ Props per slot: `UiSlotProps['Select']`, `UiSlotProps['Button']`, … (also `Sel
 - `DatePicker`: `value` is `YYYY-MM-DD` or `null`. With `time`, `YYYY-MM-DDTHH:mm` in local time (the admin converts to and from UTC). Return the same shape from `onChange`.
 - `DatePicker` `timeInCalendar`: the admin's datetime fields set it; one box with the time picked in the calendar. Your picker may ignore it. The admin's hour and minute lists are its own `Select`s, so your `Select` slot applies to them; portal its popover with `useAdminPortal()` so it sits above the calendar.
 - `Tooltip`: `content`, `side`, one focusable child.
-- `Menu`: `label`, `items` (`{ id, label, icon, checked, disabled, danger, onSelect }`), `trigger`, `className`.
+- `Menu`: `label`, `items` (`{ id, label, icon, checked, disabled, danger, keepOpen, onSelect }`; `keepOpen` leaves the menu open after the item runs, for on/off items), `trigger`, `className`.
 - Your slot can wrap the admin's own component (e.g. `Select` from `@n3wtou/mnml-cms/admin` plus a class). It gets the built-in, not itself.
 
 ## Colours: the token bridge
@@ -1391,12 +1534,18 @@ type MediaStorage = {
 | --- | --- |
 | `put` | Stores the file, returns a unique key |
 | `get` | Reads by key |
-| `list` | Optional. Adds the Media screen. |
+| `list` | Optional. Adds the Media screen and "Choose from uploads". |
 | `delete` | Optional. Adds Delete there. |
 
 ## The Media screen
 
 With `list`, the admin gets a **Media** screen. Per file: size, date, the entries using it (image fields and rich text images, drafts too), an "Unused" flag, Delete (warns if still used). Both bundled adapters have it.
+
+**Select** (needs `delete`) adds a checkbox to each file and a bar with the count, **Select all**, **Select unused**, **Clear** and **Delete**. One confirmation covers the whole batch and says how many of the files are still used in entries. Files that fail to delete (the storage said no) are listed, and the rest are deleted anyway. A batch is at most 100 files per request; larger selections are sent in several.
+
+## Choose from uploads
+
+With `list`, an `image` field has **Choose from uploads** in its toolbar (and in the empty drop zone), and the rich text **Image** tool opens the same picker. It shows the stored files, newest first, with a search by name. Pick one to use it; **Upload new** in the picker uploads and picks in one step. A picked image starts with empty alt text and no focal point, like a new upload. Without `list` (a custom adapter that can't list files), the picker is left out and both upload as before.
 
 ## Adapters
 
@@ -1580,7 +1729,8 @@ Upgrade one major at a time. Run the type check after each, and click through `/
 | 1.4.0 | `fields.references()` + `cms.getEntries()`; `fields.datetime()`; `default` on fields + `initialValues()`; select option labels + `selectLabel()`; `min` / `max` on `array` / `blocks` / `references`; combobox entry pickers; `<RichText components>` and `defineEditor({ components })`; `tools.node()` + `nodeAttributes()`; `tools.reference()`, `referenceNode()`, `collectReferences()`; tool `visible` / `context`; `@n3wtou/mnml-cms/table` (`tables`); `mediaImporter()` / `importRemoteMedia()` in `/sync`; image focal point (`focalX` / `focalY`) + `focalPosition()`. | No API or database change. `required` on `array` / `blocks` now means at least one item; the package's toolbar tools come before the site's own in each group. |
 | 1.4.1 | Docs moved to https://mnml-cms.vercel.app; the README covers install and setup only. | No code change. |
 | 1.5.0 | MCP server for agents (`mcp` option, scoped tokens, approval of deletes and discards, Markdown rich text); `listEntries` returns `createdAt` / `updatedAt`; `change.by`; `markdownToRichText()` / `richTextToMarkdown()` in `/sync`; MCP `docs` tool, docs pages as `.md`, `AGENTS.md` in the package. | No API or database change. |
-| 1.6.0 | Agent tokens from the admin (`mcp.adminTokens`); own admin controls (`Select`, `Checkbox`, `Switch`, `Tooltip`, toasts, `Menu`); `ui` option + `uiProvider()` to use your own components (e.g. shadcn) with a token bridge, `useAdminPortal()`, `mnml-admin` class; own date picker (`DatePicker`, time inside the calendar); rich text toolbar overflow menu, fullscreen editor, resizable inline editor; collection list paging and search. | No API or database change. Native selects, checkboxes, date and time popups are replaced by the admin's own. Sites with CSS targeting those native elements in the admin may need a look. |
+| 1.6.0 | Agent tokens from the admin (`mcp.adminTokens`); own admin controls (`Select`, `Checkbox`, `Switch`, `Tooltip`, toasts, `Menu`); `ui` option + `uiProvider()` to use your own components (e.g. shadcn) with a token bridge, `useAdminPortal()`, `mnml-admin` class; own date picker (`DatePicker`, time inside the calendar); rich text toolbar overflow menu, fullscreen editor, resizable inline editor; collection list paging and search. | The Drizzle schema file moved: `drizzle.config.ts` must use `schema: './node_modules/@n3wtou/mnml-cms/dist/server/content/db.js'` (was `dist/server/db.js`). No database change. Native selects, checkboxes, date and time popups are replaced by the admin's own, so CSS targeting those native elements in the admin may need a look. |
+| 1.7.0 | Collection list filters (`filters`) and sortable columns (`columns`), a Columns menu for editors (`columnChoices`); row selection with bulk Publish, Unpublish, Delete and your own actions (`listActions`); "Choose from uploads" picker and multiselect delete on the Media page; "Create new" for `reference` and `references` fields (side panel, `createNew: false` to turn off); new `image` field design (drop zone, toolbar over the preview, focal point in place); `brand: { name, logo }`; Revoke on config tokens in Agent access. | No API or database change. Editors' column choices are saved in a `mnml_cols_<collection>` cookie. The collection list now uses the full page width. The Drizzle schema path is `dist/server/content/db.js` (since 1.6.0). |
 
 ## Upgrade steps
 
@@ -1599,13 +1749,17 @@ Upgrade one major at a time. Run the type check after each, and click through `/
 4. Headings in rich text now go 1–4: add styles for `h1` and `h4`.
 5. Editors sign in again.
 
+**1.5.x → 1.6.0**
+1. In `drizzle.config.ts`, change `schema` to `'./node_modules/@n3wtou/mnml-cms/dist/server/content/db.js'`. The old `dist/server/db.js` is gone, so `drizzle-kit push` fails until you do. The `@n3wtou/mnml-cms/db` and `/schema` imports are unchanged.
+2. If your admin CSS targets native selects, checkboxes or date and time inputs, check `/admin`.
+
 **1.0 → 1.x:** no breaking changes. 1.2.0 changes how editors save drafts, which is worth telling them. 1.4.0: check `required: true` on `array` / `blocks` fields, since entries with an empty list won't save until an item is added.
 
 ## What a project has
 
 ```sh
-grep -n "blocks:\|showIf\|select:\|number:" node_modules/@n3wtou/mnml-cms/dist/define.d.ts
-ls node_modules/@n3wtou/mnml-cms/dist/sync.js 2>/dev/null     # 1.3.0+
-ls node_modules/@n3wtou/mnml-cms/dist/table-entry.js 2>/dev/null  # 1.4.0+
+grep -n "blocks:\|showIf\|select:\|number:" node_modules/@n3wtou/mnml-cms/dist/define.d.ts node_modules/@n3wtou/mnml-cms/dist/schema/define.d.ts 2>/dev/null
+ls node_modules/@n3wtou/mnml-cms/dist/sync.js node_modules/@n3wtou/mnml-cms/dist/sync/index.js 2>/dev/null  # 1.3.0+
+ls node_modules/@n3wtou/mnml-cms/dist/table-entry.js node_modules/@n3wtou/mnml-cms/dist/editor/tables.js 2>/dev/null  # 1.4.0+
 grep -rn "apiPath" src app 2>/dev/null | head                  # a kept '/api/cms'?
 ```

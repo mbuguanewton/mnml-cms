@@ -1,8 +1,20 @@
 import 'server-only';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { headers } from 'next/headers';
-import { ChevronLeftIcon, ChevronRightIcon, ExternalLinkIcon, FileTextIcon, ImageIcon, KeyRoundIcon, PlusIcon, SettingsIcon } from 'lucide-react';
+import { cookies, headers } from 'next/headers';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ChevronsUpDownIcon,
+  ExternalLinkIcon,
+  FileTextIcon,
+  ImageIcon,
+  KeyRoundIcon,
+  PlusIcon,
+  SettingsIcon,
+} from 'lucide-react';
 import { initialValues, plainDef, referenceTargets, withDefaults, type Collection, type CmsConfig, type Singleton } from '../../schema/define.js';
 import { displayText } from '../../schema/text.js';
 import type { EntryStatus } from '../../api.js';
@@ -14,12 +26,39 @@ import { AdminProvider } from '../../admin/shell/context.js';
 import { FormDialogProvider } from '../../admin/editor/form-dialog.js';
 import { AgentAccess } from '../../admin/agent/agent-access.js';
 import { AgentRequest } from '../../admin/agent/agent-request.js';
+import { ListColumns } from '../../admin/entry/list-columns.js';
+import { ListFilters, type FilterControl } from '../../admin/entry/list-filters.js';
+import { ListHeaderCheck, ListRowCheck, ListSelection } from '../../admin/entry/list-selection.js';
 import { ListSearch } from '../../admin/entry/list-search.js';
+import {
+  applyFilters,
+  activeCount,
+  cellText,
+  columnChoices,
+  columnCookie,
+  columnSpecs,
+  parseColumnCookie,
+  visibleColumns,
+  filterParams,
+  filterSpecs,
+  filtersFollowColumns,
+  filterValues,
+  listQuery,
+  nextSort,
+  parseFilters,
+  parseSort,
+  sortItems,
+  type Column,
+} from '../content/list-filters.js';
 import { listView, parsePage } from '../content/list-view.js';
 import { agentTokens } from '../mcp/tokens.js';
 import { DeleteButton } from '../../admin/entry/delete-button.js';
 import { MediaDeleteButton } from '../../admin/shell/media-delete-button.js';
+import { mediaName } from '../../admin/shell/media-name.js';
+import { MediaSelectBox, MediaSelection, type MediaItem } from '../../admin/shell/media-selection.js';
 import { EntryForm } from '../../admin/entry/entry-form.js';
+import { Brand } from '../../admin/shell/brand.js';
+import { resolveBrand } from './brand.js';
 import { AdminHeader } from '../../admin/shell/header.js';
 import { LoginForm } from '../../admin/shell/login-form.js';
 import { AdminNav, type NavGroup } from '../../admin/shell/nav.js';
@@ -28,7 +67,7 @@ import { isAdmin } from '../auth/auth.js';
 import { loadRefOptions } from '../content/ref-options.js';
 import { revOf } from '../content/rev.js';
 import { SINGLETON_SLUG } from '../content/store.js';
-import type { Context } from '../context.js';
+import type { Context, ListAction } from '../context.js';
 
 type Props = { params: Promise<{ path?: string[] }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 type AnyEntry = Record<string, unknown>;
@@ -75,7 +114,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     // The site's UI slots wrap everything, so the confirm and form dialogs use them too.
     const provider = (children: React.ReactNode) => {
       const admin = (
-        <AdminProvider value={{ adminPath, apiPath }}>
+        <AdminProvider value={{ adminPath, apiPath, mediaLibrary: options.media?.list ? true : false }}>
           <FormDialogProvider>{withEditor(children)}</FormDialogProvider>
         </AdminProvider>
       );
@@ -88,7 +127,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       if (adapter?.loginUrl) redirect(adapter.loginUrl);
       if (await isAdmin(ctx)) redirect(adminPath);
       const query = await searchParams;
-      const brand = await brandName();
+      const brand = await resolveBrandOption();
       // Laid out with inline styles on purpose: this page must look right even when the host's Tailwind
       // build hasn't generated the admin's newest classes yet (e.g. a dev server that wasn't restarted).
       const line = 'color-mix(in srgb, var(--mnml-text) 14%, transparent)';
@@ -110,9 +149,9 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       return provider(
         <main
           className={`${rootClass} bg-mnml-panel`}
-          style={{ position: 'relative', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}
+          style={{ position: 'relative', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: '40px 16px', minHeight: '100dvh' }}
         >
-          <title>{`Sign in — ${brand}`}</title>
+          <title>{`Sign in — ${brand.name}`}</title>
           {/* Decorative: a soft accent glow, and a dashed grid that fades out toward the edges. */}
           <div
             aria-hidden
@@ -126,27 +165,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
           <div aria-hidden style={gridLayer(`linear-gradient(${line} 1px, transparent 1px)`, 'auto 40px', 'to right')} />
           <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, width: '100%', maxWidth: 384 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-              <span
-                className="font-mnml-brand"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 48,
-                  height: 48,
-                  borderRadius: 12,
-                  fontSize: 24,
-                  fontWeight: 700,
-                  background: 'var(--mnml-primary)',
-                  color: 'var(--mnml-on-primary)',
-                  boxShadow: '0 1px 2px rgb(0 0 0 / 0.12)',
-                }}
-              >
-                {brand[0] ?? 'A'}
-              </span>
-              <span className="font-mnml-brand" style={{ fontSize: 18, fontWeight: 600 }}>
-                {brand}
-              </span>
+              <Brand name={brand.name} logo={brand.logo} size="login" />
             </div>
             <div
               style={{
@@ -174,11 +193,11 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     if (!(await isAdmin(ctx))) redirect(ctx.loginUrl);
 
     const content = await screen(path, await searchParams);
-    const brand = await brandName();
+    const brand = await resolveBrandOption();
     return provider(
       <div className={`${rootClass} md:flex-row`}>
-        <title>{`${brand} — Admin`}</title>
-        <AdminNav brand={brand} groups={navGroups()} signOutEverywhere={!ctx.authAdapter} />
+        <title>{`${brand.name} — Admin`}</title>
+        <AdminNav brand={brand.name} logo={brand.logo} groups={navGroups()} signOutEverywhere={!ctx.authAdapter} />
         <div className="flex min-w-0 flex-1 flex-col">{content}</div>
       </div>,
     );
@@ -190,8 +209,8 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     return loadRefOptions(ctx, referenceTargets(def.fields));
   }
 
-  async function brandName() {
-    return typeof options.brand === 'function' ? await options.brand() : (options.brand ?? 'Admin');
+  async function resolveBrandOption() {
+    return resolveBrand(typeof options.brand === 'function' ? await options.brand() : options.brand);
   }
 
   function navGroups(): NavGroup[] {
@@ -375,11 +394,11 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const size = (n?: number) => (n === undefined ? '' : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 
     const card = (f: { key: string; size?: number; uploadedAt?: Date }) => {
-      // Uploaded names carry a random prefix or suffix; show the readable part.
-      const name = (f.key.split('/').pop() ?? f.key).replace(/^[0-9a-f]{8}-/, '');
+      const name = mediaName(f.key);
       const meta = [size(f.size), f.uploadedAt?.toLocaleDateString('en-US', { dateStyle: 'medium' })].filter(Boolean).join(' · ');
       return (
-        <li key={f.key} className="flex flex-col overflow-hidden rounded-[8px] bg-mnml-panel">
+        <li key={f.key} className="relative flex flex-col overflow-hidden rounded-[8px] bg-mnml-panel">
+          {media?.delete && <MediaSelectBox mediaKey={f.key} name={name} />}
           {/* Plain <img>: served by the CMS media route. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={`${apiPath}/media/${f.key}`} alt="" loading="lazy" className="aspect-[4/3] w-full bg-mnml-surface object-cover" />
@@ -398,6 +417,8 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       );
     };
 
+    const items: MediaItem[] = (files ?? []).map((f) => ({ key: f.key, name: mediaName(f.key), usedIn: (usage.get(f.key) ?? []).length }));
+    const summary = `${files?.length ?? 0} ${files?.length === 1 ? 'file' : 'files'} · ${unused.length} unused`;
     const grid = 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
     const section = (title: string, hint: string | null, list: React.ReactNode[], count: number) => (
       <section key={title} className="flex flex-col gap-3">
@@ -419,10 +440,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
           ) : files.length === 0 ? (
             <p className="text-mnml-text-mute">No files yet. Images you upload in the editor appear here.</p>
           ) : (
-            <>
-              <p className="text-mnml-text-mute">
-                {files.length} {files.length === 1 ? 'file' : 'files'} · {unused.length} unused
-              </p>
+            <MediaSelection items={items} summary={summary} canSelect={media?.delete ? true : false}>
               {sections.map((g) =>
                 section(
                   g.label,
@@ -438,7 +456,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
                   unused.map((f) => card(f)),
                   unused.length,
                 )}
-            </>
+            </MediaSelection>
           )}
         </main>
       </>
@@ -478,7 +496,14 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
   }
 
   async function collectionList(key: string, def: Collection, query: Record<string, string | string[] | undefined>) {
-    // Columns: the title field, the slug, and the first date field if there is one (newest first).
+    // Columns (the title and the first date unless `columns` says otherwise) and filters (every filterable field unless `filters` says otherwise).
+    // The editor's choice of columns (a cookie, if the collection allows it), else the default table.
+    const cookieValue = (await cookies()).get(columnCookie(key))?.value;
+    const columns = visibleColumns(def, cookieValue);
+    const choices = columnChoices(def);
+    // Once an editor has chosen columns, filters follow them: a hidden column's filter is not shown or applied.
+    const follow = filtersFollowColumns(filterSpecs(def), columns, def.columnChoices !== false && parseColumnCookie(cookieValue) !== undefined);
+    const specs = follow.specs;
     const dateField = Object.entries(def.fields).find(([, f]) => f.type === 'date')?.[0];
     const all = (await store.listEntries(
       key as never,
@@ -488,14 +513,66 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         ...(dateField && { orderBy: dateField, order: 'desc' }),
       } as never,
     )) as { slug: string; entry: AnyEntry; status: EntryStatus }[];
-    // Search (title or slug) and paging, both from the URL.
+    const pending = await store.listPending(key);
+    // References show their target's title; the filter lists the same options.
+    const refTargets = [...specs.map((s) => s.field), ...columns.flatMap((c) => (c.field ? [c.field] : []))].flatMap((f) =>
+      f.type === 'reference' ? [f.collection] : [],
+    );
+    const refOptions = refTargets.length ? await loadRefOptions(ctx, refTargets) : {};
+    const cell = { pending, refLabel: (c: string, slug: string) => refOptions[c]?.find((o) => o.slug === slug)?.label ?? slug };
+    // Filters, sort, search (title or slug) and paging, all from the URL.
+    // `filters: false` turns the whole control off, the status filter too.
+    const filtersOn = def.filters !== false;
+    const parsed = filtersOn ? parseFilters(query, specs) : { fields: {} };
+    const filters = follow.status ? parsed : { ...parsed, status: undefined };
+    const sort = parseSort(query, columns);
     const q = typeof query.q === 'string' ? query.q : '';
-    const view = listView(all, { q, page: parsePage(query.page), title: (i) => displayText(i.entry[def.titleField]) });
+    const narrowed = sortItems(applyFilters(all, filters, specs, pending), sort, columns, cell);
+    const view = listView(narrowed, { q, page: parsePage(query.page), title: (i) => displayText(i.entry[def.titleField]) });
     const items = view.items;
-    const pageHref = (n: number) => {
-      const p = new URLSearchParams({ ...(q.trim() && { q: q.trim() }), ...(n > 1 && { page: String(n) }) }).toString();
-      return `${adminPath}/${key}${p ? `?${p}` : ''}`;
+    const filtered = activeCount(filters) > 0;
+    const listBase = `${adminPath}/${key}`;
+    const hrefFor = (o: { q?: string; filters?: typeof filters; sort?: typeof sort; page?: number }) =>
+      `${listBase}${listQuery({ q: 'q' in o ? o.q : q, filters: o.filters ?? filters, sort: 'sort' in o ? o.sort : sort, page: o.page }, specs)}`;
+    const pageHref = (n: number) => hrefFor({ page: n });
+    const keep = [...new URLSearchParams(listQuery({ filters, sort }, specs))] as [string, string][];
+    const optionsOf = (f: (typeof specs)[number]['field']) =>
+      f.type === 'select'
+        ? f.options.map((o) => ({ value: o, label: f.optionLabels?.[o] ?? o }))
+        : f.type === 'boolean'
+          ? [
+              { value: 'yes', label: 'Yes' },
+              { value: 'no', label: 'No' },
+            ]
+          : f.type === 'reference'
+            ? (refOptions[f.collection] ?? []).map((o) => ({ value: o.slug, label: o.label }))
+            : undefined;
+    const statusControl: FilterControl = {
+      name: 'status',
+      label: 'Status',
+      kind: 'select',
+      options: [
+        { value: 'draft', label: 'Draft' },
+        { value: 'changes', label: 'Changes' },
+        { value: 'published', label: 'Published' },
+      ],
+      eq: 'status',
+      from: '',
+      to: '',
     };
+    const controls: FilterControl[] = [
+      ...(follow.status ? [statusControl] : []),
+      ...specs.map((s): FilterControl => {
+        const p = filterParams(s);
+        return {
+          name: s.name,
+          label: s.label,
+          kind: s.field.type === 'date' || s.field.type === 'datetime' ? 'date' : s.field.type === 'number' ? 'number' : 'select',
+          options: optionsOf(s.field),
+          ...p,
+        };
+      }),
+    ];
     const pageLink = (n: number, label: string, icon: React.ReactNode, disabled: boolean) =>
       disabled ? (
         <span aria-disabled="true" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'pointer-events-none opacity-50' })}>
@@ -510,9 +587,33 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
           {icon} {label}
         </Link>
       );
-    const pending = await store.listPending(key);
+    // A sortable column header: a link that cycles ascending, descending, default order.
+    const heading = (col: Column) => {
+      const active = sort?.key === col.key;
+      const Icon = !active ? ChevronsUpDownIcon : sort.dir === 'asc' ? ArrowUpIcon : ArrowDownIcon;
+      return (
+        <th
+          key={col.key}
+          aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+          className={`px-4 py-2 font-medium ${col.key === 'slug' ? 'max-sm:hidden' : col.key === 'status' ? 'w-28' : ''}`}
+        >
+          <Link href={hrefFor({ sort: nextSort(sort, col.key) })} className="inline-flex items-center gap-1 text-inherit no-underline hover:text-mnml-text">
+            {col.label}
+            <Icon className={`size-3.5 ${active ? 'text-mnml-text' : 'text-mnml-text-mute opacity-60'}`} />
+          </Link>
+        </th>
+      );
+    };
     const requests = await store.listRequests(key);
-    const cols = dateField ? 4 : 3;
+    const cols = columns.length;
+    // The selection's rows (what each one's status is), and the site's own actions for this collection.
+    const rows = items.map((i) => ({
+      slug: i.slug,
+      status: i.status === 'draft' ? ('draft' as const) : pending.has(i.slug) ? ('changes' as const) : ('published' as const),
+    }));
+    const customActions = ((options.listActions as Record<string, ListAction[] | undefined> | undefined)?.[key] ?? []).map(
+      ({ name, label, danger, confirm }) => ({ name, label, danger, confirm }),
+    );
     return (
       <>
         <AdminHeader crumbs={[home, { label: def.label }]}>
@@ -520,72 +621,112 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
             <PlusIcon /> Create
           </Link>
         </AdminHeader>
-        <main className={`${bodyClass} flex flex-col gap-4`}>
-          {all.length > 0 && <ListSearch q={q} label={def.label} />}
-          <div className={`${cardClass} overflow-hidden`}>
-            <table className="w-full text-left">
-              <thead className="border-b border-mnml-line bg-mnml-panel text-mnml-text-soft">
-                <tr>
-                  <th className="px-4 py-2 font-medium">{def.fields[def.titleField]?.label ?? 'Title'}</th>
-                  <th className="px-4 py-2 font-medium max-sm:hidden">Slug</th>
-                  <th className="w-28 px-4 py-2 font-medium">Status</th>
-                  {dateField && <th className="w-32 px-4 py-2 font-medium">{def.fields[dateField].label}</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-mnml-line">
-                {items.length === 0 && (
-                  <tr>
-                    <td colSpan={cols} className="px-4 py-6 text-center text-mnml-text-mute">
-                      {all.length === 0 ? (
-                        'No entries yet.'
-                      ) : (
-                        <>
-                          No entries match “{q.trim()}”.{' '}
-                          <Link href={`${adminPath}/${key}`} className="text-mnml-link">
-                            Clear search
-                          </Link>
-                        </>
-                      )}
-                    </td>
-                  </tr>
+        {/* A table wants the whole width (the form width cap is for readable lines). */}
+        <main className={`${bodyClass.replace('max-w-3xl', 'max-w-none')} flex flex-col gap-4`}>
+          <ListSelection key={hrefFor({ page: view.page })} collection={key} rows={rows} actions={customActions}>
+            {all.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <ListSearch q={q} label={def.label} keep={keep} />
+                {filtersOn && controls.length > 0 && <ListFilters controls={controls} values={filterValues(filters, specs)} />}
+                {choices.length > 0 && (
+                  <ListColumns
+                    cookie={columnCookie(key)}
+                    primary={columnSpecs(def)[0].label}
+                    choices={choices.map(({ key: k, label }) => ({ key: k, label }))}
+                    visible={columns.filter((c) => choices.some((x) => x.key === c.key)).map((c) => c.key)}
+                    defaults={columnSpecs(def)
+                      .filter((c) => choices.some((x) => x.key === c.key))
+                      .map((c) => c.key)}
+                    customized={parseColumnCookie(cookieValue) !== undefined}
+                  />
                 )}
-                {items.map(({ slug, entry, status }) => (
-                  // The title link's overlay makes the whole row clickable.
-                  <tr key={slug} className="relative hover:bg-mnml-panel">
-                    <td className="px-4 py-2.5">
-                      <Link href={`${adminPath}/${key}/${slug}`} className="font-medium no-underline after:absolute after:inset-0">
-                        {displayText(entry[def.titleField]) || slug}
-                      </Link>
-                      {requests.has(slug) && (
-                        <span className="mt-1 block w-fit rounded-full bg-mnml-warn px-2 py-0.5 text-xs font-medium whitespace-nowrap text-mnml-on-warn sm:mt-0 sm:ml-2 sm:inline-block">
-                          Awaiting approval
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs text-mnml-text-mute max-sm:hidden">{slug}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="flex items-center gap-2 text-mnml-text-soft">
-                        <StatusDot state={status === 'draft' ? 'draft' : pending.has(slug) ? 'changes' : 'published'} />
-                        {status === 'draft' ? 'Draft' : pending.has(slug) ? 'Changes' : 'Published'}
-                      </span>
-                    </td>
-                    {dateField && <td className="px-4 py-2.5 tabular-nums text-mnml-text-soft">{displayText(entry[dateField]) || '—'}</td>}
+              </div>
+            )}
+            <div className={`${cardClass} overflow-x-auto`}>
+              <table className="w-full text-left">
+                <thead className="border-b border-mnml-line bg-mnml-panel text-mnml-text-soft">
+                  <tr>
+                    <th className="w-10 px-3 py-2">
+                      <ListHeaderCheck label={def.label.toLowerCase()} />
+                    </th>
+                    {columns.map(heading)}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {view.pages > 1 && (
-            <nav aria-label="Pages" className="flex flex-wrap items-center justify-between gap-2 text-sm text-mnml-text-soft">
-              <span className="tabular-nums">
-                {view.from}–{view.to} of {view.total}
-              </span>
-              <span className="flex gap-2">
-                {pageLink(view.page - 1, 'Previous', <ChevronLeftIcon />, view.page <= 1)}
-                {pageLink(view.page + 1, 'Next', <ChevronRightIcon />, view.page >= view.pages)}
-              </span>
-            </nav>
-          )}
+                </thead>
+                <tbody className="divide-y divide-mnml-line">
+                  {items.length === 0 && (
+                    <tr>
+                      <td colSpan={cols + 1} className="px-4 py-6 text-center text-mnml-text-mute">
+                        {all.length === 0 ? (
+                          'No entries yet.'
+                        ) : (
+                          <>
+                            No entries match {q.trim() && filtered ? 'this search and these filters' : q.trim() ? `“${q.trim()}”` : 'these filters'}.{' '}
+                            <Link href={hrefFor({ q: '', filters: { fields: {} } })} className="text-mnml-link">
+                              {q.trim() && filtered ? 'Clear all' : q.trim() ? 'Clear search' : 'Clear filters'}
+                            </Link>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  {items.map((item) => {
+                    const { slug, status } = item;
+                    return (
+                      // The title link's overlay makes the whole row clickable.
+                      <tr key={slug} className="relative hover:bg-mnml-panel">
+                        <td className="w-10 px-3 py-2.5">
+                          <ListRowCheck slug={slug} name={cellText(item, columns[0], cell) || slug} />
+                        </td>
+                        {columns.map((col, i) =>
+                          col.key === 'slug' ? (
+                            <td
+                              key={col.key}
+                              className="px-4 py-2.5 [font-family:ui-monospace,monospace] text-xs whitespace-nowrap text-mnml-text-mute max-sm:hidden"
+                            >
+                              {slug}
+                            </td>
+                          ) : col.key === 'status' ? (
+                            <td key={col.key} className="px-4 py-2.5">
+                              <span className="flex items-center gap-2 text-mnml-text-soft">
+                                <StatusDot state={status === 'draft' ? 'draft' : pending.has(slug) ? 'changes' : 'published'} />
+                                {status === 'draft' ? 'Draft' : pending.has(slug) ? 'Changes' : 'Published'}
+                              </span>
+                            </td>
+                          ) : i === 0 ? (
+                            <td key={col.key} className="px-4 py-2.5">
+                              <Link href={`${adminPath}/${key}/${slug}`} className="font-medium no-underline after:absolute after:inset-0">
+                                {cellText(item, col, cell) || slug}
+                              </Link>
+                              {requests.has(slug) && (
+                                <span className="mt-1 block w-fit rounded-full bg-mnml-warn px-2 py-0.5 text-xs font-medium whitespace-nowrap text-mnml-on-warn sm:mt-0 sm:ml-2 sm:inline-block">
+                                  Awaiting approval
+                                </span>
+                              )}
+                            </td>
+                          ) : (
+                            <td key={col.key} className="px-4 py-2.5 tabular-nums whitespace-nowrap text-mnml-text-soft">
+                              {cellText(item, col, cell) || '—'}
+                            </td>
+                          ),
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {view.pages > 1 && (
+              <nav aria-label="Pages" className="flex flex-wrap items-center justify-between gap-2 text-sm text-mnml-text-soft">
+                <span className="tabular-nums">
+                  {view.from}–{view.to} of {view.total}
+                </span>
+                <span className="flex gap-2">
+                  {pageLink(view.page - 1, 'Previous', <ChevronLeftIcon />, view.page <= 1)}
+                  {pageLink(view.page + 1, 'Next', <ChevronRightIcon />, view.page >= view.pages)}
+                </span>
+              </nav>
+            )}
+          </ListSelection>
         </main>
       </>
     );

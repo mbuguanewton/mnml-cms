@@ -1,6 +1,6 @@
 ---
 title: "Options"
-description: "Every option of createCms: storage, auth, media, paths, sidebar, editor, ui, MCP, revalidate and onChange."
+description: "Every option of createCms: storage, auth, media, paths, sidebar, list actions, editor, ui, MCP, revalidate and onChange."
 url: https://mnml-cms.vercel.app/options
 ---
 
@@ -16,14 +16,33 @@ Second argument of `createCms(config, options)`.
 | `auth` | `{ password, secret }` for the built-in login, or an `AuthAdapter` ([Authentication](https://mnml-cms.vercel.app/authentication.md)) |
 | `media` | Image storage ([Image storage](https://mnml-cms.vercel.app/image-storage.md)) |
 | `adminPath`, `apiPath` | Default `/admin`, `/api/mnml`. Must match the route files. |
-| `brand` | Sidebar title: string or (async) function |
+| `brand` | Name and logo of the sidebar and sign-in page: a string, `{ name, logo }`, or an (async) function returning either ([Brand and logo](#brand-and-logo)) |
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
 | `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build with `@n3wtou/mnml-cms/admin`. |
+| `listActions` | Your own actions in a collection list's bar, per key: `{ posts: [{ name, label, danger?, confirm?, run }] }` ([Bulk actions](https://mnml-cms.vercel.app/drafts-and-publishing.md#bulk-actions)) |
 | `editor` | Component from `editorProvider()`: extra extensions and buttons ([Extending the editor](https://mnml-cms.vercel.app/editor.md)) |
 | `ui` | Component from `uiProvider()`: your own Button, Select… in the admin ([Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md)) |
 | `mcp` | `{ tokens, adminTokens }`: MCP server for AI agents at `<apiPath>/mcp`, with tokens from env and/or the admin ([Agents](https://mnml-cms.vercel.app/agents.md)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
+
+## Brand and logo
+
+`brand` is the name in the sidebar and on the sign-in page. Give it an object to add your logo:
+
+```ts
+createCms(config, {
+  brand: { name: 'Example', logo: '/logo.svg' },
+});
+```
+
+`logo` is one of:
+
+- A URL (a file in `public/`, or any absolute URL). Replaces the letter tile; the name stays beside it.
+- `{ src, dark?, alt?, wordmark? }`. `dark` is shown in the admin's dark theme. `wordmark: true` hides the name and sizes the image by its height, for a logo that already contains it. `alt` defaults to empty, or to the name with `wordmark`.
+- A React element, e.g. an inline SVG using `currentColor`.
+
+If the image fails to load, the letter tile is shown. A plain string, or a function returning a string or object, works as before.
 
 ## In your own code
 
@@ -48,7 +67,7 @@ Build `pages` with the admin's own controls from `@n3wtou/mnml-cms/admin`. To us
 | `Checkbox`, `Switch` | `id`, `checked`, `onChange(checked)`, `disabled`, `label` |
 | `DatePicker` | `id`, `value` (`YYYY-MM-DD` or null), `onChange(value)`, `time` (adds a time box; value `YYYY-MM-DDTHH:mm`), `timeInCalendar` (with `time`: one box, time row in the calendar), `invalid` |
 | `Tooltip` | `content`, `side`, one focusable child. Shows on hover and keyboard focus. |
-| `Menu` | `label`, `items: { id, label, icon, checked, disabled, danger, onSelect }[]`, `trigger`, `className` |
+| `Menu` | `label`, `items: { id, label, icon, checked, disabled, danger, keepOpen, onSelect }[]`, `trigger`, `className` |
 
 - `onChange` gets the value, not the event.
 - `Select`: full width; cap it with a `max-w-*` class. Arrows, Home/End, type-ahead, Enter, Escape. A value that isn't an option shows as "(unavailable)".

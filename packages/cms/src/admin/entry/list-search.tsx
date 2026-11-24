@@ -7,9 +7,10 @@ import { Input } from '../ui/input.js';
 
 /**
  * The collection list's search box. A plain GET form, so Enter works without JavaScript; with it, the list follows
- * the typing (~300 ms after it stops) and a new search starts at page 1.
+ * the typing (~300 ms after it stops) and a new search starts at page 1. `keep` is the rest of the list's URL state
+ * (filters, sort) for the no-JavaScript form; with JavaScript the URL's own parameters are kept.
  */
-export function ListSearch({ q, label }: { q: string; label: string }) {
+export function ListSearch({ q, label, keep = [] }: { q: string; label: string; keep?: [string, string][] }) {
   const router = useRouter();
   const pathname = usePathname();
   const [value, setValue] = useState(q);
@@ -26,12 +27,22 @@ export function ListSearch({ q, label }: { q: string; label: string }) {
   useEffect(() => {
     const term = value.trim();
     if (term === q) return;
-    const t = setTimeout(() => router.replace(term ? `${pathname}?q=${encodeURIComponent(term)}` : pathname, { scroll: false }), 300);
+    const t = setTimeout(() => {
+      const p = new URLSearchParams(window.location.search);
+      if (term) p.set('q', term);
+      else p.delete('q');
+      p.delete('page');
+      const qs = p.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }, 300);
     return () => clearTimeout(t);
   }, [value, q, pathname, router]);
 
   return (
     <form method="get" role="search" className="relative w-full sm:max-w-xs">
+      {keep.map(([k, val]) => (
+        <input key={k} type="hidden" name={k} value={val} />
+      ))}
       <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-mnml-text-mute" />
       <Input
         type="search"

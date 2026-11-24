@@ -1,7 +1,19 @@
 'use client';
 
 import { createContext, use, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ChevronRightIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  CrosshairIcon,
+  ImagePlusIcon,
+  ImagesIcon,
+  PlusIcon,
+  Trash2Icon,
+  UploadIcon,
+  XIcon,
+} from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
 import {
   initialValues,
@@ -18,14 +30,18 @@ import {
 import { fromLocalInput, toLocalInput } from '../../schema/datetime.js';
 import { displayText } from '../../schema/text.js';
 import { EntryCombobox } from './entry-combobox.js';
+import { CreateReference, type CreatedRef } from './reference-panel.js';
 import { useMenu } from '../shell/action-menu.js';
 import { Button } from '../ui/button.js';
 import { Checkbox } from '../ui/checkbox.js';
 import { DatePicker } from '../ui/date-picker.js';
 import { Input as TextInput, Textarea } from '../ui/input.js';
 import { Select } from '../ui/select.js';
+import { Tooltip } from '../ui/tooltip.js';
+import { mediaName } from '../shell/media-name.js';
 import { useAdmin } from '../shell/context.js';
 import { RichTextEditor } from '../editor/rich-text-editor.js';
+import { MediaPicker } from '../editor/media-picker.js';
 import { uploadImage } from '../editor/upload.js';
 import { inputClass, labelClass } from '../ui/styles.js';
 
@@ -104,7 +120,17 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
         />
       );
     case 'reference':
-      return <ReferenceInput id={id} collection={field.collection} value={value as string | null} onChange={onChange} invalid={invalid} />;
+      return (
+        <ReferenceInput
+          id={id}
+          collection={field.collection}
+          label={field.label}
+          createNew={field.createNew !== false}
+          value={value as string | null}
+          onChange={onChange}
+          invalid={invalid}
+        />
+      );
     case 'references':
       return <ReferencesInput id={id} field={field} value={(value as string[]) ?? []} onChange={onChange} invalid={invalid} />;
     case 'group':
@@ -155,17 +181,23 @@ function GroupInput({
 function ReferenceInput({
   id,
   collection,
+  label: fieldLabel,
+  createNew,
   value,
   onChange,
   invalid,
 }: {
   id: string;
   collection: string;
+  label: string;
+  createNew: boolean;
   value: string | null;
   onChange: (v: unknown) => void;
   invalid: boolean;
 }) {
-  const options = use(RefOptionsContext)[collection] ?? [];
+  const [created, setCreated] = useState<CreatedRef[]>([]);
+  const offered = use(RefOptionsContext)[collection] ?? [];
+  const options = [...offered, ...created.filter((c) => !offered.some((o) => o.slug === c.slug))];
   // Keep a current value that is no longer offered (e.g. since unpublished) visible instead of silently dropping it.
   const label = value ? (options.find((o) => o.slug === value)?.label ?? `${value} (unavailable)`) : null;
   return (
@@ -178,23 +210,74 @@ function ReferenceInput({
           </Button>
         </div>
       )}
-      <EntryCombobox
-        id={id}
-        options={options.filter((o) => o.slug !== value)}
-        onPick={onChange}
-        placeholder={value ? 'Search to replace…' : 'Search…'}
-        invalid={invalid}
-      />
+      <div className="flex flex-col gap-1.5">
+        <div className="min-w-0">
+          <EntryCombobox
+            id={id}
+            options={options.filter((o) => o.slug !== value)}
+            onPick={onChange}
+            placeholder={value ? 'Search to replace…' : 'Search…'}
+            invalid={invalid}
+          />
+        </div>
+        {createNew && (
+          <CreateReference
+            collection={collection}
+            label={fieldLabel}
+            onCreated={(ref) => {
+              setCreated((prev) => [...prev, ref]);
+              onChange(ref.slug);
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }
 
+/** An icon button for the image toolbar, with its name as a tooltip and `aria-label`. */
+function ToolButton({
+  label,
+  onClick,
+  pressed,
+  controls,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  pressed?: boolean;
+  controls?: string;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip content={label}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label={label}
+        aria-expanded={pressed}
+        aria-controls={controls}
+        disabled={disabled}
+        onClick={onClick}
+      >
+        {children}
+      </Button>
+    </Tooltip>
+  );
+}
+
 function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | null; onChange: (v: ImageValue | null) => void }) {
-  const { apiPath } = useAdmin();
+  const { apiPath, mediaLibrary } = useAdmin();
   const file = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [size, setSize] = useState<{ url: string; w: number; h: number } | null>(null);
 
   const upload = async (f: File) => {
     setBusy(true);
@@ -208,52 +291,110 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
       setBusy(false);
     }
   };
+  const pickFile = () => file.current?.click();
+  const drop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f && !busy) void upload(f);
+  };
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-3">
-        {value ? (
-          // Plain <img>: previews may be any uploaded URL, no need for next/image here.
-          // oxlint-disable-next-line nextjs/no-img-element
-          <img src={value.url} alt="" className="size-16 rounded-[6px] border border-mnml-line object-cover" />
-        ) : (
-          <div className="flex size-16 items-center justify-center rounded-[6px] border border-dashed border-mnml-line text-xs text-mnml-text-mute">None</div>
-        )}
-        <div className="flex flex-col items-start gap-2">
-          <div className="flex gap-2">
-            <Button id={id} type="button" variant="outline" size="sm" disabled={busy} onClick={() => file.current?.click()}>
-              <UploadIcon /> {busy ? 'Uploading…' : value ? 'Replace' : 'Upload'}
-            </Button>
-            {value && (
-              <Button type="button" variant="outline" size="sm" aria-expanded={picking} aria-controls={`${id}-focal`} onClick={() => setPicking(!picking)}>
-                Focal point
-              </Button>
-            )}
-            {value && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
-                Remove
-              </Button>
-            )}
-          </div>
+      {value ? (
+        <div className="relative overflow-hidden rounded-[6px] border border-mnml-line bg-mnml-surface">
+          {picking ? (
+            <FocalPointPicker id={`${id}-focal`} value={value} onChange={onChange} onClose={() => setPicking(false)} />
+          ) : (
+            <>
+              {/* Plain <img>: previews may be any uploaded URL, no need for next/image here. */}
+              {/* oxlint-disable-next-line nextjs/no-img-element */}
+              <img
+                src={value.url}
+                alt=""
+                className="block max-h-72 min-h-24 w-full object-cover"
+                onLoad={(e) => setSize({ url: value.url, w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+              />
+              <div
+                role="toolbar"
+                aria-label="Image actions"
+                className="absolute right-2 top-2 flex gap-0.5 rounded-[8px] border border-mnml-line bg-mnml-bg/90 p-0.5 shadow-sm backdrop-blur"
+              >
+                <ToolButton label={busy ? 'Uploading…' : 'Replace'} onClick={pickFile} disabled={busy}>
+                  <UploadIcon />
+                </ToolButton>
+                {mediaLibrary && (
+                  <ToolButton label="Choose from uploads" onClick={() => setChoosing(true)} disabled={busy}>
+                    <ImagesIcon />
+                  </ToolButton>
+                )}
+                <ToolButton label="Focal point" onClick={() => setPicking(true)} controls={`${id}-focal`}>
+                  <CrosshairIcon />
+                </ToolButton>
+                <ToolButton label="Remove" onClick={() => onChange(null)}>
+                  <Trash2Icon />
+                </ToolButton>
+              </div>
+              <span className="pointer-events-none absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full border border-mnml-line bg-mnml-bg/90 px-2.5 py-1 text-xs backdrop-blur">
+                {mediaName(value.url.split('?')[0] ?? value.url)}
+                {size?.url === value.url && ` · ${size.w}×${size.h}`}
+              </span>
+            </>
+          )}
         </div>
-        <input
-          ref={file}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            e.target.value = '';
-            if (f) void upload(f);
+      ) : (
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={drop}
+          className={`flex flex-col items-center justify-center gap-3 rounded-[6px] border border-dashed px-4 py-8 text-center ${dragging ? 'border-mnml-primary bg-mnml-surface' : 'border-mnml-line'}`}
+        >
+          <ImagePlusIcon className="size-6 text-mnml-text-mute" aria-hidden />
+          <p>
+            {busy ? 'Uploading…' : 'Drop an image or '}
+            {!busy && (
+              <button id={id} type="button" className="text-mnml-primary underline underline-offset-2" onClick={pickFile}>
+                browse
+              </button>
+            )}
+          </p>
+          {mediaLibrary && (
+            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => setChoosing(true)}>
+              <ImagesIcon /> Choose from uploads
+            </Button>
+          )}
+        </div>
+      )}
+      <input
+        ref={file}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (f) void upload(f);
+        }}
+      />
+      {mediaLibrary && (
+        <MediaPicker
+          open={choosing}
+          onClose={() => setChoosing(false)}
+          // Like a fresh upload: no alt text, no focal point (those belonged to the old image).
+          onPick={(url) => {
+            setChoosing(false);
+            onChange({ url, alt: '' });
           }}
         />
-      </div>
+      )}
       {error && <p className="break-words text-mnml-danger">{error}</p>}
-      {value && picking && <FocalPointPicker id={`${id}-focal`} value={value} onChange={onChange} />}
       {value && (
         <TextInput
           aria-label="Alt text"
-          placeholder="Alt text: describe the image (leave empty only if decorative)"
+          placeholder="Describe the image (leave empty if decorative)"
           maxLength={300}
           value={value.alt}
           onChange={(alt) => onChange({ ...value, alt })}
@@ -266,8 +407,8 @@ function ImageInput({ id, value, onChange }: { id: string; value: ImageValue | n
 const clamp01 = (n: number) => Math.round(Math.min(1, Math.max(0, n)) * 1000) / 1000;
 const pct = (n: number) => `${Math.round(n * 1000) / 10}%`;
 
-/** The whole image, larger: click (or use the arrow keys) to set the point that stays in frame when it's cropped. */
-function FocalPointPicker({ id, value, onChange }: { id: string; value: ImageValue; onChange: (v: ImageValue | null) => void }) {
+/** Covers the preview with the whole image: click (or use the arrow keys) to set the point that stays in frame when it's cropped. */
+function FocalPointPicker({ id, value, onChange, onClose }: { id: string; value: ImageValue; onChange: (v: ImageValue | null) => void; onClose: () => void }) {
   const has = typeof value.focalX === 'number' && typeof value.focalY === 'number';
   const x = has ? (value.focalX as number) : 0.5;
   const y = has ? (value.focalY as number) : 0.5;
@@ -277,21 +418,30 @@ function FocalPointPicker({ id, value, onChange }: { id: string; value: ImageVal
     onChange(rest);
   };
   const label = has ? `Focal point: ${pct(x)} across, ${pct(y)} down` : 'Focal point: not set, the centre is used';
+  const area = useRef<HTMLDivElement>(null);
+  // Keyboard users land on the picker, like opening a dialog.
+  useEffect(() => area.current?.focus(), []);
 
   return (
-    <div id={id} className="flex flex-col items-start gap-2">
+    <div id={id} className="flex justify-center">
       <div
+        ref={area}
         tabIndex={0}
         role="application"
         aria-roledescription="focal point picker"
         aria-label={label}
         aria-describedby={`${id}-hint`}
-        className="relative inline-block max-w-full cursor-crosshair overflow-hidden rounded-[6px] border border-mnml-line outline-none focus-visible:ring-2 focus-visible:ring-mnml-primary/40"
+        className="relative inline-block max-w-full cursor-crosshair outline-none focus-visible:ring-2 focus-visible:ring-mnml-primary/40"
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           set((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
         }}
         onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            return onClose();
+          }
           const step = e.shiftKey ? 0.01 : 0.05;
           const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
           const m = moves[e.key];
@@ -301,23 +451,29 @@ function FocalPointPicker({ id, value, onChange }: { id: string; value: ImageVal
         }}
       >
         {/* oxlint-disable-next-line nextjs/no-img-element */}
-        <img src={value.url} alt="" draggable={false} className="block max-h-80 max-w-full select-none" />
+        <img src={value.url} alt="" draggable={false} className="block max-h-72 max-w-full select-none" />
         <span
           aria-hidden
           className={`pointer-events-none absolute size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)] ${has ? 'bg-black/30' : 'border-dashed opacity-70'}`}
           style={{ left: pct(x), top: pct(y) }}
         />
       </div>
-      <div className="flex items-center gap-3">
-        <p id={`${id}-hint`} className="text-xs text-mnml-text-mute">
-          Click the point to keep in frame when the image is cropped, or use the arrow keys (Shift for smaller steps).
-        </p>
+      <div className="absolute right-2 top-2 flex gap-0.5 rounded-[8px] border border-mnml-line bg-mnml-bg/90 p-0.5 shadow-sm backdrop-blur">
         {has && (
           <Button type="button" variant="ghost" size="sm" onClick={reset}>
             Reset
           </Button>
         )}
+        <ToolButton label="Close focal point" onClick={onClose}>
+          <XIcon />
+        </ToolButton>
       </div>
+      <p
+        id={`${id}-hint`}
+        className="pointer-events-none absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full border border-mnml-line bg-mnml-bg/90 px-2.5 py-1 text-xs backdrop-blur"
+      >
+        Click to set the point to keep in frame · arrows nudge (Shift: finer)
+      </p>
     </div>
   );
 }
@@ -365,7 +521,9 @@ function ReferencesInput({
   onChange: (v: unknown) => void;
   invalid: boolean;
 }) {
-  const options = use(RefOptionsContext)[field.collection] ?? [];
+  const [created, setCreated] = useState<CreatedRef[]>([]);
+  const offered = use(RefOptionsContext)[field.collection] ?? [];
+  const options = [...offered, ...created.filter((c) => !offered.some((o) => o.slug === c.slug))];
   const label = (slug: string) => options.find((o) => o.slug === slug)?.label;
   const { move, remove } = useListEditing(value, onChange);
   const remaining = options.filter((o) => !value.includes(o.slug));
@@ -400,14 +558,28 @@ function ReferencesInput({
           ))}
         </ol>
       )}
-      <EntryCombobox
-        id={id}
-        options={remaining}
-        onPick={(slug) => onChange([...value, slug])}
-        disabled={full || remaining.length === 0}
-        placeholder={full ? `Maximum of ${field.max} reached` : remaining.length ? 'Search to add…' : 'Nothing more to add'}
-        invalid={invalid}
-      />
+      <div className="flex flex-col gap-1.5">
+        <div className="min-w-0">
+          <EntryCombobox
+            id={id}
+            options={remaining}
+            onPick={(slug) => onChange([...value, slug])}
+            disabled={full || remaining.length === 0}
+            placeholder={full ? `Maximum of ${field.max} reached` : remaining.length ? 'Search to add…' : 'Nothing more to add'}
+            invalid={invalid}
+          />
+        </div>
+        {field.createNew !== false && !full && (
+          <CreateReference
+            collection={field.collection}
+            label={field.label}
+            onCreated={(ref) => {
+              setCreated((prev) => [...prev, ref]);
+              onChange([...value, ref.slug]);
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }

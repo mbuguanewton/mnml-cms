@@ -92,7 +92,7 @@ Restyle the admin by overriding `--mnml-*` variables (see `styles.css`).
 Point drizzle-kit at the package's schema:
 
 ```ts filename="drizzle.config.ts"
-export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3wtou/mnml-cms/dist/server/db.js', dbCredentials: { url: process.env.DATABASE_URL! } });
+export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3wtou/mnml-cms/dist/server/content/db.js', dbCredentials: { url: process.env.DATABASE_URL! } });
 ```
 
 Run `drizzle-kit push`. Scripts import the same table from `@n3wtou/mnml-cms/schema`.

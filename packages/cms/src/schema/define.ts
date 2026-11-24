@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { normalizeDatetime } from './datetime.js';
+import { COLUMN_TYPES, FILTER_TYPES } from './list-config.js';
 import type { JSONContent } from '@tiptap/core';
 
 // The building blocks for a mnml.config.ts. One definition there drives the admin forms,
@@ -42,9 +43,9 @@ export type SelectField<O extends readonly string[] = readonly string[]> = Base 
 export type SelectOption = string | { value: string; label: string };
 type OptionValue<T> = T extends string ? T : T extends { value: infer V extends string } ? V : never;
 /** Points at an entry of another collection; the value is that entry's slug. */
-export type ReferenceField = Base & { type: 'reference'; collection: string };
+export type ReferenceField = Base & { type: 'reference'; collection: string; createNew?: boolean };
 /** Points at several entries of another collection, in order; the value is their slugs. `required` means at least one. */
-export type ReferencesField = Base & { type: 'references'; collection: string } & Limits;
+export type ReferencesField = Base & { type: 'references'; collection: string; createNew?: boolean } & Limits;
 export type RichTextField = Base & { type: 'richtext' };
 export type TagsField = Base & { type: 'tags' };
 /** A repeatable group of fields. `itemLabel` names the field shown as each row's title in the admin. */
@@ -173,10 +174,15 @@ export const fields = {
       ...o,
     };
   },
-  /** The slug of an entry in `collection` (a key of your config). Only published entries are offered. */
-  reference: (label: string, collection: string, o: WithDefault<string> = {}): ReferenceField => ({ type: 'reference', label, collection, ...o }),
+  /** The slug of an entry in `collection` (a key of your config). Only published entries are offered. `createNew: false` hides "Create new" (a side panel that makes the entry without leaving the form). */
+  reference: (label: string, collection: string, o: WithDefault<string> & { createNew?: boolean } = {}): ReferenceField => ({
+    type: 'reference',
+    label,
+    collection,
+    ...o,
+  }),
   /** The slugs of entries in `collection`, in the editor's order. `min` / `max` limit how many; only published entries are offered. */
-  references: (label: string, collection: string, o: WithDefault<string[]> & { min?: number; max?: number } = {}): ReferencesField => ({
+  references: (label: string, collection: string, o: WithDefault<string[]> & { min?: number; max?: number; createNew?: boolean } = {}): ReferencesField => ({
     type: 'references',
     label,
     collection,
@@ -247,6 +253,21 @@ export type Collection<F extends Fields = Fields, D = NoDerived> = {
   titleField: keyof F & string;
   basePath: string;
   preview?: boolean;
+  /**
+   * The admin list's filters: field names (in this order) or `false` for none. Left out, every field that can be
+   * filtered gets one: `select`, `boolean`, `date`, `datetime`, `number` and `reference`. Status is always there.
+   */
+  filters?: readonly (keyof F & string)[] | false;
+  /**
+   * The fields the admin list shows as columns, in this order (the first is the link to the entry; Slug and Status
+   * follow it). Left out: the title and the first `date` field. Every column sorts.
+   */
+  columns?: readonly (keyof F & string)[];
+  /**
+   * Which columns an editor may show or hide from the list's Columns menu (besides Slug and Status): field names, or
+   * `false` for no Columns menu. Left out, every field that can be a column. The first column always shows.
+   */
+  columnChoices?: readonly (keyof F & string)[] | false;
   fields: F;
   derived?: DerivedFns<F, D>;
 };
@@ -272,16 +293,38 @@ function checkShowIf(label: string, fields: Fields) {
   }
 }
 
+// `filters` and `columns` naming a field the list can't use (or that doesn't exist) would silently show nothing, so fail when the config loads.
+function checkListConfig(label: string, fields: Fields, option: 'filters' | 'columns' | 'columnChoices', names: readonly string[] | false | undefined) {
+  if (!names) return;
+  const allowed = option === 'filters' ? FILTER_TYPES : COLUMN_TYPES;
+  const verb = option === 'filters' ? 'filters' : 'shows';
+  for (const [i, k] of names.entries()) {
+    if (!Object.hasOwn(fields, k)) throw new Error(`"${label}": ${option} names "${k}", which is not a field.`);
+    if (!allowed.has(fields[k].type)) {
+      throw new Error(`"${label}": ${option} names "${k}", a ${fields[k].type} field; the list ${verb} only ${[...allowed].join(', ')}.`);
+    }
+    if (names.indexOf(k) !== i) throw new Error(`"${label}": ${option} lists "${k}" twice.`);
+  }
+}
+
 export const singleton = <F extends Fields, D = NoDerived>(s: Omit<Singleton<F, D>, 'kind' | 'derived'> & DerivedInput<F, D>): Singleton<F, D> => {
   checkDerived(s.label, s.fields, s.derived);
   checkShowIf(s.label, s.fields);
   return { kind: 'singleton', ...s };
 };
 export const collection = <F extends Fields, D = NoDerived>(
-  c: Omit<Collection<F, D>, 'kind' | 'titleField' | 'derived'> & { titleField: NoInfer<keyof F & string> } & DerivedInput<F, D>,
+  c: Omit<Collection<F, D>, 'kind' | 'titleField' | 'derived' | 'filters' | 'columns' | 'columnChoices'> & {
+    titleField: NoInfer<keyof F & string>;
+    filters?: readonly NoInfer<keyof F & string>[] | false;
+    columns?: readonly NoInfer<keyof F & string>[];
+    columnChoices?: readonly NoInfer<keyof F & string>[] | false;
+  } & DerivedInput<F, D>,
 ): Collection<F, D> => {
   checkDerived(c.label, c.fields, c.derived);
   checkShowIf(c.label, c.fields);
+  checkListConfig(c.label, c.fields, 'filters', c.filters);
+  checkListConfig(c.label, c.fields, 'columns', c.columns);
+  checkListConfig(c.label, c.fields, 'columnChoices', c.columnChoices);
   return { kind: 'collection', ...c };
 };
 

@@ -35,6 +35,7 @@ export const docsIndex: DocsPage[] = [
     "description": "Every field type in mnml.config.ts, its options and the value readers return.",
     "headings": [
       "Picking entries",
+      "Create new",
       "Groups become tabs"
     ]
   },
@@ -120,6 +121,7 @@ export const docsIndex: DocsPage[] = [
     "description": "Read content on your pages: getSingleton, listEntries, getEntry, getEntries, listSlugs, RichText and live preview.",
     "headings": [
       "A list page and a post page",
+      "Static rendering",
       "`listEntries` options",
       "`getEntries`",
       "Live preview"
@@ -132,6 +134,10 @@ export const docsIndex: DocsPage[] = [
     "description": "Drafts, autosave, Publish, Discard changes and Unpublish, and what the site shows for each.",
     "headings": [
       "Collection list",
+      "Filters",
+      "Columns and sorting",
+      "Choosing columns",
+      "Bulk actions",
       "Autosave",
       "Only valid data is saved",
       "Someone else edited it",
@@ -236,8 +242,9 @@ export const docsIndex: DocsPage[] = [
     "title": "Options",
     "url": "https://mnml-cms.vercel.app/options",
     "markdown": "https://mnml-cms.vercel.app/options.md",
-    "description": "Every option of createCms: storage, auth, media, paths, sidebar, editor, ui, MCP, revalidate and onChange.",
+    "description": "Every option of createCms: storage, auth, media, paths, sidebar, list actions, editor, ui, MCP, revalidate and onChange.",
     "headings": [
+      "Brand and logo",
       "In your own code",
       "Admin UI components"
     ]
@@ -271,6 +278,7 @@ export const docsIndex: DocsPage[] = [
     "description": "Where uploaded images are stored: local disk in development, Vercel Blob, or your own storage.",
     "headings": [
       "The Media screen",
+      "Choose from uploads",
       "Adapters"
     ]
   },

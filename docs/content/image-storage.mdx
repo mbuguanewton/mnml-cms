@@ -19,12 +19,18 @@ type MediaStorage = {
 | --- | --- |
 | `put` | Stores the file, returns a unique key |
 | `get` | Reads by key |
-| `list` | Optional. Adds the Media screen. |
+| `list` | Optional. Adds the Media screen and "Choose from uploads". |
 | `delete` | Optional. Adds Delete there. |
 
 ## The Media screen
 
 With `list`, the admin gets a **Media** screen. Per file: size, date, the entries using it (image fields and rich text images, drafts too), an "Unused" flag, Delete (warns if still used). Both bundled adapters have it.
+
+**Select** (needs `delete`) adds a checkbox to each file and a bar with the count, **Select all**, **Select unused**, **Clear** and **Delete**. One confirmation covers the whole batch and says how many of the files are still used in entries. Files that fail to delete (the storage said no) are listed, and the rest are deleted anyway. A batch is at most 100 files per request; larger selections are sent in several.
+
+## Choose from uploads
+
+With `list`, an `image` field has **Choose from uploads** in its toolbar (and in the empty drop zone), and the rich text **Image** tool opens the same picker. It shows the stored files, newest first, with a search by name. Pick one to use it; **Upload new** in the picker uploads and picks in one step. A picked image starts with empty alt text and no focal point, like a new upload. Without `list` (a custom adapter that can't list files), the picker is left out and both upload as before.
 
 ## Adapters
 

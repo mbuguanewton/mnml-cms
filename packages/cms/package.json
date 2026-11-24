@@ -1,6 +1,6 @@
 {
   "name": "@n3wtou/mnml-cms",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "A small schema-driven CMS for Next.js: config file, embedded admin, Postgres storage.",
   "keywords": [
     "cms",
@@ -74,6 +74,7 @@
     "dist",
     "styles.css",
     "AGENTS.md",
+    "CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],

@@ -76,7 +76,7 @@ function MenuBase({ label, items, trigger, className }: MenuProps) {
   const run = (i: number) => {
     const item = items[i];
     if (!item || item.disabled) return;
-    close(true);
+    if (!item.keepOpen) close(true);
     item.onSelect();
   };
 
