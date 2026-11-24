@@ -229,4 +229,15 @@
   .mnml-prose .selectedCell {
     background: color-mix(in srgb, var(--mnml-primary) 12%, transparent);
   }
+
+  /* A logo with a dark-theme variant: both images are rendered, the admin's theme picks one. */
+  .mnml-logo-dark {
+    display: none !important;
+  }
+  :where(.dark) .mnml-logo-dark {
+    display: block !important;
+  }
+  :where(.dark) .mnml-logo-light {
+    display: none !important;
+  }
 }

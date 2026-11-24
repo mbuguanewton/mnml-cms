@@ -16,7 +16,7 @@ Second argument of `createCms(config, options)`.
 | `auth` | `{ password, secret }` for the built-in login, or an `AuthAdapter` ([Authentication](https://mnml-cms.vercel.app/authentication.md)) |
 | `media` | Image storage ([Image storage](https://mnml-cms.vercel.app/image-storage.md)) |
 | `adminPath`, `apiPath` | Default `/admin`, `/api/mnml`. Must match the route files. |
-| `brand` | Sidebar title: string or (async) function |
+| `brand` | Name and logo of the sidebar and sign-in page: a string, `{ name, logo }`, or an (async) function returning either ([Brand and logo](#brand-and-logo)) |
 | `icons` | Sidebar icons per key, e.g. `{ posts: <FileTextIcon /> }` |
 | `pages` | Extra admin screens: `{ path, label, group?, icon?, render }`. Build with `@n3wtou/mnml-cms/admin`. |
 | `listActions` | Your own actions in a collection list's bar, per key: `{ posts: [{ name, label, danger?, confirm?, run }] }` ([Bulk actions](https://mnml-cms.vercel.app/drafts-and-publishing.md#bulk-actions)) |
@@ -25,6 +25,24 @@ Second argument of `createCms(config, options)`.
 | `mcp` | `{ tokens, adminTokens }`: MCP server for AI agents at `<apiPath>/mcp`, with tokens from env and/or the admin ([Agents](https://mnml-cms.vercel.app/agents.md)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
+
+## Brand and logo
+
+`brand` is the name in the sidebar and on the sign-in page. Give it an object to add your logo:
+
+```ts
+createCms(config, {
+  brand: { name: 'Example', logo: '/logo.svg' },
+});
+```
+
+`logo` is one of:
+
+- A URL (a file in `public/`, or any absolute URL). Replaces the letter tile; the name stays beside it.
+- `{ src, dark?, alt?, wordmark? }`. `dark` is shown in the admin's dark theme. `wordmark: true` hides the name and sizes the image by its height, for a logo that already contains it. `alt` defaults to empty, or to the name with `wordmark`.
+- A React element, e.g. an inline SVG using `currentColor`.
+
+If the image fails to load, the letter tile is shown. A plain string, or a function returning a string or object, works as before.
 
 ## In your own code
 

@@ -6,13 +6,25 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronUpIcon, ExternalLinkIcon, HouseIcon, LogOutIcon, ShieldOffIcon } from 'lucide-react';
 import { menuItemClass } from './action-menu.js';
 import { useAdmin } from './context.js';
+import { Brand } from './brand.js';
+import type { ResolvedLogo } from '../../server/admin/brand.js';
 
 export type NavItem = { href: string; label: string; icon: React.ReactNode };
 export type NavGroup = { title: string; items: NavItem[] };
 
 const itemClass = 'flex shrink-0 items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 no-underline [&_svg]:size-4';
 
-export function AdminNav({ brand, groups, signOutEverywhere }: { brand: string; groups: NavGroup[]; signOutEverywhere?: boolean }) {
+export function AdminNav({
+  brand,
+  logo,
+  groups,
+  signOutEverywhere,
+}: {
+  brand: string;
+  logo: ResolvedLogo | null;
+  groups: NavGroup[];
+  signOutEverywhere?: boolean;
+}) {
   const pathname = usePathname();
   const { adminPath, apiPath } = useAdmin();
   const item = ({ href, label, icon }: NavItem, active: boolean) => (
@@ -30,10 +42,7 @@ export function AdminNav({ brand, groups, signOutEverywhere }: { brand: string; 
   return (
     <aside className="flex shrink-0 flex-col border-mnml-line bg-mnml-panel md:sticky md:top-0 md:h-dvh md:w-60 md:border-r max-md:border-b">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-mnml-line px-4">
-        <span className="flex size-7 items-center justify-center rounded-[6px] bg-mnml-primary font-mnml-brand text-lg font-bold text-mnml-on-primary">
-          {brand[0] ?? 'A'}
-        </span>
-        <span className="truncate font-semibold">{brand}</span>
+        <Brand name={brand} logo={logo} size="nav" />
       </div>
       <nav className="flex gap-0.5 p-2 max-md:overflow-x-auto md:flex-1 md:flex-col">
         {item({ href: adminPath, label: 'Dashboard', icon: <HouseIcon /> }, pathname === adminPath)}
