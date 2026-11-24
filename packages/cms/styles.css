@@ -239,6 +239,8 @@
   }
   :where(.dark) .mnml-logo-light {
     display: none !important;
+  }
+
   /* "Create new" panel on a reference field: slides in from the right. */
   @keyframes mnml-panel-in {
     from {
