@@ -121,6 +121,7 @@ export const docsIndex: DocsPage[] = [
     "description": "Read content on your pages: getSingleton, listEntries, getEntry, getEntries, listSlugs, RichText and live preview.",
     "headings": [
       "A list page and a post page",
+      "Static rendering",
       "`listEntries` options",
       "`getEntries`",
       "Live preview"
