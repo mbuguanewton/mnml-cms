@@ -35,6 +35,7 @@ export const docsIndex: DocsPage[] = [
     "description": "Every field type in mnml.config.ts, its options and the value readers return.",
     "headings": [
       "Picking entries",
+      "Create new",
       "Groups become tabs"
     ]
   },

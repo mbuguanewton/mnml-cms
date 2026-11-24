@@ -32,7 +32,7 @@ With `list`, the admin gets a **Media** screen. Per file: size, date, the entrie
 
 ## Choose from uploads
 
-With `list`, an `image` field has **Choose from uploads** next to Upload, and the rich text **Image** tool opens the same picker. It shows the stored files, newest first, with a search by name. Pick one to use it; **Upload new** in the picker uploads and picks in one step. A picked image starts with empty alt text and no focal point, like a new upload. Without `list` (a custom adapter that can't list files), the picker is left out and both upload as before.
+With `list`, an `image` field has **Choose from uploads** in its toolbar (and in the empty drop zone), and the rich text **Image** tool opens the same picker. It shows the stored files, newest first, with a search by name. Pick one to use it; **Upload new** in the picker uploads and picks in one step. A picked image starts with empty alt text and no focal point, like a new upload. Without `list` (a custom adapter that can't list files), the picker is left out and both upload as before.
 
 ## Adapters
 

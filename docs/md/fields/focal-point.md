@@ -10,8 +10,8 @@ The part of an image to keep in frame when cropped.
 
 ## In the admin
 
-- **Focal point** (under the image) opens a big preview. Click the spot, or arrow keys (5%; 1% with Shift).
-- **Reset** removes it. A new upload clears it.
+- **Focal point** (crosshair button in the toolbar over the image) shows the whole image over the preview. Click the spot, or arrow keys (5%; 1% with Shift).
+- **Reset** removes it. **X** (or Escape) closes focal mode. A new upload clears it.
 
 ## Stored value
 

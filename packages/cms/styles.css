@@ -239,5 +239,19 @@
   }
   :where(.dark) .mnml-logo-light {
     display: none !important;
+  /* "Create new" panel on a reference field: slides in from the right. */
+  @keyframes mnml-panel-in {
+    from {
+      transform: translateX(2rem);
+      opacity: 0;
+    }
+  }
+  .mnml-panel[open] {
+    animation: mnml-panel-in 0.18s ease-out;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mnml-panel[open] {
+      animation: none;
+    }
   }
 }

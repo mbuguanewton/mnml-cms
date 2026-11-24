@@ -22,3 +22,12 @@ export type BulkInput = { key: string; slugs: string[]; action: string };
 export type BulkResult =
   | { ok: true; results: { done: string[]; skipped: { slug: string; message: string }[]; failed: { slug: string; message: string }[] } }
   | { ok: false; message: string };
+/** What the "Create new" panel of a reference field needs: the target collection's form, its defaults and the entries its own reference fields offer. */
+export type ReferenceSchemaResult =
+  | {
+      ok: true;
+      schema: import('./schema/define.js').Collection;
+      initial: Record<string, unknown>;
+      refOptions: Record<string, { slug: string; label: string }[]>;
+    }
+  | Invalid;

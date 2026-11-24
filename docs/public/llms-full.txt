@@ -147,7 +147,7 @@ Every field takes `{ required, help }`.
 | `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null`. Options can have [labels](https://mnml-cms.vercel.app/fields/select-labels.md). |
 | `reference(label, 'authors')` | `string \| null`: a published entry's slug. Read with `cms.getEntry`. |
 | `references(label, 'posts', { min, max })` | `string[]`: published slugs, in order. Read with `cms.getEntries`. |
-| `image` | `{ url, alt, focalX?, focalY? } \| null`. [Focal point](https://mnml-cms.vercel.app/fields/focal-point.md) optional. |
+| `image` | `{ url, alt, focalX?, focalY? } \| null`. [Focal point](https://mnml-cms.vercel.app/fields/focal-point.md) optional. In the admin: an empty field is a drop zone (drop, click or browse); a filled one is a preview with an icon toolbar (Replace, Choose from uploads, Focal point, Remove) and a `filename · width×height` chip. |
 | `richtext` | Tiptap JSON. Render with `<RichText>`. |
 | `tags` | `string[]` |
 | `array(label, fields, { itemLabel, min, max })` | Repeatable list of `fields` |
@@ -172,6 +172,16 @@ authors: fields.references('Authors', 'authors', { required: true }),
 - Slugs trimmed. Blanks and repeats dropped.
 - Then `min` / `max`. `required` = at least one.
 - An entry unpublished later stays, marked "(unavailable)". Readers skip it.
+
+### Create new
+
+Next to the search box, **Create new** opens a panel on the right with the target collection's form. Make the entry without leaving the one you're editing.
+
+- **Publish** creates it live and picks it. **Save draft** creates a draft and picks it, shown as "(draft)". The picker doesn't list drafts, and readers skip them, until you publish.
+- Slug follows the title until you edit it. Errors show per field and keep the panel open.
+- Close or Cancel asks first if you typed anything.
+- A reference field inside the panel has its own **Create new**.
+- Turn it off per field: `fields.reference('Author', 'authors', { createNew: false })`.
 
 ## Groups become tabs
 
@@ -292,8 +302,8 @@ The part of an image to keep in frame when cropped.
 
 ## In the admin
 
-- **Focal point** (under the image) opens a big preview. Click the spot, or arrow keys (5%; 1% with Shift).
-- **Reset** removes it. A new upload clears it.
+- **Focal point** (crosshair button in the toolbar over the image) shows the whole image over the preview. Click the spot, or arrow keys (5%; 1% with Shift).
+- **Reset** removes it. **X** (or Escape) closes focal mode. A new upload clears it.
 
 ## Stored value
 
@@ -1517,7 +1527,7 @@ With `list`, the admin gets a **Media** screen. Per file: size, date, the entrie
 
 ## Choose from uploads
 
-With `list`, an `image` field has **Choose from uploads** next to Upload, and the rich text **Image** tool opens the same picker. It shows the stored files, newest first, with a search by name. Pick one to use it; **Upload new** in the picker uploads and picks in one step. A picked image starts with empty alt text and no focal point, like a new upload. Without `list` (a custom adapter that can't list files), the picker is left out and both upload as before.
+With `list`, an `image` field has **Choose from uploads** in its toolbar (and in the empty drop zone), and the rich text **Image** tool opens the same picker. It shows the stored files, newest first, with a search by name. Pick one to use it; **Upload new** in the picker uploads and picks in one step. A picked image starts with empty alt text and no focal point, like a new upload. Without `list` (a custom adapter that can't list files), the picker is left out and both upload as before.
 
 ## Adapters
 

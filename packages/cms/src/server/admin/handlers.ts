@@ -1,7 +1,7 @@
 import 'server-only';
 import { cookies, draftMode } from 'next/headers';
-import type { AutosaveInput, AutosaveResult, EntryInput, PreviewResult, SaveResult } from '../../api.js';
-import { previewPath } from '../../schema/define.js';
+import type { AutosaveInput, AutosaveResult, EntryInput, PreviewResult, ReferenceSchemaResult, SaveResult } from '../../api.js';
+import { initialValues, plainDef, previewPath, referenceTargets } from '../../schema/define.js';
 import {
   checkPassword,
   clearFailures,
@@ -24,7 +24,7 @@ import { loadRefOptions } from '../content/ref-options.js';
 import { PREVIEW_COOKIE } from '../content/store.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
-//   POST: login · logout · logout-all · save · autosave · discard · bulk · delete · preview · preview/exit · references · upload · media/list · media/delete · request · tokens/create · tokens/revoke · mcp
+//   POST: login · logout · logout-all · save · autosave · discard · bulk · delete · preview · preview/exit · references · reference/schema · upload · media/list · media/delete · request · tokens/create · tokens/revoke · mcp
 //   GET:  media/<key> (uploaded images, public) · preview/open (admins only)
 
 const MEDIA_KEY = /^[\w.\-/]+$/;
@@ -191,6 +191,20 @@ export function createHandlers(ctx: Context) {
       const { collections } = (await request.json().catch(() => ({}))) as { collections?: unknown };
       if (!Array.isArray(collections) || !collections.every((c) => typeof c === 'string')) return json({ ok: false, message: 'Bad request.' }, 400);
       return json({ ok: true, options: await loadRefOptions(ctx, collections as string[]) });
+    },
+
+    /** The form of a collection a reference field can create entries in (its "Create new" panel). */
+    async 'reference/schema'(request) {
+      if (!(await isAdmin(ctx))) return unauthorized();
+      const { collection } = (await request.json().catch(() => ({}))) as { collection?: unknown };
+      const def = typeof collection === 'string' && Object.hasOwn(ctx.config, collection) ? ctx.config[collection] : undefined;
+      if (def?.kind !== 'collection') return json({ ok: false, message: 'Unknown collection.', errors: {} } satisfies ReferenceSchemaResult, 404);
+      return json({
+        ok: true,
+        schema: plainDef(def),
+        initial: initialValues(def.fields),
+        refOptions: await loadRefOptions(ctx, referenceTargets(def.fields)),
+      } satisfies ReferenceSchemaResult);
     },
 
     /** The stored files, newest first: what the image picker offers. */

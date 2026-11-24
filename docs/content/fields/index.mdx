@@ -16,7 +16,7 @@ Every field takes `{ required, help }`.
 | `select(label, ['a', 'b'] as const)` | `'a' \| 'b' \| null`. Options can have [labels](/fields/select-labels). |
 | `reference(label, 'authors')` | `string \| null`: a published entry's slug. Read with `cms.getEntry`. |
 | `references(label, 'posts', { min, max })` | `string[]`: published slugs, in order. Read with `cms.getEntries`. |
-| `image` | `{ url, alt, focalX?, focalY? } \| null`. [Focal point](/fields/focal-point) optional. |
+| `image` | `{ url, alt, focalX?, focalY? } \| null`. [Focal point](/fields/focal-point) optional. In the admin: an empty field is a drop zone (drop, click or browse); a filled one is a preview with an icon toolbar (Replace, Choose from uploads, Focal point, Remove) and a `filename · width×height` chip. |
 | `richtext` | Tiptap JSON. Render with `<RichText>`. |
 | `tags` | `string[]` |
 | `array(label, fields, { itemLabel, min, max })` | Repeatable list of `fields` |
@@ -41,6 +41,16 @@ authors: fields.references('Authors', 'authors', { required: true }),
 - Slugs trimmed. Blanks and repeats dropped.
 - Then `min` / `max`. `required` = at least one.
 - An entry unpublished later stays, marked "(unavailable)". Readers skip it.
+
+### Create new
+
+Next to the search box, **Create new** opens a panel on the right with the target collection's form. Make the entry without leaving the one you're editing.
+
+- **Publish** creates it live and picks it. **Save draft** creates a draft and picks it, shown as "(draft)". The picker doesn't list drafts, and readers skip them, until you publish.
+- Slug follows the title until you edit it. Errors show per field and keep the panel open.
+- Close or Cancel asks first if you typed anything.
+- A reference field inside the panel has its own **Create new**.
+- Turn it off per field: `fields.reference('Author', 'authors', { createNew: false })`.
 
 ## Groups become tabs
 
