@@ -6,6 +6,7 @@ import type { Database } from './content/db.js';
 import { drizzleStorage, type EntryStorage } from './content/storage.js';
 import { sessionCodec } from './auth/session.js';
 import { createStore } from './content/store.js';
+import type { BrandOption } from './admin/brand.js';
 import { localMedia, type MediaStorage } from './media/media.js';
 
 /** A save or delete that reached the site. `by` is the agent token's name when the MCP server made it. */
@@ -91,8 +92,11 @@ export type CmsOptions<C extends CmsConfig> = StorageOptions & {
   /** Defaults: '/admin' and '/api/mnml'. Must match where the page and route files live. */
   adminPath?: string;
   apiPath?: string;
-  /** Sidebar title. A function is called on each admin render (e.g. to read a name from a singleton). */
-  brand?: string | (() => string | Promise<string>);
+  /**
+   * The name (and logo) shown in the sidebar and on the sign-in page: a string, `{ name, logo }`, or a function returning
+   * either (called on each admin render, e.g. to read a name from a singleton).
+   */
+  brand?: BrandOption | (() => BrandOption | Promise<BrandOption>);
   /** Sidebar icons per singleton/collection, e.g. { posts: <FileTextIcon /> }. */
   icons?: Partial<Record<keyof C, ReactNode>>;
   /** Actions for the collection list's bar, per collection key: `{ posts: [{ name: 'feature', label: 'Mark featured', run }] }`. */

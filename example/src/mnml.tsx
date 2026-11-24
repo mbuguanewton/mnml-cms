@@ -12,7 +12,8 @@ export const cms = createCms(config, {
   auth: { password: process.env.ADMIN_PASSWORD, secret: process.env.ADMIN_SESSION_SECRET },
   // Vercel Blob when a token is set; otherwise `next dev` falls back to local disk (./.mnml-uploads).
   media: process.env.BLOB_READ_WRITE_TOKEN ? vercelBlobMedia() : undefined,
-  brand: 'Example',
+  // The sidebar and sign-in page show the logo (a different file in the dark theme) next to the name.
+  brand: { name: 'Example', logo: { src: '/logo.svg', dark: '/logo-dark.svg' } },
   icons: { settings: <SettingsIcon />, home: <HouseIcon />, authors: <UserIcon />, posts: <FileTextIcon /> },
   editor: Editor,
   // The site's own Select (shadcn) in the admin; see src/mnml-ui.tsx.

@@ -243,6 +243,7 @@ export const docsIndex: DocsPage[] = [
     "markdown": "https://mnml-cms.vercel.app/options.md",
     "description": "Every option of createCms: storage, auth, media, paths, sidebar, list actions, editor, ui, MCP, revalidate and onChange.",
     "headings": [
+      "Brand and logo",
       "In your own code",
       "Admin UI components"
     ]

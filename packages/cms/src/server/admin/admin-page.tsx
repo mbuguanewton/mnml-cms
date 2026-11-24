@@ -57,6 +57,8 @@ import { MediaDeleteButton } from '../../admin/shell/media-delete-button.js';
 import { mediaName } from '../../admin/shell/media-name.js';
 import { MediaSelectBox, MediaSelection, type MediaItem } from '../../admin/shell/media-selection.js';
 import { EntryForm } from '../../admin/entry/entry-form.js';
+import { Brand } from '../../admin/shell/brand.js';
+import { resolveBrand } from './brand.js';
 import { AdminHeader } from '../../admin/shell/header.js';
 import { LoginForm } from '../../admin/shell/login-form.js';
 import { AdminNav, type NavGroup } from '../../admin/shell/nav.js';
@@ -125,7 +127,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       if (adapter?.loginUrl) redirect(adapter.loginUrl);
       if (await isAdmin(ctx)) redirect(adminPath);
       const query = await searchParams;
-      const brand = await brandName();
+      const brand = await resolveBrandOption();
       // Laid out with inline styles on purpose: this page must look right even when the host's Tailwind
       // build hasn't generated the admin's newest classes yet (e.g. a dev server that wasn't restarted).
       const line = 'color-mix(in srgb, var(--mnml-text) 14%, transparent)';
@@ -149,7 +151,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
           className={`${rootClass} bg-mnml-panel`}
           style={{ position: 'relative', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: '40px 16px', minHeight: '100dvh' }}
         >
-          <title>{`Sign in — ${brand}`}</title>
+          <title>{`Sign in — ${brand.name}`}</title>
           {/* Decorative: a soft accent glow, and a dashed grid that fades out toward the edges. */}
           <div
             aria-hidden
@@ -163,27 +165,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
           <div aria-hidden style={gridLayer(`linear-gradient(${line} 1px, transparent 1px)`, 'auto 40px', 'to right')} />
           <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, width: '100%', maxWidth: 384 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-              <span
-                className="font-mnml-brand"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 48,
-                  height: 48,
-                  borderRadius: 12,
-                  fontSize: 24,
-                  fontWeight: 700,
-                  background: 'var(--mnml-primary)',
-                  color: 'var(--mnml-on-primary)',
-                  boxShadow: '0 1px 2px rgb(0 0 0 / 0.12)',
-                }}
-              >
-                {brand[0] ?? 'A'}
-              </span>
-              <span className="font-mnml-brand" style={{ fontSize: 18, fontWeight: 600 }}>
-                {brand}
-              </span>
+              <Brand name={brand.name} logo={brand.logo} size="login" />
             </div>
             <div
               style={{
@@ -211,11 +193,11 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     if (!(await isAdmin(ctx))) redirect(ctx.loginUrl);
 
     const content = await screen(path, await searchParams);
-    const brand = await brandName();
+    const brand = await resolveBrandOption();
     return provider(
       <div className={`${rootClass} md:flex-row`}>
-        <title>{`${brand} — Admin`}</title>
-        <AdminNav brand={brand} groups={navGroups()} signOutEverywhere={!ctx.authAdapter} />
+        <title>{`${brand.name} — Admin`}</title>
+        <AdminNav brand={brand.name} logo={brand.logo} groups={navGroups()} signOutEverywhere={!ctx.authAdapter} />
         <div className="flex min-w-0 flex-1 flex-col">{content}</div>
       </div>,
     );
@@ -227,8 +209,8 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     return loadRefOptions(ctx, referenceTargets(def.fields));
   }
 
-  async function brandName() {
-    return typeof options.brand === 'function' ? await options.brand() : (options.brand ?? 'Admin');
+  async function resolveBrandOption() {
+    return resolveBrand(typeof options.brand === 'function' ? await options.brand() : options.brand);
   }
 
   function navGroups(): NavGroup[] {
