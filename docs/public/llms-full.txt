@@ -478,8 +478,26 @@ export default async function Page({ params }: Props) {
 }
 ```
 
-- No `DATABASE_URL` at build? Add `export const dynamic = 'force-dynamic'` to pages reading the CMS.
-- `listSlugs` in `generateStaticParams` returns published slugs only. Previewing a draft needs a dynamic route.
+## Static rendering
+
+Pages that read the CMS render static. Reads only touch `cookies()` and `headers()` in Draft Mode, so visitors get the cached page. Same for `<cms.PreviewBanner />`.
+
+To go static:
+
+- Don't set `export const dynamic = 'force-dynamic'`.
+- Have `DATABASE_URL` at build time. No database at build? Keep `force-dynamic` on pages reading the CMS.
+- Optional: prebuild dynamic routes. Without it a route renders on its first visit, then is cached.
+
+```tsx
+export const generateStaticParams = async () => (await cms.listSlugs('posts')).map((slug) => ({ slug }));
+```
+
+What to know:
+
+- **Edits go live.** Each save or delete revalidates `'/'` (layout) by default. Publish refreshes the page and lists; unpublish gives a 404. Narrow it with the `revalidate` option.
+- **Drafts preview fine** on static routes. Leave `dynamicParams` at its default: `listSlugs` returns published slugs only, so `dynamicParams = false` would 404 a draft.
+- **Keep request APIs off public pages.** `cms.isAdmin()`, `cookies()`, `headers()` and `searchParams` make that page dynamic.
+- `/admin` and the API route are always dynamic.
 
 ## `listEntries` options
 
