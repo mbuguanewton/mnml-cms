@@ -43,9 +43,9 @@ export type SelectField<O extends readonly string[] = readonly string[]> = Base 
 export type SelectOption = string | { value: string; label: string };
 type OptionValue<T> = T extends string ? T : T extends { value: infer V extends string } ? V : never;
 /** Points at an entry of another collection; the value is that entry's slug. */
-export type ReferenceField = Base & { type: 'reference'; collection: string };
+export type ReferenceField = Base & { type: 'reference'; collection: string; createNew?: boolean };
 /** Points at several entries of another collection, in order; the value is their slugs. `required` means at least one. */
-export type ReferencesField = Base & { type: 'references'; collection: string } & Limits;
+export type ReferencesField = Base & { type: 'references'; collection: string; createNew?: boolean } & Limits;
 export type RichTextField = Base & { type: 'richtext' };
 export type TagsField = Base & { type: 'tags' };
 /** A repeatable group of fields. `itemLabel` names the field shown as each row's title in the admin. */
@@ -174,10 +174,15 @@ export const fields = {
       ...o,
     };
   },
-  /** The slug of an entry in `collection` (a key of your config). Only published entries are offered. */
-  reference: (label: string, collection: string, o: WithDefault<string> = {}): ReferenceField => ({ type: 'reference', label, collection, ...o }),
+  /** The slug of an entry in `collection` (a key of your config). Only published entries are offered. `createNew: false` hides "Create new" (a side panel that makes the entry without leaving the form). */
+  reference: (label: string, collection: string, o: WithDefault<string> & { createNew?: boolean } = {}): ReferenceField => ({
+    type: 'reference',
+    label,
+    collection,
+    ...o,
+  }),
   /** The slugs of entries in `collection`, in the editor's order. `min` / `max` limit how many; only published entries are offered. */
-  references: (label: string, collection: string, o: WithDefault<string[]> & { min?: number; max?: number } = {}): ReferencesField => ({
+  references: (label: string, collection: string, o: WithDefault<string[]> & { min?: number; max?: number; createNew?: boolean } = {}): ReferencesField => ({
     type: 'references',
     label,
     collection,

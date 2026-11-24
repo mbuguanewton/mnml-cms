@@ -173,6 +173,16 @@ authors: fields.references('Authors', 'authors', { required: true }),
 - Then `min` / `max`. `required` = at least one.
 - An entry unpublished later stays, marked "(unavailable)". Readers skip it.
 
+### Create new
+
+Next to the search box, **Create new** opens a panel on the right with the target collection's form. Make the entry without leaving the one you're editing.
+
+- **Publish** creates it live and picks it. **Save draft** creates a draft and picks it, shown as "(draft)". The picker doesn't list drafts, and readers skip them, until you publish.
+- Slug follows the title until you edit it. Errors show per field and keep the panel open.
+- Close or Cancel asks first if you typed anything.
+- A reference field inside the panel has its own **Create new**.
+- Turn it off per field: `fields.reference('Author', 'authors', { createNew: false })`.
+
 ## Groups become tabs
 
 Groups add tabs above the form: **All fields**, **General** (fields outside groups), one per group.

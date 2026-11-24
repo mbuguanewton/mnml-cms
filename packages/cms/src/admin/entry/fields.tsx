@@ -30,6 +30,7 @@ import {
 import { fromLocalInput, toLocalInput } from '../../schema/datetime.js';
 import { displayText } from '../../schema/text.js';
 import { EntryCombobox } from './entry-combobox.js';
+import { CreateReference, type CreatedRef } from './reference-panel.js';
 import { useMenu } from '../shell/action-menu.js';
 import { Button } from '../ui/button.js';
 import { Checkbox } from '../ui/checkbox.js';
@@ -119,7 +120,17 @@ function Input({ id, field, value, onChange, path, errors, invalid }: Props & { 
         />
       );
     case 'reference':
-      return <ReferenceInput id={id} collection={field.collection} value={value as string | null} onChange={onChange} invalid={invalid} />;
+      return (
+        <ReferenceInput
+          id={id}
+          collection={field.collection}
+          label={field.label}
+          createNew={field.createNew !== false}
+          value={value as string | null}
+          onChange={onChange}
+          invalid={invalid}
+        />
+      );
     case 'references':
       return <ReferencesInput id={id} field={field} value={(value as string[]) ?? []} onChange={onChange} invalid={invalid} />;
     case 'group':
@@ -170,17 +181,23 @@ function GroupInput({
 function ReferenceInput({
   id,
   collection,
+  label: fieldLabel,
+  createNew,
   value,
   onChange,
   invalid,
 }: {
   id: string;
   collection: string;
+  label: string;
+  createNew: boolean;
   value: string | null;
   onChange: (v: unknown) => void;
   invalid: boolean;
 }) {
-  const options = use(RefOptionsContext)[collection] ?? [];
+  const [created, setCreated] = useState<CreatedRef[]>([]);
+  const offered = use(RefOptionsContext)[collection] ?? [];
+  const options = [...offered, ...created.filter((c) => !offered.some((o) => o.slug === c.slug))];
   // Keep a current value that is no longer offered (e.g. since unpublished) visible instead of silently dropping it.
   const label = value ? (options.find((o) => o.slug === value)?.label ?? `${value} (unavailable)`) : null;
   return (
@@ -193,13 +210,27 @@ function ReferenceInput({
           </Button>
         </div>
       )}
-      <EntryCombobox
-        id={id}
-        options={options.filter((o) => o.slug !== value)}
-        onPick={onChange}
-        placeholder={value ? 'Search to replace…' : 'Search…'}
-        invalid={invalid}
-      />
+      <div className="flex flex-col gap-1.5">
+        <div className="min-w-0">
+          <EntryCombobox
+            id={id}
+            options={options.filter((o) => o.slug !== value)}
+            onPick={onChange}
+            placeholder={value ? 'Search to replace…' : 'Search…'}
+            invalid={invalid}
+          />
+        </div>
+        {createNew && (
+          <CreateReference
+            collection={collection}
+            label={fieldLabel}
+            onCreated={(ref) => {
+              setCreated((prev) => [...prev, ref]);
+              onChange(ref.slug);
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -490,7 +521,9 @@ function ReferencesInput({
   onChange: (v: unknown) => void;
   invalid: boolean;
 }) {
-  const options = use(RefOptionsContext)[field.collection] ?? [];
+  const [created, setCreated] = useState<CreatedRef[]>([]);
+  const offered = use(RefOptionsContext)[field.collection] ?? [];
+  const options = [...offered, ...created.filter((c) => !offered.some((o) => o.slug === c.slug))];
   const label = (slug: string) => options.find((o) => o.slug === slug)?.label;
   const { move, remove } = useListEditing(value, onChange);
   const remaining = options.filter((o) => !value.includes(o.slug));
@@ -525,14 +558,28 @@ function ReferencesInput({
           ))}
         </ol>
       )}
-      <EntryCombobox
-        id={id}
-        options={remaining}
-        onPick={(slug) => onChange([...value, slug])}
-        disabled={full || remaining.length === 0}
-        placeholder={full ? `Maximum of ${field.max} reached` : remaining.length ? 'Search to add…' : 'Nothing more to add'}
-        invalid={invalid}
-      />
+      <div className="flex flex-col gap-1.5">
+        <div className="min-w-0">
+          <EntryCombobox
+            id={id}
+            options={remaining}
+            onPick={(slug) => onChange([...value, slug])}
+            disabled={full || remaining.length === 0}
+            placeholder={full ? `Maximum of ${field.max} reached` : remaining.length ? 'Search to add…' : 'Nothing more to add'}
+            invalid={invalid}
+          />
+        </div>
+        {field.createNew !== false && !full && (
+          <CreateReference
+            collection={field.collection}
+            label={field.label}
+            onCreated={(ref) => {
+              setCreated((prev) => [...prev, ref]);
+              onChange([...value, ref.slug]);
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }
