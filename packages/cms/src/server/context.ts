@@ -7,6 +7,7 @@ import { drizzleStorage, type EntryStorage } from './content/storage.js';
 import { sessionCodec } from './auth/session.js';
 import { createStore } from './content/store.js';
 import type { BrandOption } from './admin/brand.js';
+import type { CacheOption } from './content/cached-store.js';
 import { localMedia, type MediaStorage } from './media/media.js';
 
 /** A save or delete that reached the site. `by` is the agent token's name when the MCP server made it. */
@@ -109,6 +110,12 @@ export type CmsOptions<C extends CmsConfig> = StorageOptions & {
   /** A site's own components for the admin's Button, Input, Select… slots: the component from `uiProvider(slots)`,
    *  exported from a 'use client' file. Slots left out use the built-in ones. */
   ui?: ComponentType<{ children: ReactNode }>;
+  /**
+   * Caches the public readers across requests (`cms.getEntry`, `listEntries`…), until a save or delete changes that
+   * collection. `{ revalidate }` sets the longest a read may live, in seconds (default 3600): the limit for content
+   * written outside the CMS (scripts, SQL). Off by default; recommended. Draft Mode and the admin always read fresh.
+   */
+  cache?: CacheOption;
   /** Called after each save or delete. Default: revalidatePath('/', 'layout'). */
   revalidate?: (change: Change) => void;
   /** Turns on the MCP server at <apiPath>/mcp, so agents (Claude Code, Cursor…) can manage content with a token. */

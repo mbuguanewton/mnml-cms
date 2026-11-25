@@ -12,7 +12,7 @@ In the editor, the node is a card with a one-line preview. Double-click or press
 
 Once, with its form fields, in a plain module the editor config and the site both import. `nodeAttributes(fields)` gives one attribute per field: starts empty, kept in HTML as `data-<name>`.
 
-```ts filename="src/youtube.ts"
+```ts filename="src/mnml/youtube.ts"
 import { Node } from '@tiptap/core';
 import { fields } from '@n3wtou/mnml-cms';
 import { nodeAttributes } from '@n3wtou/mnml-cms/editor';
@@ -34,7 +34,7 @@ export const YouTube = Node.create({
 
 ## 2. Add the button
 
-```tsx filename="src/mnml-editor.tsx"
+```tsx filename="src/mnml/editor.tsx"
 export const editor = defineEditor({
   extensions: [YouTube],
   tools: [

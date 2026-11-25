@@ -8,7 +8,7 @@ url: https://mnml-cms.vercel.app/editor/tables
 
 Own entry point, so sites without tables skip the code. Spread its extensions and tools into the editor config:
 
-```tsx filename="src/mnml-editor.tsx"
+```tsx filename="src/mnml/editor.tsx"
 import { defineEditor } from '@n3wtou/mnml-cms/editor';
 import { tables } from '@n3wtou/mnml-cms/table';
 

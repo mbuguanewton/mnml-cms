@@ -27,7 +27,7 @@ export function CodeBlock({ attrs, children }: RichTextNodeProps) {
 
 In the editor config. Keys are node names: `codeBlock`, `image`, `blockquote`, yours…
 
-```ts filename="src/mnml-editor.ts"
+```ts filename="src/mnml/editor.ts"
 export const editor = defineEditor({
   components: { codeBlock: CodeBlock },
 });

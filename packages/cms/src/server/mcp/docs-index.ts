@@ -18,14 +18,37 @@ export const docsIndex: DocsPage[] = [
     "markdown": "https://mnml-cms.vercel.app/getting-started.md",
     "description": "Install mnml-cms in a Next.js site: the config, createCms, the admin and API routes, the proxy and the database table.",
     "headings": [
+      "Where files go",
+      "Help your AI agent",
       "Install",
       "Environment variables",
       "1. Define your content",
       "2. Create the CMS",
       "3. Mount the admin",
       "4. Add the styles",
-      "5. Create the table",
-      "Help your AI agent"
+      "5. Create the table"
+    ]
+  },
+  {
+    "title": "Agents (MCP)",
+    "url": "https://mnml-cms.vercel.app/agents",
+    "markdown": "https://mnml-cms.vercel.app/agents.md",
+    "description": "Let AI agents (Claude Code, Cursor, Zed) manage content through the built-in MCP server, with scoped tokens, drafts and editor approval.",
+    "headings": [
+      "Set up",
+      "Tokens",
+      "Tokens from the admin",
+      "Scopes",
+      "Tools",
+      "Rich text",
+      "Drafts",
+      "Approval",
+      "Connect an agent",
+      "Claude Code",
+      "Zed",
+      "Cursor",
+      "Claude connectors",
+      "Security"
     ]
   },
   {
@@ -36,6 +59,7 @@ export const docsIndex: DocsPage[] = [
     "headings": [
       "Picking entries",
       "Create new",
+      "Reordering lists",
       "Groups become tabs"
     ]
   },
@@ -122,6 +146,7 @@ export const docsIndex: DocsPage[] = [
     "headings": [
       "A list page and a post page",
       "Static rendering",
+      "Caching",
       "`listEntries` options",
       "`getEntries`",
       "Live preview"
@@ -214,28 +239,6 @@ export const docsIndex: DocsPage[] = [
       "For every `<RichText>`",
       "For one `<RichText>`",
       "Good to know"
-    ]
-  },
-  {
-    "title": "Agents (MCP)",
-    "url": "https://mnml-cms.vercel.app/agents",
-    "markdown": "https://mnml-cms.vercel.app/agents.md",
-    "description": "Let AI agents (Claude Code, Cursor, Zed) manage content through the built-in MCP server, with scoped tokens, drafts and editor approval.",
-    "headings": [
-      "Set up",
-      "Tokens",
-      "Tokens from the admin",
-      "Scopes",
-      "Tools",
-      "Rich text",
-      "Drafts",
-      "Approval",
-      "Connect an agent",
-      "Claude Code",
-      "Zed",
-      "Cursor",
-      "Claude connectors",
-      "Security"
     ]
   },
   {

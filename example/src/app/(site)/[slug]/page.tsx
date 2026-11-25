@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { seoMetadata } from '@n3wtou/mnml-cms';
 import { RichText } from '@n3wtou/mnml-cms/rich-text';
 import { cms } from '@/mnml';
-import { editor } from '@/mnml-editor';
+import { editor } from '@/mnml/editor';
 import { PostCard } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';

@@ -6,6 +6,30 @@ url: https://mnml-cms.vercel.app/getting-started
 
 # Getting started
 
+## Where files go
+
+```text
+mnml.config.ts        content model (plain data)
+src/mnml/
+  index.ts            createCms(...), exports `cms`
+  editor.tsx          rich-text editor setup, shared with the site
+  editor-client.tsx   the editor for the admin ('use client')
+  ui.tsx              your own admin controls
+```
+
+Only `index.ts` is needed to start. Add the rest when you use them (see [Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md) and [Editor](https://mnml-cms.vercel.app/editor.md)).
+
+## Help your AI agent
+
+Add to your `AGENTS.md` or `CLAUDE.md`:
+
+```md
+Read node_modules/@n3wtou/mnml-cms/AGENTS.md before changing anything that uses mnml-cms.
+```
+
+- Every docs page is Markdown at its URL plus `.md`, e.g. [/agents.md](https://mnml-cms.vercel.app/agents.md). Index: [llms.txt](https://mnml-cms.vercel.app/llms.txt). Everything: [llms-full.txt](https://mnml-cms.vercel.app/llms-full.txt).
+- With the [MCP server](https://mnml-cms.vercel.app/agents.md) on, the `docs` tool hands agents the right `.md` links.
+
 ## Install
 
 ```sh
@@ -46,11 +70,11 @@ export default config({
 
 ## 2. Create the CMS
 
-Server only.
+Server only. Keep everything that sets up the CMS in one `src/mnml/` folder: `index.ts` exports `cms`, and the files you add later sit beside it, named for what they are (`editor.tsx`, `editor-client.tsx`, `ui.tsx`, a custom node's `youtube.ts`). Import it as `@/mnml`.
 
-```ts filename="src/mnml.ts"
+```ts filename="src/mnml/index.ts"
 import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next';
-import config from '../mnml.config';
+import config from '../../mnml.config';
 
 export const cms = createCms(config, {
   database: neonDatabase(process.env.DATABASE_URL), // or any Drizzle Postgres database
@@ -98,14 +122,3 @@ export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3
 ```
 
 Run `drizzle-kit push`. Scripts import the same table from `@n3wtou/mnml-cms/schema`.
-
-## Help your AI agent
-
-Add to your `AGENTS.md` or `CLAUDE.md`:
-
-```md
-Read node_modules/@n3wtou/mnml-cms/AGENTS.md before changing anything that uses mnml-cms.
-```
-
-- Every docs page is Markdown at its URL plus `.md`, e.g. [/agents.md](https://mnml-cms.vercel.app/agents.md). Index: [llms.txt](https://mnml-cms.vercel.app/llms.txt). Everything: [llms-full.txt](https://mnml-cms.vercel.app/llms-full.txt).
-- With the [MCP server](https://mnml-cms.vercel.app/agents.md) on, the `docs` tool hands agents the right `.md` links.

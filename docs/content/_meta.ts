@@ -1,12 +1,12 @@
 export default {
   index: 'Introduction',
   'getting-started': 'Getting started',
+  agents: 'Agents (MCP)',
   fields: 'Fields',
   'reading-content': 'Reading content',
   'drafts-and-publishing': 'Drafts and publishing',
   'moving-content': 'Moving content',
   editor: 'Editor',
-  agents: 'Agents (MCP)',
   options: 'Options',
   'custom-admin-ui': 'Custom admin UI',
   authentication: 'Authentication',

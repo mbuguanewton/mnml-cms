@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 import { seoMetadata } from '@n3wtou/mnml-cms';
 import { collectReferences, RichText } from '@n3wtou/mnml-cms/rich-text';
 import { cms } from '@/mnml';
-import { editor } from '@/mnml-editor';
+import { editor } from '@/mnml/editor';
 import { PostLink } from '@/components/post-link';
 import { Category, Picture, PostCard, formatDate, formatDateTime } from '@/components/ui';
 
