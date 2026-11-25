@@ -121,6 +121,7 @@ Everything else is in the docs at **https://mnml-cms.vercel.app**:
   [conditional fields](https://mnml-cms.vercel.app/fields/conditional-fields), [derived values](https://mnml-cms.vercel.app/fields/derived-values), [SEO](https://mnml-cms.vercel.app/fields/seo)
 - [Reading content](https://mnml-cms.vercel.app/reading-content)
 - [Drafts and publishing](https://mnml-cms.vercel.app/drafts-and-publishing)
+- [Changing fields](https://mnml-cms.vercel.app/changing-fields): what editors see when stored content no longer fits a changed field
 - [Agents (MCP)](https://mnml-cms.vercel.app/agents): let Claude Code, Cursor or Zed manage content with scoped tokens
 - [Moving content between databases](https://mnml-cms.vercel.app/moving-content), including rehosting images
 - [Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui): your own (shadcn) components in the admin

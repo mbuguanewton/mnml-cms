@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "db:push": "drizzle-kit push",
     "db:seed": "vpx scripts/seed.ts",
+    "db:mismatch": "vpx scripts/mismatch-demo.ts",
     "db:export": "vpx scripts/content.ts export",
     "db:import": "vpx scripts/content.ts import",
     "db:sync": "vpx scripts/content.ts sync",

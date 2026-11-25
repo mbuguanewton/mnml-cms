@@ -5,6 +5,7 @@ export default {
   fields: 'Fields',
   'reading-content': 'Reading content',
   'drafts-and-publishing': 'Drafts and publishing',
+  'changing-fields': 'Changing fields',
   'moving-content': 'Moving content',
   editor: 'Editor',
   options: 'Options',

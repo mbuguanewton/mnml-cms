@@ -21,6 +21,7 @@ import { EntryCombobox } from './entry-combobox.js';
 import { CreateReference, type CreatedRef } from './reference-panel.js';
 import { followOpen, reorder } from './sortable.js';
 import { DragHandle, useSortable } from './use-sortable.js';
+import { MismatchCard, MismatchContext } from './mismatch-panel.js';
 import { useMenu } from '../shell/action-menu.js';
 import { Button } from '../ui/button.js';
 import { Checkbox } from '../ui/checkbox.js';
@@ -52,6 +53,9 @@ export const RowErrorsContext = createContext<RowMap>(() => {});
 
 export function FieldRenderer({ field, value, onChange, path, errors, siblings }: RenderProps) {
   if (!isVisible(field, siblings)) return null;
+  // A stored value that doesn't fit this field: the card (old value, suggestion, Remove) stands in for the input.
+  const mismatch = use(MismatchContext).open[path];
+  if (mismatch) return <MismatchCard mismatch={mismatch} />;
   const error = errors[path];
   const id = `f-${path}`;
   if (field.type === 'group') {
@@ -613,7 +617,12 @@ function TagsInput({ id, value, onChange }: { id: string; value: string[]; onCha
 
 /** Open row, edit, reorder and remove for a list of items, shared by `array` and `blocks`. */
 function useListEditing<T>(value: T[], onChange: (v: unknown) => void, path?: string) {
-  const [open, setOpen] = useState<number | null>(null);
+  // The first row holding a stored value that doesn't fit starts open: its card is inside.
+  const unsettledPaths = Object.keys(use(MismatchContext).open);
+  const [open, setOpen] = useState<number | null>(() => {
+    const i = path ? value.findIndex((_, r) => unsettledPaths.some((k) => k.startsWith(`${path}.${r}.`))) : -1;
+    return i >= 0 ? i : null;
+  });
   const rowsChanged = use(RowErrorsContext);
   const update = (i: number, item: T) => onChange(value.map((v, j) => (j === i ? item : v)));
   const move = (from: number, to: number) => {
@@ -627,7 +636,7 @@ function useListEditing<T>(value: T[], onChange: (v: unknown) => void, path?: st
     else if (open !== null && open > i) setOpen(open - 1);
     if (path) rowsChanged(path, (r) => (r === i ? null : r > i ? r - 1 : r));
   };
-  return { open, setOpen, update, move, remove };
+  return { open, setOpen, update, move, remove, unsettled: unsettledPaths };
 }
 
 // Keystatic-style list: one row per item, expanded inline one at a time.
@@ -644,7 +653,7 @@ function ArrayInput({
   path: string;
   errors: Errors;
 }) {
-  const { open, setOpen, update, move, remove } = useListEditing(value, onChange, path);
+  const { open, setOpen, update, move, remove, unsettled } = useListEditing(value, onChange, path);
   const sortable = useSortable({
     count: value.length,
     onMove: move,
@@ -661,7 +670,7 @@ function ArrayInput({
         {value.length === 0 && <li className="px-3 py-2.5 text-mnml-text-mute">No items</li>}
         {value.map((item, i) => {
           const isOpen = open === i;
-          const hasError = Object.keys(errors).some((k) => k.startsWith(`${path}.${i}.`));
+          const hasError = [...Object.keys(errors), ...unsettled].some((k) => k.startsWith(`${path}.${i}.`));
           return (
             <li key={i} {...sortable.rowProps(i)}>
               {sortable.line(i)}
@@ -730,7 +739,7 @@ function BlocksInput({
   path: string;
   errors: Errors;
 }) {
-  const { open, setOpen, update, move, remove } = useListEditing(value, onChange, path);
+  const { open, setOpen, update, move, remove, unsettled } = useListEditing(value, onChange, path);
   const sortable = useSortable({
     count: value.length,
     onMove: move,
@@ -754,7 +763,7 @@ function BlocksInput({
           const def = field.blocks[item.kind];
           if (!def) return null;
           const isOpen = open === i;
-          const hasError = Object.keys(errors).some((k) => k.startsWith(`${path}.${i}.`));
+          const hasError = [...Object.keys(errors), ...unsettled].some((k) => k.startsWith(`${path}.${i}.`));
           const title = field.itemLabel && field.itemLabel in def.fields ? displayText(item[field.itemLabel]) : '';
           return (
             <li key={i} {...sortable.rowProps(i)}>
