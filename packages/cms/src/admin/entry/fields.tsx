@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, use, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { createContext, use, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, CrosshairIcon, ImagePlusIcon, ImagesIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
 import {
@@ -27,6 +27,7 @@ import { Checkbox } from '../ui/checkbox.js';
 import { DatePicker } from '../ui/date-picker.js';
 import { Input as TextInput, Textarea } from '../ui/input.js';
 import { Select } from '../ui/select.js';
+import { placePopover } from '../ui/position.js';
 import { Tooltip } from '../ui/tooltip.js';
 import { mediaName } from '../shell/media-name.js';
 import { useAdmin } from '../shell/context.js';
@@ -838,6 +839,30 @@ function BlockPicker({
   const needle = q.trim().toLowerCase();
   const shown = all.filter(([kind, b]) => !needle || `${b.label} ${kind} ${b.description ?? ''}`.toLowerCase().includes(needle));
 
+  // The list is a popover (top layer, fixed): it doesn't change the page's height, flips above the button and shrinks to
+  // the room it has. Placed again when the search changes its height.
+  useLayoutEffect(() => {
+    const el = popup.current;
+    const anchor = root.current?.firstElementChild as HTMLElement | null;
+    if (!open || !el || !anchor) return;
+    if (!el.matches(':popover-open')) el.showPopover();
+    placePopover(el, anchor, { align: 'start', fit: true });
+  }, [open, root, shown.length]);
+  useEffect(() => {
+    if (!open) return;
+    const follow = (e: Event) => {
+      const anchor = root.current?.firstElementChild as HTMLElement | null;
+      if (popup.current && anchor && !(e.target instanceof Node && popup.current.contains(e.target)))
+        placePopover(popup.current, anchor, { align: 'start', fit: true });
+    };
+    window.addEventListener('scroll', follow, true);
+    window.addEventListener('resize', follow);
+    return () => {
+      window.removeEventListener('scroll', follow, true);
+      window.removeEventListener('resize', follow);
+    };
+  }, [open, root]);
+
   // Land on the search box (or the first block) so the keyboard works straight away.
   useEffect(() => {
     if (open) popup.current?.querySelector<HTMLElement>('input, button')?.focus();
@@ -876,8 +901,9 @@ function BlockPicker({
         <div
           ref={popup}
           role="menu"
+          popover="manual"
           onKeyDown={onKeyDown}
-          className="absolute left-0 top-full z-20 mt-1 w-72 max-w-[calc(100vw-3rem)] rounded-[8px] border border-mnml-line bg-mnml-bg p-1 shadow-lg"
+          className="flex w-72 flex-col rounded-[8px] border border-mnml-line bg-mnml-bg p-1 text-mnml-text shadow-lg [font-family:ui-sans-serif,system-ui,sans-serif]"
         >
           {all.length > SEARCH_FROM && (
             <TextInput
@@ -894,7 +920,7 @@ function BlockPicker({
               }}
             />
           )}
-          <div className="flex max-h-72 flex-col overflow-y-auto">
+          <div className="flex max-h-72 min-h-0 flex-col overflow-y-auto">
             {shown.length === 0 && <p className="px-2.5 py-2 text-mnml-text-mute">No match</p>}
             {shown.map(([kind, b]) => (
               <button

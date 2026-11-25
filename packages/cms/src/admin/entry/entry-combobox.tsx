@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { placePopover } from '../ui/position.js';
 import { inputClass } from '../ui/styles.js';
 
 export type EntryOption = { slug: string; label: string };
@@ -34,10 +35,35 @@ export function EntryCombobox({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const root = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const list = useRef<HTMLUListElement>(null);
   const listId = useId();
   const shown = filterOptions(options, query);
   const current = Math.max(0, Math.min(active, shown.length - 1));
   const optionId = (i: number) => `${listId}-option-${i}`;
+
+  // The list is a popover (top layer, fixed): it doesn't change the page's height, flips above the box and shrinks to the
+  // room it has. Placed again when the matches change its height, and when the page moves.
+  const visible = open && !disabled;
+  useLayoutEffect(() => {
+    const el = list.current;
+    if (!visible || !el || !input.current) return;
+    if (!el.matches(':popover-open')) el.showPopover();
+    placePopover(el, input.current, { matchWidth: true, fit: true });
+  }, [visible, shown.length]);
+  useEffect(() => {
+    if (!visible) return;
+    const follow = (e: Event) => {
+      if (list.current && input.current && !(e.target instanceof Node && list.current.contains(e.target)))
+        placePopover(list.current, input.current, { matchWidth: true, fit: true });
+    };
+    window.addEventListener('scroll', follow, true);
+    window.addEventListener('resize', follow);
+    return () => {
+      window.removeEventListener('scroll', follow, true);
+      window.removeEventListener('resize', follow);
+    };
+  }, [visible]);
 
   // Close when clicking anywhere else.
   useEffect(() => {
@@ -81,6 +107,7 @@ export function EntryCombobox({
   return (
     <div ref={root} className="relative">
       <input
+        ref={input}
         id={id}
         type="text"
         role="combobox"
@@ -103,11 +130,13 @@ export function EntryCombobox({
         onClick={() => setOpen(true)}
         onKeyDown={onKeyDown}
       />
-      {open && !disabled && (
+      {visible && (
         <ul
+          ref={list}
           id={listId}
           role="listbox"
-          className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-[8px] border border-mnml-line bg-mnml-bg p-1 shadow-lg"
+          popover="manual"
+          className="max-h-64 overflow-y-auto rounded-[8px] border border-mnml-line bg-mnml-bg p-1 text-sm text-mnml-text shadow-lg [font-family:ui-sans-serif,system-ui,sans-serif]"
         >
           {shown.length === 0 ? (
             <li role="presentation" className="px-2.5 py-2 text-mnml-text-mute">
