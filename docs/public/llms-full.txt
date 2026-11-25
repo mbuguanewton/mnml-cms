@@ -743,7 +743,7 @@ createCms(config, { cache: true }); // or { revalidate: 600 }
 - Draft Mode, `all: true` and the admin always read fresh data.
 - `revalidate` (seconds, default 3600) is the longest a read lives. Content written outside the CMS (`db:import`, `sync`, SQL, another app) does not drop the cache, so it shows up after this time. Lower it if you write that way often.
 - Next stores each cached value up to about 2 MB. A longer list is read from the database each time. Use `limit`, or `getEntries`, on huge collections.
-- Uses Next's `unstable_cache`, so it doesn't work with `cacheComponents`. Leave `cache` off there.
+- Built on Next's `unstable_cache`, which Next replaced with `use cache`. On an app with `cacheComponents` on, test it before relying on it.
 
 ## `listEntries` options
 

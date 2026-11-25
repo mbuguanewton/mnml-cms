@@ -46,7 +46,8 @@ export function cachedReaders<C extends CmsConfig>(store: Store<C>, option: Cach
   // The callbacks read the saved version (`drafts: false`): no cookies or headers inside the cache.
   const saved = { drafts: false } as const;
   const run = <T>(key: string, parts: string[], fn: () => Promise<T>) => wrap(fn, ['mnml', ...parts], { tags: [cacheTag(key)], revalidate: ttl });
-  const skip = async (o?: ReadOptions) => !!o?.all || (await draftMode()).isEnabled;
+  // `drafts: false` reads the saved version even in Draft Mode, so it is safe to cache there.
+  const skip = async (o?: ReadOptions) => !!o?.all || (o?.drafts !== false && (await draftMode()).isEnabled);
 
   return {
     getSingleton: (async (key, o) =>
@@ -55,10 +56,15 @@ export function cachedReaders<C extends CmsConfig>(store: Store<C>, option: Cach
     getEntry: (async (key, slug, o) =>
       (await skip(o)) ? store.getEntry(key, slug, o) : run(key, ['entry', key, slug], () => store.getEntry(key, slug, saved))) as Store<C>['getEntry'],
 
-    getEntries: (async (key, slugs, o) =>
-      (await skip(o))
-        ? store.getEntries(key, slugs, o)
-        : run(key, ['entries', key, JSON.stringify(slugs)], () => store.getEntries(key, slugs, saved))) as Store<C>['getEntries'],
+    // Cached by the sorted slugs, so the same set in another order is one entry; the caller's order is put back here.
+    getEntries: (async (key, slugs, o) => {
+      if (await skip(o)) return store.getEntries(key, slugs, o);
+      const wanted = [...new Set(slugs.filter((s) => typeof s === 'string' && s !== ''))];
+      const sorted = [...wanted].sort();
+      const found = await run(key, ['entries', key, JSON.stringify(sorted)], () => store.getEntries(key, sorted, saved));
+      const bySlug = new Map(found.map((e) => [e.slug, e]));
+      return wanted.flatMap((slug) => bySlug.get(slug) ?? []);
+    }) as Store<C>['getEntries'],
 
     // The whole published list is cached, then filtered, sorted and paged here: a `filter` function can't be a cache key.
     listEntries: (async (key, o?: ListOptions<never>) => {

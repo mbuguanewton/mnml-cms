@@ -119,6 +119,14 @@ describe('cachedReaders', () => {
     expect(reads).toBe(2);
   });
 
+  it("caches getEntries by the set of slugs, and keeps the caller's order", async () => {
+    const r = readers();
+    expect((await r.getEntries('posts', ['b', 'a'])).map((e) => e.slug)).toEqual(['b', 'a']);
+    expect((await r.getEntries('posts', ['a', 'b', 'a', ''])).map((e) => e.slug)).toEqual(['a', 'b']);
+    expect(seen.filter((s) => s.keyParts.includes('entries'))).toHaveLength(2);
+    expect(reads).toBe(1);
+  });
+
   it('skips the cache for `all: true`', async () => {
     const r = readers();
     expect((await r.listEntries('posts', { all: true })).map((i) => i.slug)).toEqual(['a', 'b', 'd']);
@@ -135,5 +143,13 @@ describe('cachedReaders', () => {
     await r.getSingleton('home');
     await r.getEntries('posts', ['a']);
     expect(seen).toEqual([]);
+  });
+
+  it('still caches `drafts: false` reads in Draft Mode (they read the saved version)', async () => {
+    const r = readers();
+    draft = true;
+    await r.getEntry('posts', 'a', { drafts: false });
+    await r.getEntry('posts', 'a', { drafts: false });
+    expect(reads).toBe(1);
   });
 });
