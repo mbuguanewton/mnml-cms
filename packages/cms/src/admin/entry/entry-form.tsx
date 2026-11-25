@@ -13,7 +13,7 @@ import { useAdmin } from '../shell/context.js';
 import { FieldRenderer, RefOptionsProvider, RowErrorsContext, type RefOptions } from './fields.js';
 import { remapRowErrors } from './sortable.js';
 import { MismatchBanner, MismatchContext } from './mismatch-panel.js';
-import { fieldAt, fieldLabelAt, setIn, type Mismatch } from '../../schema/fit.js';
+import { fieldLabelAt, setIn, type Mismatch } from '../../schema/fit.js';
 import { EntryContext } from './entry-context.js';
 import { LivePreview } from './live-preview.js';
 import { AdminHeader, type Crumb } from '../shell/header.js';
@@ -97,8 +97,11 @@ export function EntryForm({
   const [pending, startTransition] = useTransition();
   const errors = result && !result.ok ? result.errors : {};
   // Errors are keyed by row index: when a list's rows move or go, they move with them.
-  const rowsChanged = (prefix: string, map: (i: number) => number | null) =>
+  const rowsChanged = (prefix: string, map: (i: number) => number | null) => {
     setResult((r) => (r && !r.ok ? { ...r, errors: remapRowErrors(r.errors, prefix, map) } : r));
+    // The cards of unsettled values follow their rows, and go with a row that is removed.
+    setUnsettled((u) => Object.fromEntries(Object.entries(remapRowErrors(u, prefix, map)).map(([path, m]) => [path, { ...m, path }])));
+  };
 
   // Like Sanity's field groups: an "All fields" tab, plus one tab per `group` field that shows only
   // that group. Fields outside any group are under "General". No tab bar without a group.
@@ -169,7 +172,7 @@ export function EntryForm({
           // Incomplete or invalid: keep editing, nothing is saved until it is valid.
           failed.current = current;
           const [path, msg] = Object.entries(r.errors)[0] ?? [];
-          setAuto({ kind: 'paused', message: path ? `${path.startsWith('$') ? path.slice(1) : fieldLabelAt(fields, path)}: ${msg}` : r.message });
+          setAuto({ kind: 'paused', message: path ? `${path.startsWith('$') ? path.slice(1) : fieldLabelAt(fields, path, data)}: ${msg}` : r.message });
         }
       } catch (e) {
         failed.current = current;
@@ -202,6 +205,7 @@ export function EntryForm({
   // A new entry has nothing to autosave into yet: Create draft stores it off the site. A singleton without
   // `drafts` just saves (publishes).
   const save = (action: SaveAction) => {
+    if (blocked > 0) return;
     const sent = snapshot();
     startTransition(async () => {
       const r = await post<SaveResult>('save', { ...input(), action: isCollection ? action : undefined });
@@ -303,7 +307,7 @@ export function EntryForm({
   return (
     <RefOptionsProvider value={refOptions}>
       <RowErrorsContext value={rowsChanged}>
-        <MismatchContext value={{ open: unsettled, resolve, fieldAt: (path) => fieldAt(fields, path) }}>
+        <MismatchContext value={{ open: unsettled, resolve }}>
           <EntryContext value={entryInfo}>
             <form onSubmit={submit} className="flex flex-1 flex-col">
               <AdminHeader crumbs={crumbs}>

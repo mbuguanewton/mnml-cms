@@ -20,7 +20,7 @@ A banner at the top counts the fields and links to each card.
 
 - Nothing is saved until every card is settled. Autosave waits ("Resolve 2 fields first") and Publish is off. The old content can't be overwritten by accident.
 - Use this and Remove change the form only. The old value stays in the database until you save.
-- Cards also show inside groups, array items and blocks. The row with a card opens by itself and is marked "Needs attention".
+- Cards also show inside groups, array items and blocks. The first row with a card opens by itself. Other rows with one are marked "Needs attention", and the banner links open them. A card moves with its row when you reorder, and goes when you remove the row.
 - It works for the published version, unpublished changes and a draft. The banner names which one you are editing.
 - Empty values (`null`, `''`, `[]`) are fixed without asking: nothing is lost.
 - A field hidden by `showIf` is fixed without asking too. Saving does the same.

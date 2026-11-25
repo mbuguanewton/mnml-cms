@@ -13,10 +13,8 @@ export type MismatchState = {
   open: Record<string, Mismatch>;
   /** Settle a field: with a value (Use this), or without one (Remove: the form already holds the empty value). */
   resolve: (path: string, value?: { value: unknown }) => void;
-  /** The field at a form path, so the card can check what the editor types. */
-  fieldAt: (path: string) => Field | undefined;
 };
-export const MismatchContext = createContext<MismatchState>({ open: {}, resolve: () => {}, fieldAt: () => undefined });
+export const MismatchContext = createContext<MismatchState>({ open: {}, resolve: () => {} });
 
 // Fields whose suggestion is edited as text. A choice or a yes/no is picked in the field itself, after Use this.
 // Edited in a box with several lines: the rest in one line.
@@ -84,14 +82,15 @@ const pre = 'max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-[6px
 
 /** Takes the place of a field whose stored value doesn't fit it: the old value, what it could become, and what to do. */
 export function MismatchCard({ mismatch: m }: { mismatch: Mismatch }) {
-  const { resolve, fieldAt } = use(MismatchContext);
-  const field = fieldAt(m.path);
-  const editable = !!m.suggestion && !!field && EDITABLE.has(m.type);
+  const { resolve } = use(MismatchContext);
+  // Converting what is typed needs only the field's kind (the kinds edited as text have no other settings).
+  const field = { type: m.type, label: m.label } as Field;
+  const editable = !!m.suggestion && EDITABLE.has(m.type);
   // The suggestion as text the editor can change. What they type is checked as the field's own kind of value.
   const original = m.suggestion ? previewText(m.suggestion.value) : '';
   const [text, setText] = useState(original);
   const edited = text !== original;
-  const converted = !editable || !edited ? m.suggestion : field ? convertValue(field, text) : null;
+  const converted = !editable || !edited ? m.suggestion : convertValue(field, text);
   return (
     <section
       id={`mismatch-${m.path}`}
@@ -158,7 +157,16 @@ export function MismatchBanner({ items, version }: { items: Mismatch[]; version:
             <button
               type="button"
               className="cursor-pointer text-mnml-text underline underline-offset-2 hover:text-mnml-primary"
-              onClick={() => document.getElementById(`mismatch-${m.path}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
+              onClick={() => {
+                const show = () => document.getElementById(`mismatch-${m.path}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                if (document.getElementById(`mismatch-${m.path}`)) return show();
+                // The card is in a row that is closed: open a row marked "Needs attention", then go to the card.
+                const closed = [...document.querySelectorAll<HTMLElement>('[data-mnml-row] button[aria-expanded="false"]')].find((b) =>
+                  b.textContent?.includes('Needs attention'),
+                );
+                closed?.click();
+                requestAnimationFrame(show);
+              }}
             >
               {m.label}
             </button>

@@ -265,3 +265,36 @@ describe('fieldAt', () => {
     expect(fieldAt(all, 'nope')).toBeUndefined();
   });
 });
+
+describe('review fixes', () => {
+  it('a block row after a dropped kind is reported at its place in what is kept', () => {
+    const { data, mismatches } = reviewEntry(all, {
+      ...valid,
+      blocks: [
+        { kind: 'gone', x: 1 },
+        { kind: 'hero', heading: 5 },
+      ],
+    });
+    expect((data.blocks as unknown[]).length).toBe(1);
+    expect(mismatches.map((m) => m.path)).toEqual(['blocks.0.heading']);
+  });
+  it('a group or an array item holding the wrong kind of value is reported, not hidden', () => {
+    const { mismatches } = reviewEntry(all, { ...valid, seo: 'Acme', rows: ['text'] });
+    expect(mismatches.map((m) => m.path).sort()).toEqual(['rows', 'seo']);
+  });
+  it('only reads a number as a date when it looks like a time', () => {
+    expect(convertValue(all.date, 2025)).toBeNull();
+    expect(convertValue(all.date, 42)).toBeNull();
+    expect(convertValue(all.date, Date.UTC(2026, 10, 24))).toEqual({ value: '2026-11-24' });
+    expect(convertValue(all.date, Date.UTC(2026, 10, 24) / 1000)).toEqual({ value: '2026-11-24' });
+  });
+  it('fieldAt uses the block kind from the data when two kinds share a field name', () => {
+    const f = {
+      sections: fields.blocks('S', { quote: block('Quote', { body: fields.richtext('Quote body') }), cta: block('CTA', { body: fields.text('CTA body') }) }),
+    } satisfies Fields;
+    const data = { sections: [{ kind: 'quote' }, { kind: 'cta' }] };
+    expect(fieldAt(f, 'sections.0.body', data)?.type).toBe('richtext');
+    expect(fieldAt(f, 'sections.1.body', data)?.type).toBe('text');
+    expect(fieldLabelAt(f, 'sections.0.body', data)).toBe('Quote body');
+  });
+});

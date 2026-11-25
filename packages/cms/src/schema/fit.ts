@@ -120,11 +120,13 @@ function fitValue(f: Field, v: unknown, path: string, found: Found): unknown {
       return Array.isArray(v) && v.every(isObject) ? v.map((item, i) => fitFields(f.fields, item, `${path}.${i}`, found)) : misfit();
     case 'blocks':
       if (!Array.isArray(v)) return misfit();
-      // A block whose kind is no longer in the config is dropped.
-      return v.flatMap((item, i) => {
-        const kind = isObject(item) && typeof item.kind === 'string' && Object.hasOwn(f.blocks, item.kind) ? item.kind : null;
-        return kind === null ? [] : [{ kind, ...fitFields(f.blocks[kind].fields, item as Record<string, unknown>, `${path}.${i}`, found) }];
-      });
+      // A block whose kind is no longer in the config is dropped, so a row's index is its place in what is kept.
+      return v
+        .filter((item) => isObject(item) && typeof item.kind === 'string' && Object.hasOwn(f.blocks, item.kind))
+        .map((item, i) => {
+          const { kind } = item as { kind: string };
+          return { kind, ...fitFields(f.blocks[kind].fields, item as Record<string, unknown>, `${path}.${i}`, found) };
+        });
     case 'image':
       return fitsLeaf(f, v) ? (typeof v === 'string' ? { url: v, alt: '' } : v) : misfit();
     default:
@@ -162,8 +164,10 @@ export function reviewEntry(fields: Fields, data: unknown): { data: Record<strin
 const YES = new Set(['yes', 'y', 'true', '1', 'on']);
 const NO = new Set(['no', 'n', 'false', '0', 'off']);
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+// A number is a time only if it looks like one: seconds (2001 to 5138) or milliseconds since 1970. `42` and `2025` aren't.
+const asEpoch = (n: number) => (Math.abs(n) >= 1e11 ? n : n >= 1e9 && n < 1e11 ? n * 1000 : NaN);
 const asDate = (v: unknown): Date | null => {
-  const d = typeof v === 'number' ? new Date(v) : typeof v === 'string' && v.trim() ? new Date(v.trim()) : null;
+  const d = typeof v === 'number' ? new Date(asEpoch(v)) : typeof v === 'string' && v.trim() ? new Date(v.trim()) : null;
   return d && !Number.isNaN(d.getTime()) ? d : null;
 };
 const asUrl = (text: string): string | null => {
@@ -329,21 +333,32 @@ export function setIn(data: unknown, path: string, value: unknown): unknown {
   return { ...obj, [head]: rest.length ? setIn(obj[head], next, value) : value };
 }
 
-/** The field at a form path (`footer.links.0.label`), or undefined. */
-export function fieldAt(fields: Fields, path: string): Field | undefined {
+/**
+ * The field at a form path (`footer.links.0.label`), or undefined. Block rows can have different fields for each kind:
+ * pass the entry's `data` so the row's own kind is used (without it, the fields of every kind are merged).
+ */
+export function fieldAt(fields: Fields, path: string, data?: unknown): Field | undefined {
   let current: Fields | null = fields;
   let found: Field | undefined;
+  let node: unknown = data;
   for (const part of path.split('.')) {
-    if (/^\d+$/.test(part)) continue;
+    if (/^\d+$/.test(part)) {
+      node = Array.isArray(node) ? node[Number(part)] : undefined;
+      if (found?.type === 'blocks') {
+        const kind = isObject(node) && typeof node.kind === 'string' ? node.kind : '';
+        current = Object.hasOwn(found.blocks, kind) ? found.blocks[kind].fields : Object.assign({}, ...Object.values(found.blocks).map((b) => b.fields));
+      }
+      continue;
+    }
     const f: Field | undefined = current && Object.hasOwn(current, part) ? current[part] : undefined;
     if (!f) return undefined;
     found = f;
+    node = isObject(node) ? node[part] : undefined;
     if (f.type === 'group' || f.type === 'array') current = f.fields;
-    else if (f.type === 'blocks') current = Object.assign({}, ...Object.values(f.blocks).map((b) => b.fields));
     else current = null;
   }
   return found;
 }
 
 /** The label of the field at a form path (`footer.links.0.label` gives "Label"), or the path if there is none. */
-export const fieldLabelAt = (fields: Fields, path: string): string => fieldAt(fields, path)?.label ?? path;
+export const fieldLabelAt = (fields: Fields, path: string, data?: unknown): string => fieldAt(fields, path, data)?.label ?? path;

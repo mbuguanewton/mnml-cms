@@ -106,3 +106,11 @@ describe('remapRowErrors', () => {
     expect(remapRowErrors({ 'linksX.1': 'a' }, 'links', () => 0)).toEqual({ 'linksX.1': 'a' });
   });
 });
+
+describe('remapRowErrors on other values', () => {
+  it('re-keys anything keyed by path', () => {
+    const open = { 'rows.1.n': { path: 'rows.1.n' }, 'rows.2.n': { path: 'rows.2.n' }, other: { path: 'other' } };
+    const out = remapRowErrors(open, 'rows', (i) => (i === 1 ? null : i - 1));
+    expect(Object.keys(out).sort()).toEqual(['other', 'rows.1.n']);
+  });
+});

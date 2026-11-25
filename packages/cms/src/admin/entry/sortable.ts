@@ -66,12 +66,12 @@ export function dropSlot(from: number, to: number): number | null {
 export const movedMessage = (label: string, to: number, count: number) => `${label} moved to position ${to + 1} of ${count}`;
 
 /**
- * Errors are keyed by path (`footer.links.2.label`). After rows move or go, re-key the ones under `prefix` (the list's path)
+ * Errors (or anything else) keyed by path (`footer.links.2.label`). After rows move or go, re-key the ones under `prefix` (the list's path)
  * so each follows its row. `map` gives a row's new index, or null if the row is gone (its errors are dropped).
  */
-export function remapRowErrors(errors: Record<string, string>, prefix: string, map: (i: number) => number | null): Record<string, string> {
+export function remapRowErrors<T = string>(errors: Record<string, T>, prefix: string, map: (i: number) => number | null): Record<string, T> {
   const head = `${prefix}.`;
-  const out: Record<string, string> = {};
+  const out: Record<string, T> = {};
   for (const [key, message] of Object.entries(errors)) {
     const row = key.startsWith(head) ? /^(\d+)(\..*)?$/.exec(key.slice(head.length)) : null;
     if (!row) {

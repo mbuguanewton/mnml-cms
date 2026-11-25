@@ -265,7 +265,9 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       const entry = pending ? (withDefaults(def.fields, pending) as AnyEntry) : (stored ?? initialValues(def.fields));
       const request = await store.getRequest(key, SINGLETON_SLUG);
       // Stored values that no longer fit a changed field are set aside for the editor to settle (see `reviewEntry`).
-      const review = reviewEntry(def.fields, fieldsOnly(def, entry as AnyEntry));
+      // From the stored data as it is (the readers fill in defaults, which would hide a value of the wrong kind).
+      const raw = pending ?? (await store.getRow(key, SINGLETON_SLUG))?.data;
+      const review = raw !== undefined ? reviewEntry(def.fields, raw) : { data: fieldsOnly(def, entry as AnyEntry), mismatches: [] };
       return (
         <EntryForm
           banner={request && <AgentRequest schemaKey={key} action={request.action} by={request.by} at={request.at} />}
@@ -305,7 +307,8 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const title = displayText(entry[def.titleField]) || sub;
     const request = await store.getRequest(key, sub);
     // Stored values that no longer fit a changed field are set aside for the editor to settle (see `reviewEntry`).
-    const review = reviewEntry(def.fields, fieldsOnly(def, pending ? (withDefaults(def.fields, pending) as AnyEntry) : entry));
+    // From the stored data as it is (the readers fill in defaults, which would hide a value of the wrong kind).
+    const review = reviewEntry(def.fields, pending ?? (await store.getRow(key, sub))?.data ?? entry);
     return (
       // key: remount with fresh state after a create redirect
       <EntryForm
