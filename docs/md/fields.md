@@ -31,7 +31,7 @@ Every field takes `{ required, help }`.
 `reference` and `references` use a search box: filter by title or slug, pick with ↓/↑ + Enter or a click.
 
 - `reference`: shows the pick, with a clear (×) button.
-- `references`: shows the picks. Reorder, remove, add up to `max`.
+- `references`: shows the picks. [Drag to reorder](#reordering-lists), remove, add up to `max`.
 
 ```ts
 related: fields.references('Related posts', 'posts', { max: 3 }),
@@ -53,6 +53,14 @@ Next to the search box, **Create new** opens a panel on the right with the targe
 - Close or Cancel asks first if you typed anything.
 - A reference field inside the panel has its own **Create new**.
 - Turn it off per field: `fields.reference('Author', 'authors', { createNew: false })`.
+
+## Reordering lists
+
+`array`, `blocks` and `references` rows have a grip on the left. Drag it to move the row.
+
+- Mouse, touch and pen. A line shows where the row will drop. Letting go away from the list, or pressing Escape, cancels.
+- Keyboard: focus the grip, then ↑ / ↓ move the row one place, Home and End to the top or bottom. Focus stays on the row, and a screen reader hears the new position.
+- An open row stays open while it moves, and a row's validation errors move with it (also when a row is removed). Order is the order readers get.
 
 ## Groups become tabs
 

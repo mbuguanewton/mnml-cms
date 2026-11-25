@@ -22,6 +22,7 @@ sections: fields.blocks('Sections', {
 - Editors see only the picked block's fields.
 - `block(label, fields, { description })`: one-line hint in the list.
 - `fields.blocks(…, { addLabel })`: renames the button.
+- Drag a section by its grip to reorder (or focus the grip and use the arrow keys). See [Reordering lists](https://mnml-cms.vercel.app/fields.md#reordering-lists).
 
 ## Reading
 
