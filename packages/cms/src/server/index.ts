@@ -3,12 +3,14 @@ import type { CmsConfig } from '../schema/define.js';
 import { createAdminPage } from './admin/admin-page.js';
 import { isAdmin } from './auth/auth.js';
 import { createContext, type CmsOptions } from './context.js';
+import { cachedReaders } from './content/cached-store.js';
 import { createHandlers } from './admin/handlers.js';
 import { createPreviewBanner } from './admin/preview-banner.js';
 
 export type { BrandLogo, BrandOption } from './admin/brand.js';
 export type { AdminPageDef, AgentScope, AgentToken, Change, CmsOptions, ListAction, McpOptions } from './context.js';
 export type { AuthAdapter, PasswordAuth } from './auth/auth.js';
+export type { CacheOption } from './content/cached-store.js';
 export type { ListOptions, ReadOptions } from './content/store.js';
 export { neonDatabase, type Database } from './content/db.js';
 export type { EntryStorage, StoredRow } from './content/storage.js';
@@ -27,7 +29,7 @@ export { localMedia, vercelBlobMedia, type MediaFile, type MediaStorage } from '
  */
 export function createCms<C extends CmsConfig>(config: C, options: CmsOptions<C>) {
   const ctx = createContext(config, options);
-  const { getSingleton, listEntries, getEntry, getEntries, listSlugs } = ctx.store;
+  const { getSingleton, listEntries, getEntry, getEntries, listSlugs } = cachedReaders(ctx.store, options.cache);
   return {
     config,
     getSingleton,

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 vi.mock('server-only', () => ({}));
-vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 vi.mock('next/server', () => ({ after: (fn: () => unknown) => void fn() }));
 vi.mock('next/headers', () => ({ draftMode: async () => ({ isEnabled: false }), cookies: async () => ({ get: () => undefined }) }));
 
@@ -9,6 +9,7 @@ const { collection, config, fields } = await import('../../schema/define.js');
 const { createContext } = await import('../context.js');
 const { createHandlers } = await import('../admin/handlers.js');
 const { revOf } = await import('./rev.js');
+const { revalidateTag } = await import('next/cache');
 type Row = { collection: string; slug: string; data: unknown; status: string };
 
 const cmsConfig = config({
@@ -21,12 +22,10 @@ let onChange: ReturnType<typeof vi.fn<(change: unknown) => void>>;
 let handlers: ReturnType<typeof createHandlers>;
 const row = (c: string, s: string) => rows.find((r) => r.collection === c && r.slug === s);
 
-beforeEach(() => {
-  rows = [{ collection: 'posts', slug: 'live', data: { title: 'Live' }, status: 'published' }];
-  revalidate = vi.fn<(change: unknown) => void>();
-  onChange = vi.fn<(change: unknown) => void>();
+/** The handlers over `rows`, with extra `createCms` options. */
+function build(extra: { cache?: boolean } = {}) {
   const now = new Date();
-  handlers = createHandlers(
+  return createHandlers(
     createContext(cmsConfig, {
       storage: {
         readRow: async (c, s) => row(c, s),
@@ -45,8 +44,17 @@ beforeEach(() => {
       auth: { isAdmin: async () => true, loginUrl: '/' },
       revalidate,
       onChange,
+      ...extra,
     }) as never,
   );
+}
+
+beforeEach(() => {
+  vi.mocked(revalidateTag).mockClear();
+  rows = [{ collection: 'posts', slug: 'live', data: { title: 'Live' }, status: 'published' }];
+  revalidate = vi.fn<(change: unknown) => void>();
+  onChange = vi.fn<(change: unknown) => void>();
+  handlers = build();
 });
 
 const post = async (route: string, body: unknown) => {
@@ -99,5 +107,26 @@ describe('admin writes through the content service', () => {
     expect((await post('delete', { key: 'posts', slug: 'live' })).body).toEqual({ ok: true, redirect: '/admin/posts' });
     expect(row('posts', 'live')).toBeUndefined();
     expect(onChange).toHaveBeenCalledWith({ type: 'delete', key: 'posts', slug: 'live' });
+  });
+});
+
+describe('read cache invalidation', () => {
+  it("expires the key's tag on a publish and a delete, even with a custom revalidate", async () => {
+    handlers = build({ cache: true });
+    await post('save', { key: 'posts', slug: 'fresh', mode: 'create', data: { title: 'Fresh' } });
+    expect(revalidateTag).toHaveBeenCalledWith('mnml:posts', { expire: 0 });
+    expect(revalidate).toHaveBeenCalledTimes(1);
+    vi.mocked(revalidateTag).mockClear();
+    await post('delete', { key: 'posts', slug: 'fresh' });
+    expect(revalidateTag).toHaveBeenCalledWith('mnml:posts', { expire: 0 });
+  });
+
+  it('leaves the cache alone for pending changes, and when it is off', async () => {
+    handlers = build({ cache: true });
+    await post('save', { key: 'posts', slug: 'live', mode: 'update', action: 'draft', data: { title: 'Next' } });
+    expect(revalidateTag).not.toHaveBeenCalled();
+    handlers = build();
+    await post('save', { key: 'posts', slug: 'live', mode: 'update', data: { title: 'Now' } });
+    expect(revalidateTag).not.toHaveBeenCalled();
   });
 });

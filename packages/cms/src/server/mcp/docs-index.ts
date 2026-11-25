@@ -145,6 +145,7 @@ export const docsIndex: DocsPage[] = [
     "headings": [
       "A list page and a post page",
       "Static rendering",
+      "Caching",
       "`listEntries` options",
       "`getEntries`",
       "Live preview"
