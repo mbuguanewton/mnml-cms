@@ -1,11 +1,11 @@
 import { defineEditor, referenceNode, tools } from '@n3wtou/mnml-cms/editor';
 import { tables } from '@n3wtou/mnml-cms/table';
 import { CirclePlayIcon, FileSymlinkIcon } from 'lucide-react';
-import { CodeBlock } from './components/code-block';
-import { YouTubeEmbed } from './components/youtube-embed';
+import { CodeBlock } from '../components/code-block';
+import { YouTubeEmbed } from '../components/youtube-embed';
 import { YouTube, youtubeFields } from './youtube';
 
-// Shared by the admin (through mnml-editor-client.tsx) and <RichText editor={editor}> on the site.
+// Shared by the admin (through editor-client.tsx) and <RichText editor={editor}> on the site.
 export const editor = defineEditor({
   // blockLink: a card linking another post. Rendering it needs the post's data, so the post page passes it.
   // Tables come from their own entry, so sites without them don't load the table code.

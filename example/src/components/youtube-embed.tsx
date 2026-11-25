@@ -1,5 +1,5 @@
 import type { RichTextNodeProps } from '@n3wtou/mnml-cms/editor';
-import { youtubeId } from '../youtube';
+import { youtubeId } from '../mnml/youtube';
 
 /** Renders the rich-text `youtube` node as a privacy-friendly embed. */
 export function YouTubeEmbed({ attrs }: RichTextNodeProps) {

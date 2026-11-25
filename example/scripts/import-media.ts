@@ -6,7 +6,7 @@ import { localMedia, mediaImporter, vercelBlobMedia } from '@n3wtou/mnml-cms/syn
 
 if (existsSync('.env.local')) process.loadEnvFile('.env.local');
 
-// The same storage the site uses (src/mnml.tsx): Vercel Blob with a token, local disk otherwise.
+// The same storage the site uses (src/mnml/index.tsx): Vercel Blob with a token, local disk otherwise.
 const media = process.env.BLOB_READ_WRITE_TOKEN ? vercelBlobMedia() : localMedia();
 const urls = process.argv.slice(2);
 if (urls.length === 0) {
