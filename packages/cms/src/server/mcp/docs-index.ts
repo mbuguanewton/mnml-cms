@@ -59,6 +59,7 @@ export const docsIndex: DocsPage[] = [
     "headings": [
       "Picking entries",
       "Create new",
+      "Reordering lists",
       "Groups become tabs"
     ]
   },

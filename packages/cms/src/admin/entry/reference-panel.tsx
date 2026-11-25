@@ -12,7 +12,8 @@ import { PortalHost } from '../ui/context.js';
 import { labelClass } from '../ui/styles.js';
 import { useAdmin } from '../shell/context.js';
 import { StatusDot } from './status-dot.js';
-import { FieldRenderer, RefOptionsProvider, type Errors, type RefOptions } from './fields.js';
+import { FieldRenderer, RefOptionsProvider, RowErrorsContext, type Errors, type RefOptions } from './fields.js';
+import { remapRowErrors } from './sortable.js';
 
 /** An entry made from the panel, as a picker lists it. A draft is labelled as one until it's published. */
 export type CreatedRef = { slug: string; label: string };
@@ -92,6 +93,8 @@ function ReferencePanel({ collection, onClose, onCreated }: { collection: string
     if (client && !dialog.current?.open) dialog.current?.showModal();
   }, [client]);
 
+  // Rows' errors follow them when a list is reordered (paths carry this panel's id as a prefix, `errors` does not).
+  const rowsChanged = (prefix: string, map: (i: number) => number | null) => setErrors((e) => remapRowErrors(e, prefix.slice(uid.length + 1), map));
   const def: Collection | null = loaded?.schema ?? null;
   const dirty = JSON.stringify([data, slug]) !== baseline;
 
@@ -167,37 +170,39 @@ function ReferencePanel({ collection, onClose, onCreated }: { collection: string
             {!def && !failed && <p className="text-mnml-text-mute">Loading…</p>}
             {def && loaded && (
               <RefOptionsProvider value={loaded.refOptions as RefOptions}>
-                {Object.entries(def.fields).map(([k, f]) => (
-                  <div key={k} className="contents">
-                    <FieldRenderer
-                      field={f}
-                      value={data[k]}
-                      onChange={(v) => set(k, v)}
-                      path={`${uid}.${k}`}
-                      errors={Object.fromEntries(Object.entries(errors).map(([k, m]) => [`${uid}.${k}`, m]))}
-                      siblings={data}
-                    />
-                    {k === def.titleField && (
-                      <div className="flex flex-col gap-1.5">
-                        <label htmlFor={`${uid}-slug`} className={labelClass}>
-                          Slug
-                        </label>
-                        <p className="-mt-1 text-mnml-text-mute">Used in the URL. Filled in from the title.</p>
-                        <Input
-                          id={`${uid}-slug`}
-                          className="[font-family:ui-monospace,monospace] text-xs"
-                          invalid={!!errors.$slug}
-                          value={slug}
-                          onChange={(v) => {
-                            setSlugEdited(true);
-                            setSlug(v);
-                          }}
-                        />
-                        {errors.$slug && <p className="text-mnml-danger">{errors.$slug}</p>}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                <RowErrorsContext value={rowsChanged}>
+                  {Object.entries(def.fields).map(([k, f]) => (
+                    <div key={k} className="contents">
+                      <FieldRenderer
+                        field={f}
+                        value={data[k]}
+                        onChange={(v) => set(k, v)}
+                        path={`${uid}.${k}`}
+                        errors={Object.fromEntries(Object.entries(errors).map(([k, m]) => [`${uid}.${k}`, m]))}
+                        siblings={data}
+                      />
+                      {k === def.titleField && (
+                        <div className="flex flex-col gap-1.5">
+                          <label htmlFor={`${uid}-slug`} className={labelClass}>
+                            Slug
+                          </label>
+                          <p className="-mt-1 text-mnml-text-mute">Used in the URL. Filled in from the title.</p>
+                          <Input
+                            id={`${uid}-slug`}
+                            className="[font-family:ui-monospace,monospace] text-xs"
+                            invalid={!!errors.$slug}
+                            value={slug}
+                            onChange={(v) => {
+                              setSlugEdited(true);
+                              setSlug(v);
+                            }}
+                          />
+                          {errors.$slug && <p className="text-mnml-danger">{errors.$slug}</p>}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </RowErrorsContext>
               </RefOptionsProvider>
             )}
           </div>

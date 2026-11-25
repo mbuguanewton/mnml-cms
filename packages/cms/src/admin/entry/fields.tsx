@@ -1,19 +1,7 @@
 'use client';
 
 import { createContext, use, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  CrosshairIcon,
-  ImagePlusIcon,
-  ImagesIcon,
-  PlusIcon,
-  Trash2Icon,
-  UploadIcon,
-  XIcon,
-} from 'lucide-react';
+import { ChevronDownIcon, ChevronRightIcon, CrosshairIcon, ImagePlusIcon, ImagesIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
 import {
   initialValues,
@@ -31,6 +19,8 @@ import { fromLocalInput, toLocalInput } from '../../schema/datetime.js';
 import { displayText } from '../../schema/text.js';
 import { EntryCombobox } from './entry-combobox.js';
 import { CreateReference, type CreatedRef } from './reference-panel.js';
+import { followOpen, reorder } from './sortable.js';
+import { DragHandle, useSortable } from './use-sortable.js';
 import { useMenu } from '../shell/action-menu.js';
 import { Button } from '../ui/button.js';
 import { Checkbox } from '../ui/checkbox.js';
@@ -55,6 +45,9 @@ type RenderProps = Props & { siblings: unknown };
 export type RefOptions = Record<string, { slug: string; label: string }[]>;
 const RefOptionsContext = createContext<RefOptions>({});
 export const RefOptionsProvider = RefOptionsContext;
+/** How a list tells the form its rows moved or went, so errors keyed by row index follow them. `prefix` is the list's path. */
+export type RowMap = (prefix: string, map: (i: number) => number | null) => void;
+export const RowErrorsContext = createContext<RowMap>(() => {});
 
 export function FieldRenderer({ field, value, onChange, path, errors, siblings }: RenderProps) {
   if (!isVisible(field, siblings)) return null;
@@ -526,37 +519,33 @@ function ReferencesInput({
   const options = [...offered, ...created.filter((c) => !offered.some((o) => o.slug === c.slug))];
   const label = (slug: string) => options.find((o) => o.slug === slug)?.label;
   const { move, remove } = useListEditing(value, onChange);
+  const sortable = useSortable({ count: value.length, onMove: move, labelOf: (i) => label(value[i]) ?? value[i] });
   const remaining = options.filter((o) => !value.includes(o.slug));
   const full = field.max !== undefined && value.length >= field.max;
   return (
     <div className="flex flex-col gap-1.5">
       {value.length > 0 && (
-        <ol aria-label={`${field.label}: picked`} className="flex flex-col divide-y divide-mnml-line rounded-[6px] border border-mnml-line bg-mnml-bg">
-          {value.map((slug, i) => (
-            <li key={slug} className="flex items-center gap-2 px-3 py-1.5">
-              <span className="min-w-0 flex-1 truncate">
-                {/* Keep an entry that is no longer offered (e.g. since unpublished) visible instead of silently dropping it. */}
-                {label(slug) ?? `${slug} (unavailable)`}
-              </span>
-              <Button type="button" variant="ghost" size="icon-xs" aria-label={`Move ${label(slug) ?? slug} up`} disabled={i === 0} onClick={() => move(i, -1)}>
-                <ArrowUpIcon />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Move ${label(slug) ?? slug} down`}
-                disabled={i === value.length - 1}
-                onClick={() => move(i, 1)}
-              >
-                <ArrowDownIcon />
-              </Button>
-              <Button type="button" variant="ghost" size="icon-xs" aria-label={`Remove ${label(slug) ?? slug}`} onClick={() => remove(i)}>
-                <XIcon />
-              </Button>
-            </li>
-          ))}
-        </ol>
+        <>
+          <ol aria-label={`${field.label}: picked`} className="flex flex-col divide-y divide-mnml-line rounded-[6px] border border-mnml-line bg-mnml-bg">
+            {value.map((slug, i) => {
+              const row = sortable.rowProps(i);
+              return (
+                <li key={slug} style={row.style} data-mnml-row={row['data-mnml-row']} className={`flex items-center gap-2 py-1.5 pr-3 pl-1.5 ${row.className}`}>
+                  <DragHandle label={label(slug) ?? slug} {...sortable.handleProps(i)} />
+                  <span className="min-w-0 flex-1 truncate">
+                    {/* Keep an entry that is no longer offered (e.g. since unpublished) visible instead of silently dropping it. */}
+                    {label(slug) ?? `${slug} (unavailable)`}
+                  </span>
+                  <Button type="button" variant="ghost" size="icon-xs" aria-label={`Remove ${label(slug) ?? slug}`} onClick={() => remove(i)}>
+                    <XIcon />
+                  </Button>
+                  {sortable.line(i)}
+                </li>
+              );
+            })}
+          </ol>
+          {sortable.status}
+        </>
       )}
       <div className="flex flex-col gap-1.5">
         <div className="min-w-0">
@@ -622,20 +611,20 @@ function TagsInput({ id, value, onChange }: { id: string; value: string[]; onCha
 }
 
 /** Open row, edit, reorder and remove for a list of items, shared by `array` and `blocks`. */
-function useListEditing<T>(value: T[], onChange: (v: unknown) => void) {
+function useListEditing<T>(value: T[], onChange: (v: unknown) => void, path?: string) {
   const [open, setOpen] = useState<number | null>(null);
+  const rowsChanged = use(RowErrorsContext);
   const update = (i: number, item: T) => onChange(value.map((v, j) => (j === i ? item : v)));
-  const move = (i: number, d: number) => {
-    const next = [...value];
-    [next[i], next[i + d]] = [next[i + d], next[i]];
-    onChange(next);
-    if (open === i) setOpen(i + d);
-    else if (open === i + d) setOpen(i);
+  const move = (from: number, to: number) => {
+    onChange(reorder(value, from, to));
+    setOpen(followOpen(open, from, to));
+    if (path) rowsChanged(path, (i) => followOpen(i, from, to));
   };
   const remove = (i: number) => {
     onChange(value.filter((_, j) => j !== i));
     if (open === i) setOpen(null);
     else if (open !== null && open > i) setOpen(open - 1);
+    if (path) rowsChanged(path, (r) => (r === i ? null : r > i ? r - 1 : r));
   };
   return { open, setOpen, update, move, remove };
 }
@@ -654,7 +643,12 @@ function ArrayInput({
   path: string;
   errors: Errors;
 }) {
-  const { open, setOpen, update, move, remove } = useListEditing(value, onChange);
+  const { open, setOpen, update, move, remove } = useListEditing(value, onChange, path);
+  const sortable = useSortable({
+    count: value.length,
+    onMove: move,
+    labelOf: (i) => (field.itemLabel && displayText(value[i][field.itemLabel])) || `Item ${i + 1}`,
+  });
   const add = () => {
     onChange([...value, initialValues(field.fields)]);
     setOpen(value.length);
@@ -662,30 +656,28 @@ function ArrayInput({
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <ul className="w-full divide-y divide-mnml-line overflow-hidden rounded-[8px] border border-mnml-line">
+      <ul className={`w-full divide-y divide-mnml-line rounded-[8px] border border-mnml-line ${sortable.dragging ? 'overflow-visible' : 'overflow-hidden'}`}>
         {value.length === 0 && <li className="px-3 py-2.5 text-mnml-text-mute">No items</li>}
         {value.map((item, i) => {
           const isOpen = open === i;
           const hasError = Object.keys(errors).some((k) => k.startsWith(`${path}.${i}.`));
           return (
-            <li key={i}>
+            <li key={i} {...sortable.rowProps(i)}>
+              {sortable.line(i)}
               <div className={`flex items-center gap-1 pr-1.5 ${isOpen ? 'bg-mnml-panel' : 'hover:bg-mnml-panel'}`}>
+                <span className="pl-1.5">
+                  <DragHandle label={(field.itemLabel && displayText(item[field.itemLabel])) || `Item ${i + 1}`} {...sortable.handleProps(i)} />
+                </span>
                 <button
                   type="button"
                   aria-expanded={isOpen}
                   onClick={() => setOpen(isOpen ? null : i)}
-                  className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
+                  className="flex min-w-0 flex-1 items-center gap-2 py-2 pr-3 pl-1 text-left"
                 >
                   <ChevronRightIcon className={`size-4 shrink-0 text-mnml-text-mute transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                   <span className="truncate">{(field.itemLabel && displayText(item[field.itemLabel])) || `Item ${i + 1}`}</span>
                   {hasError && <span className="shrink-0 text-xs text-mnml-danger">Needs attention</span>}
                 </button>
-                <Button type="button" variant="ghost" size="icon-xs" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
-                  <ArrowUpIcon />
-                </Button>
-                <Button type="button" variant="ghost" size="icon-xs" aria-label="Move down" disabled={i === value.length - 1} onClick={() => move(i, 1)}>
-                  <ArrowDownIcon />
-                </Button>
                 <Button type="button" variant="ghost" size="icon-xs" aria-label="Remove" onClick={() => remove(i)}>
                   <Trash2Icon />
                 </Button>
@@ -709,6 +701,7 @@ function ArrayInput({
           );
         })}
       </ul>
+      {sortable.status}
       <AddRow field={field} count={value.length}>
         {(full) => (
           <Button type="button" variant="outline" size="sm" onClick={add} disabled={full}>
@@ -736,7 +729,15 @@ function BlocksInput({
   path: string;
   errors: Errors;
 }) {
-  const { open, setOpen, update, move, remove } = useListEditing(value, onChange);
+  const { open, setOpen, update, move, remove } = useListEditing(value, onChange, path);
+  const sortable = useSortable({
+    count: value.length,
+    onMove: move,
+    labelOf: (i) => {
+      const def = field.blocks[value[i].kind];
+      return (field.itemLabel && def && field.itemLabel in def.fields && displayText(value[i][field.itemLabel])) || def?.label || `Item ${i + 1}`;
+    },
+  });
   const add = (kind: string) => {
     onChange([...value, { kind, ...initialValues(field.blocks[kind].fields) }]);
     setOpen(value.length);
@@ -746,7 +747,7 @@ function BlocksInput({
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <ul className="w-full divide-y divide-mnml-line overflow-hidden rounded-[8px] border border-mnml-line">
+      <ul className={`w-full divide-y divide-mnml-line rounded-[8px] border border-mnml-line ${sortable.dragging ? 'overflow-visible' : 'overflow-hidden'}`}>
         {value.length === 0 && <li className="px-3 py-3 text-mnml-text-mute">Nothing here yet. Use “{addLabel}” below.</li>}
         {value.map((item, i) => {
           const def = field.blocks[item.kind];
@@ -755,25 +756,23 @@ function BlocksInput({
           const hasError = Object.keys(errors).some((k) => k.startsWith(`${path}.${i}.`));
           const title = field.itemLabel && field.itemLabel in def.fields ? displayText(item[field.itemLabel]) : '';
           return (
-            <li key={i}>
+            <li key={i} {...sortable.rowProps(i)}>
+              {sortable.line(i)}
               <div className={`flex items-center gap-1 pr-1.5 ${isOpen ? 'bg-mnml-panel' : 'hover:bg-mnml-panel'}`}>
+                <span className="pl-1.5">
+                  <DragHandle label={title || def.label} {...sortable.handleProps(i)} />
+                </span>
                 <button
                   type="button"
                   aria-expanded={isOpen}
                   onClick={() => setOpen(isOpen ? null : i)}
-                  className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
+                  className="flex min-w-0 flex-1 items-center gap-2 py-2 pr-3 pl-1 text-left"
                 >
                   <ChevronRightIcon className={`size-4 shrink-0 text-mnml-text-mute transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                   <span className="shrink-0 rounded-[4px] bg-mnml-surface px-1.5 py-0.5 text-xs text-mnml-text-mute">{def.label}</span>
                   <span className="truncate">{title}</span>
                   {hasError && <span className="shrink-0 text-xs text-mnml-danger">Needs attention</span>}
                 </button>
-                <Button type="button" variant="ghost" size="icon-xs" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
-                  <ArrowUpIcon />
-                </Button>
-                <Button type="button" variant="ghost" size="icon-xs" aria-label="Move down" disabled={i === value.length - 1} onClick={() => move(i, 1)}>
-                  <ArrowDownIcon />
-                </Button>
                 <Button type="button" variant="ghost" size="icon-xs" aria-label="Remove" onClick={() => remove(i)}>
                   <Trash2Icon />
                 </Button>
@@ -798,6 +797,7 @@ function BlocksInput({
           );
         })}
       </ul>
+      {sortable.status}
       <AddRow field={field} count={value.length}>
         {(full) => <BlockPicker blocks={field.blocks} label={addLabel} onPick={add} disabled={full} />}
       </AddRow>
