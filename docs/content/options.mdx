@@ -21,6 +21,7 @@ Second argument of `createCms(config, options)`.
 | `editor` | Component from `editorProvider()`: extra extensions and buttons ([Extending the editor](/editor)) |
 | `ui` | Component from `uiProvider()`: your own Button, Select… in the admin ([Custom admin UI](/custom-admin-ui)) |
 | `mcp` | `{ tokens, adminTokens }`: MCP server for AI agents at `<apiPath>/mcp`, with tokens from env and/or the admin ([Agents](/agents)) |
+| `cache` | `true` or `{ revalidate }` (seconds, default 3600): keeps published reads between requests, dropped on each save or delete. Off by default, recommended ([Caching](/reading-content#caching)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
 

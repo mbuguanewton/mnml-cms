@@ -1,9 +1,10 @@
 import 'server-only';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { after } from 'next/server';
 import type { AutosaveInput, AutosaveResult, EntryInput, Invalid, SaveResult } from '../../api.js';
 import { objectSchema, slugSchema, withDefaults } from '../../schema/define.js';
 import type { Change, Context } from '../context.js';
+import { cacheTag } from './cached-store.js';
 import { revOf } from './rev.js';
 import { SINGLETON_SLUG } from './store.js';
 
@@ -34,6 +35,9 @@ export function validate(ctx: Context, input: Pick<EntryInput, 'key' | 'slug' | 
 
 /** Revalidates the site, then runs `onChange` after the response is sent. */
 function changed(ctx: Context, change: Change) {
+  // Before the site's own `revalidate`, which replaces only the default below: the cache must always expire.
+  // `expire: 0` drops it at once; 'max' would serve the old version to the next visitor.
+  if (ctx.options.cache) revalidateTag(cacheTag(change.key), { expire: 0 });
   (ctx.options.revalidate ?? (() => revalidatePath('/', 'layout')))(change);
   const onChange = ctx.options.onChange;
   if (onChange)

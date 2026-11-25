@@ -78,6 +78,21 @@ What to know:
 - **Keep request APIs off public pages.** `cms.isAdmin()`, `cookies()`, `headers()` and `searchParams` make that page dynamic.
 - `/admin` and the API route are always dynamic.
 
+## Caching
+
+Out of the box, a read is de-duplicated within one request only. Every request that reads content queries the database. Turn on `cache` (recommended) to keep published reads between requests:
+
+```ts
+createCms(config, { cache: true }); // or { revalidate: 600 }
+```
+
+- Covers `getSingleton`, `getEntry`, `getEntries`, `listEntries` and `listSlugs`. Each save, publish, unpublish or delete drops what was cached for that collection, so edits show at once.
+- Your own `revalidate` option does not stop that. It only replaces the default `revalidatePath`.
+- Draft Mode, `all: true` and the admin always read fresh data.
+- `revalidate` (seconds, default 3600) is the longest a read lives. Content written outside the CMS (`db:import`, `sync`, SQL, another app) does not drop the cache, so it shows up after this time. Lower it if you write that way often.
+- Next stores each cached value up to about 2 MB. A longer list is read from the database each time. Use `limit`, or `getEntries`, on huge collections.
+- Uses Next's `unstable_cache`, so it doesn't work with `cacheComponents`. Leave `cache` off there.
+
 ## `listEntries` options
 
 | Option | Value |
