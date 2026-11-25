@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.0
+
+### New features
+
+- d7d893b: Drag to reorder in `array`, `blocks` and `references` fields. A grip on each row replaces the up and down arrows: drag it with a mouse, finger or pen, or focus it and use ↑ ↓ Home End (a screen reader hears the new position). An open row stays open while it moves, and a row's validation errors move with it (also when a row is removed). No change to stored data or the API. The "Move up" and "Move down" buttons are gone from the admin. See [Reordering lists](https://mnml-cms.vercel.app/fields#reordering-lists).
+- 18754b4: New `cache` option: `createCms(config, { cache: true })` keeps published reads (`getSingleton`, `getEntry`, `getEntries`, `listEntries`, `listSlugs`) between requests. Each save, publish, unpublish or delete drops what was cached for that collection, even with your own `revalidate`. Draft Mode, `all: true` and the admin read fresh data. `{ revalidate }` sets the longest a read may live (default 3600 seconds), which matters for content written outside the CMS. Off by default; recommended. Built on `unstable_cache`; test it first if your app uses `cacheComponents`. See [Caching](https://mnml-cms.vercel.app/reading-content#caching).
+
 ## 1.7.0
 
 ### New features
