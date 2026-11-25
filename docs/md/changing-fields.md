@@ -1,0 +1,54 @@
+---
+title: "Changing fields"
+description: "What happens when you change a field in mnml.config.ts and entries already hold content: the admin shows the old value beside the new field, and readers return an empty value."
+url: https://mnml-cms.vercel.app/changing-fields
+---
+
+# Changing fields
+
+Entries outlive the config. Change a field (rich text to text, a `select` option removed, text to date) and saved entries still hold values of the old kind.
+
+## In the admin
+
+Open an entry. A field whose stored value no longer fits shows a card instead of its input:
+
+- **Stored**: the old value. Rich text shows as its words, anything else as text or JSON.
+- **As a text field** (the new kind): a suggested value, when there is a sensible one. Edit it before you accept. What you type is checked as that kind of value (a date must be a date).
+- **What is lost**: a line under the suggestion when converting drops something, e.g. "Lost: 1 heading, a list" (rich text to text), "The time of day is dropped" (date and time to date).
+- **Use this**: puts the suggestion (as edited) into the field. Only shown when there is one.
+- **Remove**: drops the old value. The card is replaced by the normal, empty field. Always shown.
+
+A banner at the top counts the fields and links to each card.
+
+- Nothing is saved until every card is settled. Autosave waits ("Resolve 2 fields first") and Publish is off. The old content can't be overwritten by accident.
+- Use this and Remove change the form only. The old value stays in the database until you save.
+- Cards also show inside groups, array items and blocks. The row with a card opens by itself and is marked "Needs attention".
+- It works for the published version, unpublished changes and a draft. The banner names which one you are editing.
+- Empty values (`null`, `''`, `[]`) are fixed without asking: nothing is lost.
+- A field hidden by `showIf` is fixed without asking too. Saving does the same.
+
+## What Use this can convert
+
+| Stored | New field | Becomes |
+| --- | --- | --- |
+| Rich text | `text`, `textarea` | Plain text. Blank line between blocks. `text` joins them on one line. |
+| Text | `richtext` | A paragraph for each line |
+| Text, number | `number` | The number (`"1,250"` is 1250) |
+| `yes` `no` `true` `false` `1` `0` `on` `off` | `boolean` | `true` or `false` |
+| Text | `select` | The option with that value or label, ignoring case |
+| Text, number (milliseconds) | `date`, `datetime` | The date, or the UTC time |
+| Text | `url` | A link (`example.com` gets `https://`) |
+| Text with commas, `;` or lines | `tags`, `references` | A list |
+| Text, number | `reference` | That text, if it is one word |
+
+Everything else has no suggestion: `image`, `array`, `group`, `blocks`, objects. Use Remove.
+
+## On the site
+
+Readers (`getEntry`, `listEntries`, `getEntries`, `getSingleton`) never pass a value that doesn't fit its field. It reads as the field's empty value, and `next dev` logs one warning for each entry and field. A stale value can't break a page for visitors.
+
+- The stored data is not changed. Only the admin's Save changes it.
+- Values that were always valid read as before.
+- The admin, the MCP server and `sync` see what is stored.
+
+Prefer to migrate on purpose? Write a script with `@n3wtou/mnml-cms/sync` ([Moving content](https://mnml-cms.vercel.app/moving-content.md)).

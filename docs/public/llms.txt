@@ -21,6 +21,7 @@ Each page is Markdown at its URL plus `.md`. Every page in one file: https://mnm
 - [SEO](https://mnml-cms.vercel.app/fields/seo.md): The seo() field and seoMetadata() for Next.js metadata.
 - [Reading content](https://mnml-cms.vercel.app/reading-content.md): Read content on your pages: getSingleton, listEntries, getEntry, getEntries, listSlugs, RichText and live preview.
 - [Drafts and publishing](https://mnml-cms.vercel.app/drafts-and-publishing.md): Drafts, autosave, Publish, Discard changes and Unpublish, and what the site shows for each.
+- [Changing fields](https://mnml-cms.vercel.app/changing-fields.md): What happens when you change a field in mnml.config.ts and entries already hold content: the admin shows the old value beside the new field, and readers return an empty value.
 - [Moving content between databases](https://mnml-cms.vercel.app/moving-content.md): Export and import content between databases, rehost images and convert Markdown, with @n3wtou/mnml-cms/sync.
 - [Extending the editor](https://mnml-cms.vercel.app/editor.md): Extend the rich text editor with Tiptap extensions and toolbar tools (defineEditor, editorProvider).
 - [Tables](https://mnml-cms.vercel.app/editor/tables.md): Tables in rich text with @n3wtou/mnml-cms/table.

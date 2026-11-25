@@ -29,7 +29,7 @@ export { localMedia, vercelBlobMedia, type MediaFile, type MediaStorage } from '
  */
 export function createCms<C extends CmsConfig>(config: C, options: CmsOptions<C>) {
   const ctx = createContext(config, options);
-  const { getSingleton, listEntries, getEntry, getEntries, listSlugs } = cachedReaders(ctx.store, options.cache);
+  const { getSingleton, listEntries, getEntry, getEntries, listSlugs } = cachedReaders(ctx.readers, options.cache);
   return {
     config,
     getSingleton,

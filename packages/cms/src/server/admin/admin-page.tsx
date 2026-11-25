@@ -15,6 +15,7 @@ import {
   PlusIcon,
   SettingsIcon,
 } from 'lucide-react';
+import { reviewEntry } from '../../schema/fit.js';
 import { initialValues, plainDef, referenceTargets, withDefaults, type Collection, type CmsConfig, type Singleton } from '../../schema/define.js';
 import { displayText } from '../../schema/text.js';
 import type { EntryStatus } from '../../api.js';
@@ -263,12 +264,16 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
       // A singleton that was never saved starts like a new entry: with the fields' defaults.
       const entry = pending ? (withDefaults(def.fields, pending) as AnyEntry) : (stored ?? initialValues(def.fields));
       const request = await store.getRequest(key, SINGLETON_SLUG);
+      // Stored values that no longer fit a changed field are set aside for the editor to settle (see `reviewEntry`).
+      const review = reviewEntry(def.fields, fieldsOnly(def, entry as AnyEntry));
       return (
         <EntryForm
           banner={request && <AgentRequest schemaKey={key} action={request.action} by={request.by} at={request.at} />}
           schemaKey={key}
           schema={plainDef(def)}
-          initial={fieldsOnly(def, entry as AnyEntry)}
+          initial={review.data}
+          mismatches={review.mismatches}
+          mismatchVersion={pending ? 'draft' : 'saved version'}
           hasPending={pending !== undefined}
           rev={revOf(def, pending ?? stored)}
           derived={derivedRows(def, stored)}
@@ -299,6 +304,8 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const pending = (await store.getPending(key, sub)) as AnyEntry | undefined;
     const title = displayText(entry[def.titleField]) || sub;
     const request = await store.getRequest(key, sub);
+    // Stored values that no longer fit a changed field are set aside for the editor to settle (see `reviewEntry`).
+    const review = reviewEntry(def.fields, fieldsOnly(def, pending ? (withDefaults(def.fields, pending) as AnyEntry) : entry));
     return (
       // key: remount with fresh state after a create redirect
       <EntryForm
@@ -307,7 +314,9 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         schemaKey={key}
         schema={plainDef(def)}
         slug={sub}
-        initial={fieldsOnly(def, pending ? (withDefaults(def.fields, pending) as AnyEntry) : entry)}
+        initial={review.data}
+        mismatches={review.mismatches}
+        mismatchVersion={pending ? 'draft' : status === 'draft' ? 'draft' : 'published version'}
         hasPending={pending !== undefined}
         rev={revOf(def, pending ?? entry)}
         derived={derivedRows(def, entry)}

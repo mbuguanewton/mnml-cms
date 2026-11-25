@@ -74,3 +74,51 @@ describe('getEntries', () => {
     expect(calls).toEqual({ readRows: 0, readRowsBySlug: 0 });
   });
 });
+
+describe('readers for a site (fit: true)', () => {
+  // The config changed since these were saved: `title` held a rich text document, `related` held a string.
+  const stale = [
+    { collection: 'posts', slug: 'old', data: { title: { type: 'doc', content: [] }, related: 'a' }, status: 'published' },
+    { collection: 'posts', slug: 'fine', data: { title: 'Fine', related: ['a'] }, status: 'published' },
+  ];
+  const staleStorage = (): EntryStorage => ({
+    readRow: async (c, s) => stale.find((r) => r.collection === c && r.slug === s),
+    readRows: async (c) => stale.filter((r) => r.collection === c).map((r) => ({ ...r, createdAt: now, updatedAt: now })),
+    upsert: async () => {},
+    insertIfAbsent: async () => true,
+    remove: async () => {},
+  });
+
+  it('read a value that does not fit as the empty value, in every reader', async () => {
+    const store = createStore(cmsConfig, staleStorage(), { fit: true });
+    expect(await store.getEntry('posts', 'old')).toMatchObject({ title: '', related: [] });
+    expect((await store.listEntries('posts')).map((i) => [i.slug, i.entry.title])).toEqual([
+      ['fine', 'Fine'],
+      ['old', ''],
+    ]);
+    expect((await store.getEntries('posts', ['old', 'fine'])).map((e) => e.entry.title)).toEqual(['', 'Fine']);
+  });
+
+  it('leave a valid entry as it is', async () => {
+    expect(await createStore(cmsConfig, staleStorage(), { fit: true }).getEntry('posts', 'fine')).toMatchObject({ title: 'Fine', related: ['a'] });
+  });
+
+  it('warn once for each entry and field in development, and not otherwise', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const store = createStore(cmsConfig, staleStorage(), { fit: true });
+    vi.stubEnv('NODE_ENV', 'production');
+    await store.getEntry('posts', 'old');
+    expect(warn).not.toHaveBeenCalled();
+    vi.stubEnv('NODE_ENV', 'development');
+    await store.getEntry('posts', 'old');
+    await store.getEntry('posts', 'old');
+    expect(warn.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining('posts/old: "title"'), expect.stringContaining('posts/old: "related"')]);
+    warn.mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  it('are not what the admin and the write path use: the plain store keeps the stored value', async () => {
+    const entry = await createStore(cmsConfig, staleStorage()).getEntry('posts', 'old');
+    expect(entry?.title).toEqual({ type: 'doc', content: [] });
+  });
+});
