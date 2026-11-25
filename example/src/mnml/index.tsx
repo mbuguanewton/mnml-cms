@@ -2,10 +2,10 @@ import 'server-only';
 import { DatabaseZapIcon, FileTextIcon, HouseIcon, SettingsIcon, UserIcon } from 'lucide-react';
 import { revalidatePath } from 'next/cache';
 import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next';
-import config from '../mnml.config';
-import { CacheTool } from './admin/cache-tool';
-import { Editor } from './mnml-editor-client';
-import { AdminUi } from './mnml-ui';
+import config from '../../mnml.config';
+import { CacheTool } from '../admin/cache-tool';
+import { Editor } from './editor-client';
+import { AdminUi } from './ui';
 
 export const cms = createCms(config, {
   database: neonDatabase(process.env.DATABASE_URL),
@@ -16,7 +16,7 @@ export const cms = createCms(config, {
   brand: { name: 'Example', logo: { src: '/logo.svg', dark: '/logo-dark.svg' } },
   icons: { settings: <SettingsIcon />, home: <HouseIcon />, authors: <UserIcon />, posts: <FileTextIcon /> },
   editor: Editor,
-  // The site's own Select (shadcn) in the admin; see src/mnml-ui.tsx.
+  // The site's own Select (shadcn) in the admin; see src/mnml/ui.tsx.
   ui: AdminUi,
   // An extra action in the posts list's bar (next to Publish, Unpublish and Delete): runs once for each selected post.
   listActions: {

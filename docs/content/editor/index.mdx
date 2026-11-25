@@ -8,7 +8,7 @@ Add Tiptap extensions and toolbar buttons.
 
 The editor (browser) and `<RichText>` (server) need the same extensions. So the config is a plain module both import (no `'use client'`):
 
-```ts filename="src/mnml-editor.ts"
+```ts filename="src/mnml/editor.ts"
 import { defineEditor, tools } from '@n3wtou/mnml-cms/editor';
 
 export const editor = defineEditor({
@@ -19,10 +19,10 @@ export const editor = defineEditor({
 
 A client file wraps it for the admin:
 
-```tsx filename="src/mnml-editor-client.tsx"
+```tsx filename="src/mnml/editor-client.tsx"
 'use client';
 import { editorProvider } from '@n3wtou/mnml-cms/admin';
-import { editor } from './mnml-editor';
+import { editor } from './editor';
 export const Editor = editorProvider(editor);
 ```
 
@@ -91,7 +91,7 @@ In order: undo/redo, text style menu (paragraph, headings, quote), `format` (bol
 
 Swap StarterKit's plain code block for [`CodeBlockLowlight`](https://tiptap.dev/docs/editor/extensions/nodes/code-block-lowlight) and add a button. To replace or remove a default extension, pass a function: it gets the defaults and returns the full list.
 
-```tsx filename="src/mnml-editor.tsx"
+```tsx filename="src/mnml/editor.tsx"
 import { defineEditor } from '@n3wtou/mnml-cms/editor';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { common, createLowlight } from 'lowlight';

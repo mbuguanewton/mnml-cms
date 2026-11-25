@@ -12,6 +12,8 @@ Let AI agents (Claude Code, Cursor, Zed) edit your content. The CMS has a built-
 - Agents can't delete or discard alone. An editor approves in the admin.
 - Each agent has its own token. The token's scopes decide what it can do.
 
+Keep the setup in your `src/mnml/` folder, beside the rest of the CMS wiring ([Getting started](https://mnml-cms.vercel.app/getting-started.md#where-files-go)): the `mcp` option below goes in `src/mnml/index.ts`.
+
 ## Set up
 
 1. Make a token (32+ random characters):
@@ -28,7 +30,7 @@ Let AI agents (Claude Code, Cursor, Zed) edit your content. The CMS has a built-
 
 3. Turn on the server:
 
-   ```ts
+   ```ts filename="src/mnml/index.ts"
    export const cms = createCms(config, {
      // …
      mcp: {

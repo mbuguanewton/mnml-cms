@@ -42,11 +42,11 @@ export default config({
 });
 ```
 
-**2. Wiring** (`src/mnml.ts`, server only):
+**2. Wiring** (`src/mnml/index.ts`, server only). Keep the CMS files together in `src/mnml/` (`editor.tsx`, `ui.tsx` and so on beside `index.ts`); import it as `@/mnml`:
 
 ```ts
 import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next';
-import config from '../mnml.config';
+import config from '../../mnml.config';
 
 export const cms = createCms(config, {
   database: neonDatabase(process.env.DATABASE_URL), // or any Drizzle Postgres database
