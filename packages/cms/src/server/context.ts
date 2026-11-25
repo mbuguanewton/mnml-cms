@@ -135,6 +135,8 @@ export function createContext<C extends CmsConfig>(config: C, options: CmsOption
     options: { ...options, media },
     storage,
     store: createStore(config, storage),
+    // What the site's pages read: a stored value that doesn't fit its field reads as empty.
+    readers: createStore(config, storage, { fit: true }),
     authAdapter,
     session: sessionCodec(authAdapter ? undefined : (options.auth as PasswordAuth).secret),
     adminPath,

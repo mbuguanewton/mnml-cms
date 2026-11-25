@@ -147,6 +147,7 @@ export const docsIndex: DocsPage[] = [
       "A list page and a post page",
       "Static rendering",
       "Caching",
+      "Stale values",
       "`listEntries` options",
       "`getEntries`",
       "Live preview"
@@ -168,6 +169,17 @@ export const docsIndex: DocsPage[] = [
       "Someone else edited it",
       "On your site",
       "Singletons"
+    ]
+  },
+  {
+    "title": "Changing fields",
+    "url": "https://mnml-cms.vercel.app/changing-fields",
+    "markdown": "https://mnml-cms.vercel.app/changing-fields.md",
+    "description": "What happens when you change a field in mnml.config.ts and entries already hold content: the admin shows the old value beside the new field, and readers return an empty value.",
+    "headings": [
+      "In the admin",
+      "What Use this can convert",
+      "On the site"
     ]
   },
   {

@@ -2,6 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { cookies, draftMode } from 'next/headers';
 import type { EntryStatus } from '../../api.js';
+import { fitDefaults, type Mismatch } from '../../schema/fit.js';
 import { withDefaults, withDerived, type CmsConfig, type CollectionKey, type EntryFor, type SingletonKey } from '../../schema/define.js';
 import type { EntryStorage } from './storage.js';
 
@@ -67,7 +68,27 @@ export function arrange<E>(items: Item<E>[], o: ListOptions<E>) {
   return out.slice(start, o.limit === undefined ? undefined : start + o.limit);
 }
 
-export function createStore<C extends CmsConfig>(config: C, storage: EntryStorage) {
+const warned = new Set<string>();
+/** Once for each entry and field, in development: a stored value didn't fit its field and was read as empty. */
+function warnMisfit(key: string, slug: string, m: Mismatch) {
+  if (process.env.NODE_ENV !== 'development') return;
+  const id = `${key}/${slug}/${m.path}`;
+  if (warned.has(id)) return;
+  warned.add(id);
+  console.warn(
+    `[mnml-cms] ${key}/${slug}: "${m.path}" (${m.label}) holds a value that doesn't fit a ${m.type} field, so it reads as empty. Open the entry in the admin to fix it.`,
+  );
+}
+
+/**
+ * `fit: true` is for the readers a site's pages call: a stored value that doesn't fit its field (the config changed
+ * since it was saved) reads as the field's empty value, so a stale value can't break a page. The admin, the MCP server
+ * and the write path use the store without it and see what is stored.
+ */
+export function createStore<C extends CmsConfig>(config: C, storage: EntryStorage, opts: { fit?: boolean } = {}) {
+  const shape = (key: string, slug: string, data: unknown) =>
+    (opts.fit ? fitDefaults(config[key].fields, data, (m) => warnMisfit(key, slug, m)) : withDefaults(config[key].fields, data)) as never;
+
   // Cached per request, so a page reading the same entry twice hits storage once.
   const readRow = cache((collection: string, slug: string) => storage.readRow(collection, slug));
 
@@ -99,7 +120,7 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
   return {
     async getSingleton<K extends SingletonKey<C>>(this: void, key: K, o?: ReadOptions): Promise<EntryFor<C, K> | null> {
       const data = await readWithDraft(key, SINGLETON_SLUG, o);
-      return data === undefined ? null : (withDerived(config[key], withDefaults(config[key].fields, data)) as EntryFor<C, K>);
+      return data === undefined ? null : (withDerived(config[key], shape(key, SINGLETON_SLUG, data)) as EntryFor<C, K>);
     },
 
     async listEntries<K extends CollectionKey<C>>(
@@ -129,13 +150,13 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
           });
         }
       }
-      const withData = [...items.values()].map((i) => ({ ...i, entry: withDerived(config[key], withDefaults(config[key].fields, i.entry)) as E }));
+      const withData = [...items.values()].map((i) => ({ ...i, entry: withDerived(config[key], shape(key, i.slug, i.entry)) as E }));
       return arrange(withData, o);
     },
 
     async getEntry<K extends CollectionKey<C>>(this: void, key: K, slug: string, o?: ReadOptions): Promise<EntryFor<C, K> | null> {
       const data = await readWithDraft(key, slug, o);
-      return data === undefined ? null : (withDerived(config[key], withDefaults(config[key].fields, data)) as EntryFor<C, K>);
+      return data === undefined ? null : (withDerived(config[key], shape(key, slug, data)) as EntryFor<C, K>);
     },
 
     /**
@@ -159,7 +180,7 @@ export function createStore<C extends CmsConfig>(config: C, storage: EntryStorag
         const row = bySlug.get(slug);
         const data =
           p?.key === key && p.slug === slug ? await readWithDraft(key, slug, o) : row && (row.status === 'published' || o?.all) ? row.data : undefined;
-        if (data !== undefined) out.push({ slug, entry: withDerived(config[key], withDefaults(config[key].fields, data)) as EntryFor<C, K> });
+        if (data !== undefined) out.push({ slug, entry: withDerived(config[key], shape(key, slug, data)) as EntryFor<C, K> });
       }
       return out;
     },

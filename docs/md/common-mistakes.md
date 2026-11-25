@@ -18,6 +18,8 @@ url: https://mnml-cms.vercel.app/common-mistakes
 - Blank inputs are stored as `null` for `date`, `url`, `number`, `select` and `reference`. `boolean` ignores `required`.
 - A `reference` stores a slug only. Read it with `getEntry`. Nothing checks that the entry still exists.
 
+- Changing a field's type while entries hold content is safe: the admin shows the old value and asks. See [Changing fields](https://mnml-cms.vercel.app/changing-fields.md).
+
 ## Blocks and conditional fields
 
 - `kind` is reserved in blocks. A block can't have a field named `kind`.

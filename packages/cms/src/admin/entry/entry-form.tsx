@@ -12,6 +12,8 @@ import { Tooltip } from '../ui/tooltip.js';
 import { useAdmin } from '../shell/context.js';
 import { FieldRenderer, RefOptionsProvider, RowErrorsContext, type RefOptions } from './fields.js';
 import { remapRowErrors } from './sortable.js';
+import { MismatchBanner, MismatchContext } from './mismatch-panel.js';
+import { fieldLabelAt, setIn, type Mismatch } from '../../schema/fit.js';
 import { EntryContext } from './entry-context.js';
 import { LivePreview } from './live-preview.js';
 import { AdminHeader, type Crumb } from '../shell/header.js';
@@ -41,6 +43,10 @@ type Props = {
   actions?: React.ReactNode;
   /** Shown under the header, e.g. an agent's request waiting for approval. */
   banner?: React.ReactNode;
+  /** Stored values that don't fit their field (the config changed): set aside, and settled by the editor before saving. */
+  mismatches?: Mismatch[];
+  /** Which version they are in, for the banner: 'draft' or 'published version'. */
+  mismatchVersion?: string;
 };
 
 export function EntryForm({
@@ -57,6 +63,8 @@ export function EntryForm({
   refOptions = {},
   actions,
   banner,
+  mismatches = [],
+  mismatchVersion = 'entry',
 }: Props) {
   const { post, confirm, toast } = useAdmin();
   const router = useRouter();
@@ -69,6 +77,16 @@ export function EntryForm({
   const [slug, setSlug] = useState(existingSlug ?? '');
   const [slugEdited, setSlugEdited] = useState(false);
   const [result, setResult] = useState<SaveResult | null>(null);
+  // Stored values that don't fit their field are shown as cards until each is settled. The form holds the field's empty
+  // value meanwhile, so nothing is saved over them: autosave and Publish wait.
+  const [unsettled, setUnsettled] = useState(() => Object.fromEntries(mismatches.map((m) => [m.path, m])));
+  const [settled, setSettled] = useState(0);
+  const blocked = Object.keys(unsettled).length;
+  const resolve = (path: string, use?: { value: unknown }) => {
+    if (use) setData((d) => setIn(d, path, use.value) as typeof d);
+    setUnsettled(({ [path]: _gone, ...rest }) => rest);
+    setSettled((n) => n + 1);
+  };
   // A notice from the page (e.g. "Created" after the redirect) shows once.
   const noticed = useRef(false);
   useEffect(() => {
@@ -79,8 +97,11 @@ export function EntryForm({
   const [pending, startTransition] = useTransition();
   const errors = result && !result.ok ? result.errors : {};
   // Errors are keyed by row index: when a list's rows move or go, they move with them.
-  const rowsChanged = (prefix: string, map: (i: number) => number | null) =>
+  const rowsChanged = (prefix: string, map: (i: number) => number | null) => {
     setResult((r) => (r && !r.ok ? { ...r, errors: remapRowErrors(r.errors, prefix, map) } : r));
+    // The cards of unsettled values follow their rows, and go with a row that is removed.
+    setUnsettled((u) => Object.fromEntries(Object.entries(remapRowErrors(u, prefix, map)).map(([path, m]) => [path, { ...m, path }])));
+  };
 
   // Like Sanity's field groups: an "All fields" tab, plus one tab per `group` field that shows only
   // that group. Fields outside any group are under "General". No tab bar without a group.
@@ -114,7 +135,7 @@ export function EntryForm({
   };
 
   // Dirty = differs from what was last loaded or saved. Save stays disabled until then.
-  const snapshot = () => JSON.stringify([data, slug]);
+  const snapshot = () => JSON.stringify([data, slug, settled]);
   const [baseline, setBaseline] = useState(snapshot);
   const dirty = snapshot() !== baseline;
 
@@ -132,7 +153,7 @@ export function EntryForm({
   const unsaved = autosave && current !== baseline;
 
   useEffect(() => {
-    if (!autosave || auto.kind === 'saving' || auto.kind === 'conflict' || current === baseline || current === failed.current) return;
+    if (!autosave || blocked > 0 || auto.kind === 'saving' || auto.kind === 'conflict' || current === baseline || current === failed.current) return;
     const t = setTimeout(async () => {
       setAuto({ kind: 'saving' });
       try {
@@ -151,7 +172,7 @@ export function EntryForm({
           // Incomplete or invalid: keep editing, nothing is saved until it is valid.
           failed.current = current;
           const [path, msg] = Object.entries(r.errors)[0] ?? [];
-          setAuto({ kind: 'paused', message: path ? `${path.replace('$', '')}: ${msg}` : r.message });
+          setAuto({ kind: 'paused', message: path ? `${path.startsWith('$') ? path.slice(1) : fieldLabelAt(fields, path, data)}: ${msg}` : r.message });
         }
       } catch (e) {
         failed.current = current;
@@ -162,7 +183,7 @@ export function EntryForm({
     return () => clearTimeout(t);
     // `input` and `post` are recreated every render; the edit itself (`current`) is what should restart the timer.
     // oxlint-disable-next-line react/exhaustive-deps
-  }, [autosave, auto.kind, current, baseline, rev]);
+  }, [autosave, blocked, auto.kind, current, baseline, rev]);
 
   // Edits that aren't saved yet are lost on leaving.
   useEffect(() => {
@@ -184,6 +205,7 @@ export function EntryForm({
   // A new entry has nothing to autosave into yet: Create draft stores it off the site. A singleton without
   // `drafts` just saves (publishes).
   const save = (action: SaveAction) => {
+    if (blocked > 0) return;
     const sent = snapshot();
     startTransition(async () => {
       const r = await post<SaveResult>('save', { ...input(), action: isCollection ? action : undefined });
@@ -231,13 +253,17 @@ export function EntryForm({
   };
   // Autosave progress in the header. Manual saves, conflicts and errors are toasts; the reason a save is paused
   // stays here (in full on wide screens) since it lasts until the form is fixed.
-  const note = !autosave
-    ? null
-    : 'message' in auto
-      ? { ok: false, short: 'Not saved', text: auto.kind === 'paused' ? `Not saved: ${auto.message}` : 'Not saved' }
-      : auto.kind === 'idle'
+  const waiting = `Resolve ${blocked === 1 ? '1 field' : `${blocked} fields`} first`;
+  const note =
+    blocked > 0
+      ? { ok: false, short: 'Resolve fields', text: waiting }
+      : !autosave
         ? null
-        : { ok: true, short: auto.kind === 'saving' ? 'Saving…' : 'Saved', text: auto.kind === 'saving' ? 'Saving…' : 'Saved' };
+        : 'message' in auto
+          ? { ok: false, short: 'Not saved', text: auto.kind === 'paused' ? `Not saved: ${auto.message}` : 'Not saved' }
+          : auto.kind === 'idle'
+            ? null
+            : { ok: true, short: auto.kind === 'saving' ? 'Saving…' : 'Saved', text: auto.kind === 'saving' ? 'Saving…' : 'Saved' };
   // For the fullscreen editor's header: the entry's title and save state.
   const statusText = note?.short ?? (isCollection && mode === 'update' ? dotLabels[dotState] : null);
   const entryInfo = {
@@ -251,7 +277,7 @@ export function EntryForm({
   };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pending) return;
+    if (pending || blocked > 0) return;
     if (showPublish ? canPublish : dirty) save(showPublish || !isCollection ? 'publish' : 'draft');
   };
 
@@ -281,138 +307,141 @@ export function EntryForm({
   return (
     <RefOptionsProvider value={refOptions}>
       <RowErrorsContext value={rowsChanged}>
-        <EntryContext value={entryInfo}>
-          <form onSubmit={submit} className="flex flex-1 flex-col">
-            <AdminHeader crumbs={crumbs}>
-              {isCollection && mode === 'update' && (
-                <Tooltip content={dotLabels[dotState]} side="bottom">
-                  <StatusDot state={dotState} focusable className="mx-1" />
-                </Tooltip>
-              )}
-              <span role="status" className={`min-w-0 truncate text-sm ${note?.ok ? 'text-mnml-text-soft' : 'text-mnml-danger'}`}>
-                {note && (
-                  <>
-                    <span className="sm:hidden">{note.short}</span>
-                    <span className="max-sm:hidden">{note.text}</span>
-                  </>
+        <MismatchContext value={{ open: unsettled, resolve }}>
+          <EntryContext value={entryInfo}>
+            <form onSubmit={submit} className="flex flex-1 flex-col">
+              <AdminHeader crumbs={crumbs}>
+                {isCollection && mode === 'update' && (
+                  <Tooltip content={dotLabels[dotState]} side="bottom">
+                    <StatusDot state={dotState} focusable className="mx-1" />
+                  </Tooltip>
                 )}
-              </span>
-              {canPreview && (
-                <Button
-                  type="button"
-                  variant={showPreview ? 'secondary' : 'outline'}
-                  aria-pressed={showPreview}
-                  className="max-lg:hidden"
-                  onClick={() => setPreviewHidden(showPreview)}
-                >
-                  <EyeIcon /> Preview
-                </Button>
-              )}
-              {draftable ? (
-                <>
-                  {!autosave && (
-                    <Button type="button" variant="outline" disabled={pending || !dirty} onClick={() => save('draft')}>
-                      Create draft
-                    </Button>
+                <span role="status" className={`min-w-0 truncate text-sm ${note?.ok ? 'text-mnml-text-soft' : 'text-mnml-danger'}`}>
+                  {note && (
+                    <>
+                      <span className="sm:hidden">{note.short}</span>
+                      <span className="max-sm:hidden">{note.text}</span>
+                    </>
                   )}
-                  {showPublish && (
-                    <Button type="submit" disabled={pending || auto.kind === 'saving' || !canPublish} className="px-4">
-                      {pending ? 'Saving…' : 'Publish'}
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <Button type="submit" disabled={pending || !dirty} className="px-4">
-                  {pending ? 'Saving…' : 'Save'}
-                </Button>
-              )}
-              {((isCollection && published) || (autosave && published && changes) || actions) && (
-                <ActionMenu>
-                  {autosave && published && changes && (
-                    <MenuItem disabled={pending} onClick={discard}>
-                      <Undo2Icon /> Discard changes
-                    </MenuItem>
-                  )}
-                  {isCollection && published && (
-                    <MenuItem disabled={pending} onClick={() => save('unpublish')}>
-                      <FileXIcon /> Unpublish
-                    </MenuItem>
-                  )}
-                  {actions}
-                </ActionMenu>
-              )}
-            </AdminHeader>
-            {banner}
-            <div className="flex flex-1">
-              <div className={showPreview ? 'w-[min(36rem,45%)] shrink-0' : 'w-full'}>
-                <div className={`${bodyClass} flex flex-col gap-6`}>
-                  {tabs.length > 0 && (
-                    <div className="sticky top-14 z-10 -mx-6 border-b border-mnml-line bg-mnml-bg/90 px-6 py-3 backdrop-blur">
-                      <div
-                        role="tablist"
-                        aria-label="Field groups"
-                        className="flex gap-1 overflow-x-auto"
-                        onKeyDown={(e) => {
-                          const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-                          if (!step) return;
-                          e.preventDefault();
-                          const next = tabs[(tabs.findIndex((t) => t.id === tab) + step + tabs.length) % tabs.length];
-                          setTab(next.id);
-                          e.currentTarget.querySelector<HTMLElement>(`[data-tab="${CSS.escape(next.id)}"]`)?.focus();
-                        }}
-                      >
-                        {tabs.map((t) => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            role="tab"
-                            data-tab={t.id}
-                            aria-selected={tab === t.id}
-                            tabIndex={tab === t.id ? 0 : -1}
-                            onClick={() => setTab(t.id)}
-                            className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-mnml-primary/40 ${
-                              tab === t.id ? 'bg-mnml-primary text-mnml-on-primary' : 'mnml-state text-mnml-text-soft'
-                            }`}
-                          >
-                            {t.label}
-                            {errorTabs.has(t.id) && (
-                              <span role="img" aria-label="Has errors" className="size-1.5 rounded-full bg-mnml-danger ring-2 ring-mnml-bg/60" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {Object.entries(fields)
-                    .filter(([k]) => inTab(k))
-                    .map(([k, f]) => (
-                      <div key={k} className="contents">
-                        <FieldRenderer field={f} value={data[k]} onChange={(v) => set(k, v)} path={k} errors={errors} siblings={data} />
-                        {def.kind === 'collection' && k === def.titleField && slugField}
-                        {derived
-                          .filter((d) => d.after === k)
-                          .map((d) => (
-                            <DerivedRow key={d.key} label={d.label} value={d.value} />
+                </span>
+                {canPreview && (
+                  <Button
+                    type="button"
+                    variant={showPreview ? 'secondary' : 'outline'}
+                    aria-pressed={showPreview}
+                    className="max-lg:hidden"
+                    onClick={() => setPreviewHidden(showPreview)}
+                  >
+                    <EyeIcon /> Preview
+                  </Button>
+                )}
+                {draftable ? (
+                  <>
+                    {!autosave && (
+                      <Button type="button" variant="outline" disabled={pending || blocked > 0 || !dirty} onClick={() => save('draft')}>
+                        Create draft
+                      </Button>
+                    )}
+                    {showPublish && (
+                      <Button type="submit" disabled={pending || blocked > 0 || auto.kind === 'saving' || !canPublish} className="px-4">
+                        {pending ? 'Saving…' : 'Publish'}
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <Button type="submit" disabled={pending || blocked > 0 || !dirty} className="px-4">
+                    {pending ? 'Saving…' : 'Save'}
+                  </Button>
+                )}
+                {((isCollection && published) || (autosave && published && changes) || actions) && (
+                  <ActionMenu>
+                    {autosave && published && changes && (
+                      <MenuItem disabled={pending} onClick={discard}>
+                        <Undo2Icon /> Discard changes
+                      </MenuItem>
+                    )}
+                    {isCollection && published && (
+                      <MenuItem disabled={pending} onClick={() => save('unpublish')}>
+                        <FileXIcon /> Unpublish
+                      </MenuItem>
+                    )}
+                    {actions}
+                  </ActionMenu>
+                )}
+              </AdminHeader>
+              {banner}
+              <MismatchBanner items={Object.values(unsettled)} version={mismatchVersion} />
+              <div className="flex flex-1">
+                <div className={showPreview ? 'w-[min(36rem,45%)] shrink-0' : 'w-full'}>
+                  <div className={`${bodyClass} flex flex-col gap-6`}>
+                    {tabs.length > 0 && (
+                      <div className="sticky top-14 z-10 -mx-6 border-b border-mnml-line bg-mnml-bg/90 px-6 py-3 backdrop-blur">
+                        <div
+                          role="tablist"
+                          aria-label="Field groups"
+                          className="flex gap-1 overflow-x-auto"
+                          onKeyDown={(e) => {
+                            const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+                            if (!step) return;
+                            e.preventDefault();
+                            const next = tabs[(tabs.findIndex((t) => t.id === tab) + step + tabs.length) % tabs.length];
+                            setTab(next.id);
+                            e.currentTarget.querySelector<HTMLElement>(`[data-tab="${CSS.escape(next.id)}"]`)?.focus();
+                          }}
+                        >
+                          {tabs.map((t) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              role="tab"
+                              data-tab={t.id}
+                              aria-selected={tab === t.id}
+                              tabIndex={tab === t.id ? 0 : -1}
+                              onClick={() => setTab(t.id)}
+                              className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-mnml-primary/40 ${
+                                tab === t.id ? 'bg-mnml-primary text-mnml-on-primary' : 'mnml-state text-mnml-text-soft'
+                              }`}
+                            >
+                              {t.label}
+                              {errorTabs.has(t.id) && (
+                                <span role="img" aria-label="Has errors" className="size-1.5 rounded-full bg-mnml-danger ring-2 ring-mnml-bg/60" />
+                              )}
+                            </button>
                           ))}
+                        </div>
                       </div>
-                    ))}
-                  {(tab === ALL || tab === GENERAL) &&
-                    derived.filter((d) => !d.after || !(d.after in fields)).map((d) => <DerivedRow key={d.key} label={d.label} value={d.value} />)}
+                    )}
+                    {Object.entries(fields)
+                      .filter(([k]) => inTab(k))
+                      .map(([k, f]) => (
+                        <div key={k} className="contents">
+                          <FieldRenderer field={f} value={data[k]} onChange={(v) => set(k, v)} path={k} errors={errors} siblings={data} />
+                          {def.kind === 'collection' && k === def.titleField && slugField}
+                          {derived
+                            .filter((d) => d.after === k)
+                            .map((d) => (
+                              <DerivedRow key={d.key} label={d.label} value={d.value} />
+                            ))}
+                        </div>
+                      ))}
+                    {(tab === ALL || tab === GENERAL) &&
+                      derived.filter((d) => !d.after || !(d.after in fields)).map((d) => <DerivedRow key={d.key} label={d.label} value={d.value} />)}
+                  </div>
                 </div>
+                {showPreview && (
+                  <div className="sticky top-14 flex h-[calc(100dvh-3.5rem)] min-w-0 flex-1">
+                    <LivePreview
+                      input={input()}
+                      onClose={() => setPreviewHidden(true)}
+                      autosaveVersion={autosave ? version : undefined}
+                      pausedMessage={autosave && auto.kind === 'paused' ? auto.message : undefined}
+                    />
+                  </div>
+                )}
               </div>
-              {showPreview && (
-                <div className="sticky top-14 flex h-[calc(100dvh-3.5rem)] min-w-0 flex-1">
-                  <LivePreview
-                    input={input()}
-                    onClose={() => setPreviewHidden(true)}
-                    autosaveVersion={autosave ? version : undefined}
-                    pausedMessage={autosave && auto.kind === 'paused' ? auto.message : undefined}
-                  />
-                </div>
-              )}
-            </div>
-          </form>
-        </EntryContext>
+            </form>
+          </EntryContext>
+        </MismatchContext>
       </RowErrorsContext>
     </RefOptionsProvider>
   );

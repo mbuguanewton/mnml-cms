@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, use, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { createContext, use, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, CrosshairIcon, ImagePlusIcon, ImagesIcon, PlusIcon, Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import type { JSONContent } from '@tiptap/core';
 import {
@@ -21,12 +21,14 @@ import { EntryCombobox } from './entry-combobox.js';
 import { CreateReference, type CreatedRef } from './reference-panel.js';
 import { followOpen, reorder } from './sortable.js';
 import { DragHandle, useSortable } from './use-sortable.js';
+import { MismatchCard, MismatchContext } from './mismatch-panel.js';
 import { useMenu } from '../shell/action-menu.js';
 import { Button } from '../ui/button.js';
 import { Checkbox } from '../ui/checkbox.js';
 import { DatePicker } from '../ui/date-picker.js';
 import { Input as TextInput, Textarea } from '../ui/input.js';
 import { Select } from '../ui/select.js';
+import { placePopover } from '../ui/position.js';
 import { Tooltip } from '../ui/tooltip.js';
 import { mediaName } from '../shell/media-name.js';
 import { useAdmin } from '../shell/context.js';
@@ -51,6 +53,9 @@ export const RowErrorsContext = createContext<RowMap>(() => {});
 
 export function FieldRenderer({ field, value, onChange, path, errors, siblings }: RenderProps) {
   if (!isVisible(field, siblings)) return null;
+  // A stored value that doesn't fit this field: the card (old value, suggestion, Remove) stands in for the input.
+  const mismatch = use(MismatchContext).open[path];
+  if (mismatch) return <MismatchCard mismatch={mismatch} />;
   const error = errors[path];
   const id = `f-${path}`;
   if (field.type === 'group') {
@@ -612,7 +617,12 @@ function TagsInput({ id, value, onChange }: { id: string; value: string[]; onCha
 
 /** Open row, edit, reorder and remove for a list of items, shared by `array` and `blocks`. */
 function useListEditing<T>(value: T[], onChange: (v: unknown) => void, path?: string) {
-  const [open, setOpen] = useState<number | null>(null);
+  // The first row holding a stored value that doesn't fit starts open: its card is inside.
+  const unsettledPaths = Object.keys(use(MismatchContext).open);
+  const [open, setOpen] = useState<number | null>(() => {
+    const i = path ? value.findIndex((_, r) => unsettledPaths.some((k) => k.startsWith(`${path}.${r}.`))) : -1;
+    return i >= 0 ? i : null;
+  });
   const rowsChanged = use(RowErrorsContext);
   const update = (i: number, item: T) => onChange(value.map((v, j) => (j === i ? item : v)));
   const move = (from: number, to: number) => {
@@ -626,7 +636,7 @@ function useListEditing<T>(value: T[], onChange: (v: unknown) => void, path?: st
     else if (open !== null && open > i) setOpen(open - 1);
     if (path) rowsChanged(path, (r) => (r === i ? null : r > i ? r - 1 : r));
   };
-  return { open, setOpen, update, move, remove };
+  return { open, setOpen, update, move, remove, unsettled: unsettledPaths };
 }
 
 // Keystatic-style list: one row per item, expanded inline one at a time.
@@ -643,7 +653,7 @@ function ArrayInput({
   path: string;
   errors: Errors;
 }) {
-  const { open, setOpen, update, move, remove } = useListEditing(value, onChange, path);
+  const { open, setOpen, update, move, remove, unsettled } = useListEditing(value, onChange, path);
   const sortable = useSortable({
     count: value.length,
     onMove: move,
@@ -660,7 +670,7 @@ function ArrayInput({
         {value.length === 0 && <li className="px-3 py-2.5 text-mnml-text-mute">No items</li>}
         {value.map((item, i) => {
           const isOpen = open === i;
-          const hasError = Object.keys(errors).some((k) => k.startsWith(`${path}.${i}.`));
+          const hasError = [...Object.keys(errors), ...unsettled].some((k) => k.startsWith(`${path}.${i}.`));
           return (
             <li key={i} {...sortable.rowProps(i)}>
               {sortable.line(i)}
@@ -729,7 +739,7 @@ function BlocksInput({
   path: string;
   errors: Errors;
 }) {
-  const { open, setOpen, update, move, remove } = useListEditing(value, onChange, path);
+  const { open, setOpen, update, move, remove, unsettled } = useListEditing(value, onChange, path);
   const sortable = useSortable({
     count: value.length,
     onMove: move,
@@ -753,7 +763,7 @@ function BlocksInput({
           const def = field.blocks[item.kind];
           if (!def) return null;
           const isOpen = open === i;
-          const hasError = Object.keys(errors).some((k) => k.startsWith(`${path}.${i}.`));
+          const hasError = [...Object.keys(errors), ...unsettled].some((k) => k.startsWith(`${path}.${i}.`));
           const title = field.itemLabel && field.itemLabel in def.fields ? displayText(item[field.itemLabel]) : '';
           return (
             <li key={i} {...sortable.rowProps(i)}>
@@ -838,6 +848,30 @@ function BlockPicker({
   const needle = q.trim().toLowerCase();
   const shown = all.filter(([kind, b]) => !needle || `${b.label} ${kind} ${b.description ?? ''}`.toLowerCase().includes(needle));
 
+  // The list is a popover (top layer, fixed): it doesn't change the page's height, flips above the button and shrinks to
+  // the room it has. Placed again when the search changes its height.
+  useLayoutEffect(() => {
+    const el = popup.current;
+    const anchor = root.current?.firstElementChild as HTMLElement | null;
+    if (!open || !el || !anchor) return;
+    if (!el.matches(':popover-open')) el.showPopover();
+    placePopover(el, anchor, { align: 'start', fit: true });
+  }, [open, root, shown.length]);
+  useEffect(() => {
+    if (!open) return;
+    const follow = (e: Event) => {
+      const anchor = root.current?.firstElementChild as HTMLElement | null;
+      if (popup.current && anchor && !(e.target instanceof Node && popup.current.contains(e.target)))
+        placePopover(popup.current, anchor, { align: 'start', fit: true });
+    };
+    window.addEventListener('scroll', follow, true);
+    window.addEventListener('resize', follow);
+    return () => {
+      window.removeEventListener('scroll', follow, true);
+      window.removeEventListener('resize', follow);
+    };
+  }, [open, root]);
+
   // Land on the search box (or the first block) so the keyboard works straight away.
   useEffect(() => {
     if (open) popup.current?.querySelector<HTMLElement>('input, button')?.focus();
@@ -876,8 +910,9 @@ function BlockPicker({
         <div
           ref={popup}
           role="menu"
+          popover="manual"
           onKeyDown={onKeyDown}
-          className="absolute left-0 top-full z-20 mt-1 w-72 max-w-[calc(100vw-3rem)] rounded-[8px] border border-mnml-line bg-mnml-bg p-1 shadow-lg"
+          className="flex w-72 flex-col rounded-[8px] border border-mnml-line bg-mnml-bg p-1 text-mnml-text shadow-lg [font-family:ui-sans-serif,system-ui,sans-serif]"
         >
           {all.length > SEARCH_FROM && (
             <TextInput
@@ -894,7 +929,7 @@ function BlockPicker({
               }}
             />
           )}
-          <div className="flex max-h-72 flex-col overflow-y-auto">
+          <div className="flex max-h-72 min-h-0 flex-col overflow-y-auto">
             {shown.length === 0 && <p className="px-2.5 py-2 text-mnml-text-mute">No match</p>}
             {shown.map(([kind, b]) => (
               <button

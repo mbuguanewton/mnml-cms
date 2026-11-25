@@ -93,6 +93,10 @@ createCms(config, { cache: true }); // or { revalidate: 600 }
 - Next stores each cached value up to about 2 MB. A longer list is read from the database each time. Use `limit`, or `getEntries`, on huge collections.
 - Built on Next's `unstable_cache`, which Next replaced with `use cache`. On an app with `cacheComponents` on, test it before relying on it.
 
+## Stale values
+
+A stored value that no longer fits its field (the config changed since it was saved) reads as the field's empty value, so a page never gets a value of the wrong kind. `next dev` logs a warning for each one. Editors settle it in the admin ([Changing fields](https://mnml-cms.vercel.app/changing-fields.md)).
+
 ## `listEntries` options
 
 | Option | Value |
