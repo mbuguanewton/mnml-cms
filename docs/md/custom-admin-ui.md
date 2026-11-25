@@ -14,7 +14,7 @@ Slots: `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `DatePicke
 
 A `'use client'` file maps your components to the slots:
 
-```tsx filename="src/mnml-ui.tsx"
+```tsx filename="src/mnml/ui.tsx"
 'use client';
 import { uiProvider, type UiSlotProps } from '@n3wtou/mnml-cms/admin';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -43,8 +43,8 @@ export const AdminUi = uiProvider({ Select: AdminSelect });
 
 Pass it to `createCms`:
 
-```tsx filename="src/mnml.tsx"
-import { AdminUi } from './mnml-ui';
+```tsx filename="src/mnml/index.tsx"
+import { AdminUi } from './ui';
 
 export const cms = createCms(config, { /* … */ ui: AdminUi });
 ```

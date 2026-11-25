@@ -25,6 +25,30 @@ Start: [Getting started](https://mnml-cms.vercel.app/getting-started.md). Full a
 
 # Getting started
 
+## Where files go
+
+```text
+mnml.config.ts        content model (plain data)
+src/mnml/
+  index.ts            createCms(...), exports `cms`
+  editor.tsx          rich-text editor setup, shared with the site
+  editor-client.tsx   the editor for the admin ('use client')
+  ui.tsx              your own admin controls
+```
+
+Only `index.ts` is needed to start. Add the rest when you use them (see [Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md) and [Editor](https://mnml-cms.vercel.app/editor.md)).
+
+## Help your AI agent
+
+Add to your `AGENTS.md` or `CLAUDE.md`:
+
+```md
+Read node_modules/@n3wtou/mnml-cms/AGENTS.md before changing anything that uses mnml-cms.
+```
+
+- Every docs page is Markdown at its URL plus `.md`, e.g. [/agents.md](https://mnml-cms.vercel.app/agents.md). Index: [llms.txt](https://mnml-cms.vercel.app/llms.txt). Everything: [llms-full.txt](https://mnml-cms.vercel.app/llms-full.txt).
+- With the [MCP server](https://mnml-cms.vercel.app/agents.md) on, the `docs` tool hands agents the right `.md` links.
+
 ## Install
 
 ```sh
@@ -65,11 +89,11 @@ export default config({
 
 ## 2. Create the CMS
 
-Server only.
+Server only. Keep everything that sets up the CMS in one `src/mnml/` folder: `index.ts` exports `cms`, and the files you add later sit beside it, named for what they are (`editor.tsx`, `editor-client.tsx`, `ui.tsx`, a custom node's `youtube.ts`). Import it as `@/mnml`.
 
-```ts filename="src/mnml.ts"
+```ts filename="src/mnml/index.ts"
 import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next';
-import config from '../mnml.config';
+import config from '../../mnml.config';
 
 export const cms = createCms(config, {
   database: neonDatabase(process.env.DATABASE_URL), // or any Drizzle Postgres database
@@ -118,16 +142,223 @@ export default defineConfig({ dialect: 'postgresql', schema: './node_modules/@n3
 
 Run `drizzle-kit push`. Scripts import the same table from `@n3wtou/mnml-cms/schema`.
 
-## Help your AI agent
+---
 
-Add to your `AGENTS.md` or `CLAUDE.md`:
+<!-- https://mnml-cms.vercel.app/agents.md -->
 
-```md
-Read node_modules/@n3wtou/mnml-cms/AGENTS.md before changing anything that uses mnml-cms.
+# Agents (MCP)
+
+Let AI agents (Claude Code, Cursor, Zed) edit your content. The CMS has a built-in MCP server. Agents use the same checks as the admin.
+
+- Agents write drafts. Nothing goes live until `publish`.
+- Agents can't delete or discard alone. An editor approves in the admin.
+- Each agent has its own token. The token's scopes decide what it can do.
+
+Keep the setup in your `src/mnml/` folder, beside the rest of the CMS wiring ([Getting started](https://mnml-cms.vercel.app/getting-started.md#where-files-go)): the `mcp` option below goes in `src/mnml/index.ts`.
+
+## Set up
+
+1. Make a token (32+ random characters):
+
+   ```sh
+   openssl rand -hex 32
+   ```
+
+2. Put it in your env: `.env.local` locally, your host's settings in production.
+
+   ```sh
+   MNML_AGENT_TOKEN=…
+   ```
+
+3. Turn on the server:
+
+   ```ts filename="src/mnml/index.ts"
+   export const cms = createCms(config, {
+     // …
+     mcp: {
+       tokens: [{ name: 'claude', token: process.env.MNML_AGENT_TOKEN, scopes: ['read', 'draft'] }],
+     },
+   });
+   ```
+
+Done. The server lives at `<apiPath>/mcp`, e.g. `https://your-site.com/api/mnml/mcp`. Your route file (`export const { GET, POST } = cms.handlers`) already serves it.
+
+- No token set (and no `adminTokens`): the route is off (404).
+- Token under 32 characters: ignored, with a warning in the log.
+
+## Tokens
+
+The agent sends `Authorization: Bearer <token>`. It must match the value in your site's env exactly.
+
+| Option | What it does |
+| --- | --- |
+| `token` | The secret, e.g. `process.env.MNML_AGENT_TOKEN`. Unset: ignored. |
+| `name` | Shown as `change.by` in `onChange`, and on approval requests. Default `'agent'`. |
+| `scopes` | What the token can do. Default `['read', 'draft']`. |
+| `collections` | Only these keys, e.g. `['posts']`. Default: all. |
+
+One token per agent or person. Then each has its own scopes and name, and you can revoke one alone. To rotate, change the value on the site and in the agent.
+
+```ts
+mcp: {
+  tokens: [
+    { name: 'newton', token: process.env.MNML_TOKEN_NEWTON, scopes: ['read', 'draft', 'publish'] },
+    { name: 'blog-bot', token: process.env.MNML_TOKEN_BOT, collections: ['posts'] },
+  ],
+},
 ```
 
-- Every docs page is Markdown at its URL plus `.md`, e.g. [/agents.md](https://mnml-cms.vercel.app/agents.md). Index: [llms.txt](https://mnml-cms.vercel.app/llms.txt). Everything: [llms-full.txt](https://mnml-cms.vercel.app/llms-full.txt).
-- With the [MCP server](https://mnml-cms.vercel.app/agents.md) on, the `docs` tool hands agents the right `.md` links.
+### Tokens from the admin
+
+Let editors make tokens in the admin instead of env vars:
+
+```ts
+mcp: { adminTokens: true },
+```
+
+- **Agent access** appears in the sidebar (under Tools).
+- Create: name, scopes (default `read` + `draft`), content (default all). The token (`mnml_…`) shows **once**, with a ready `claude mcp add` command. Copy it then.
+- Stored as a SHA-256 hash in the entries table. No migration.
+- The list shows each token's scopes, content, created and last used (updated at most once a minute).
+- **Revoke** cuts access on the agent's next request.
+- Config tokens still work alongside, and show in the list as "from config". Names are unique across both.
+- **Revoke** on a config token only explains what to do: remove it from the `mcp.tokens` option (or its environment variable) and redeploy. It keeps working until then, since it lives in your config, not in the database.
+
+### Scopes
+
+| Scope | Can | Tools |
+| --- | --- | --- |
+| `read` | Read schema and entries, drafts too | `get_schema`, `list_entries`, `get_entry`, `search`, `validate_entry`, `diff_entry`, `get_preview_url` |
+| `draft` | Create entries, save drafts, import images | `create_entry`, `update_entry`, `upload_media_from_url` |
+| `publish` | Go live, go offline, ask to discard | `publish`, `unpublish`, `discard_draft` |
+| `delete` | Ask to delete | `delete_entry` |
+
+- Scopes don't include each other. List each one you want.
+- Agents only see tools they have scopes for. Others fail with the missing scope's name.
+- A singleton without `drafts: true` has no draft: saving it goes live. So `update_entry` on it needs `publish` too.
+
+## Tools
+
+| Tool | What it does |
+| --- | --- |
+| `get_schema` | All content the token can use. Each field as JSON Schema: type, required, options, limits. Call first. |
+| `list_entries` | A collection's entries: `status`, `createdAt`, `updatedAt`, `hasDraftChanges`. Filter, sort, page. |
+| `get_entry` | One entry, latest version, drafts included. Shows a waiting approval request. Rich text as JSON or Markdown. |
+| `search` | Find text in entries, rich text too. |
+| `validate_entry` | Check data, save nothing. Returns errors per field. |
+| `diff_entry` | Fields where the draft differs from live. |
+| `get_preview_url` | Link to see the draft on your site. Editors only. |
+| `create_entry` | New collection entry, as a draft. Slug comes from the title unless given. Missing fields get their default. |
+| `update_entry` | Change some fields. The rest stay. |
+| `upload_media_from_url` | Copy an https image (4 MB max) into your storage. Returns a value for an `image` field. |
+| `publish` | Make the latest version live. |
+| `unpublish` | Take an entry off the site. It becomes a draft. |
+| `discard_draft` | Ask to throw away unpublished changes. |
+| `delete_entry` | Ask to delete an entry. |
+
+- Bad data returns errors per field, same checks as the admin.
+- Unknown field names fail. They are never dropped silently.
+
+### Rich text
+
+Agents write rich text as Markdown. The server turns it into Tiptap JSON.
+
+```json
+{ "title": "Hello", "content": "## Intro\n\nSome **bold** text and a [link](https://x.com).\n\n- one\n- two" }
+```
+
+- Works: headings, **bold**, *italic*, ~~strike~~, `code`, links, lists, quotes, code blocks, images, `---`.
+- Tables and raw HTML: refused with a field error. Send Tiptap JSON (`{ "type": "doc", "content": [...] }`) for those.
+- References and your own editor nodes: Tiptap JSON only.
+- Works in nested fields too (groups, arrays, blocks).
+
+To read rich text as Markdown, pass `richText: 'markdown'` to `get_entry` or `list_entries`. It's shorter than JSON. Nodes Markdown can't show come out as `<!-- mnml:<type> -->`, and the result has `lossy: true`. Don't write that Markdown back, or those nodes are lost.
+
+## Drafts
+
+Same rules as [Drafts and publishing](https://mnml-cms.vercel.app/drafts-and-publishing.md):
+
+- `create_entry`: a draft. 404 on the site.
+- `update_entry` on a published entry: live version stays. The edit waits beside it (orange dot in the admin).
+- `publish`: live, and the site revalidates.
+
+`get_preview_url` gives `<apiPath>/preview/open?key=…&slug=…`. It opens the page in Draft Mode, only for editors signed in to the admin. Everyone else goes to login.
+
+## Approval
+
+`delete_entry` and `discard_draft` change nothing. They create a request and return `status: 'awaiting_approval'` plus `approveUrl` (the entry's admin page).
+
+- The list shows **Awaiting approval**.
+- The entry page shows the request with **Reject** and **Approve**.
+- Discard is refused if the draft changed after the request.
+- One request per entry. A new one replaces the old.
+- Publishing the draft drops a discard request.
+
+`get_entry` returns a waiting request as `awaitingApproval`.
+
+## Connect an agent
+
+Locally, use `http://localhost:3000/api/mnml/mcp`. The header must be `Authorization`, value `Bearer <token>`.
+
+### Claude Code
+
+```sh
+claude mcp add --transport http mnml https://your-site.com/api/mnml/mcp --header "Authorization: Bearer $MNML_AGENT_TOKEN"
+```
+
+Or commit `.mcp.json` so your whole team gets it. The token comes from each person's env, never from git:
+
+```json
+{
+  "mcpServers": {
+    "mnml": {
+      "type": "http",
+      "url": "https://your-site.com/api/mnml/mcp",
+      "headers": { "Authorization": "Bearer ${MNML_AGENT_TOKEN}" }
+    }
+  }
+}
+```
+
+### Zed
+
+In `settings.json`:
+
+```json
+"context_servers": {
+  "mnml": {
+    "url": "https://your-site.com/api/mnml/mcp",
+    "headers": { "Authorization": "Bearer <token>" }
+  }
+}
+```
+
+### Cursor
+
+In `~/.cursor/mcp.json`. It holds the token, so keep it out of git.
+
+```json
+{
+  "mcpServers": {
+    "mnml": {
+      "url": "https://your-site.com/api/mnml/mcp",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+### Claude connectors
+
+Not yet. Connectors in claude.ai and the Claude apps need OAuth, and the server doesn't support it yet. Use a client that can send a header.
+
+## Security
+
+- Tokens live in env vars. Never commit them.
+- Give the fewest scopes. `['read', 'draft']` can't change the live site.
+- Limit with `collections` when you can.
+- `upload_media_from_url` only fetches public https hosts. Private, loopback and link-local addresses are refused, on every redirect too.
+- Browser requests from other sites are refused, same as the admin.
 
 ---
 
@@ -764,7 +995,7 @@ Add Tiptap extensions and toolbar buttons.
 
 The editor (browser) and `<RichText>` (server) need the same extensions. So the config is a plain module both import (no `'use client'`):
 
-```ts filename="src/mnml-editor.ts"
+```ts filename="src/mnml/editor.ts"
 import { defineEditor, tools } from '@n3wtou/mnml-cms/editor';
 
 export const editor = defineEditor({
@@ -775,10 +1006,10 @@ export const editor = defineEditor({
 
 A client file wraps it for the admin:
 
-```tsx filename="src/mnml-editor-client.tsx"
+```tsx filename="src/mnml/editor-client.tsx"
 'use client';
 import { editorProvider } from '@n3wtou/mnml-cms/admin';
-import { editor } from './mnml-editor';
+import { editor } from './editor';
 export const Editor = editorProvider(editor);
 ```
 
@@ -847,7 +1078,7 @@ In order: undo/redo, text style menu (paragraph, headings, quote), `format` (bol
 
 Swap StarterKit's plain code block for [`CodeBlockLowlight`](https://tiptap.dev/docs/editor/extensions/nodes/code-block-lowlight) and add a button. To replace or remove a default extension, pass a function: it gets the defaults and returns the full list.
 
-```tsx filename="src/mnml-editor.tsx"
+```tsx filename="src/mnml/editor.tsx"
 import { defineEditor } from '@n3wtou/mnml-cms/editor';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { common, createLowlight } from 'lowlight';
@@ -881,7 +1112,7 @@ Highlighting shows in the editor only. `<RichText>` renders `<pre><code class="l
 
 Own entry point, so sites without tables skip the code. Spread its extensions and tools into the editor config:
 
-```tsx filename="src/mnml-editor.tsx"
+```tsx filename="src/mnml/editor.tsx"
 import { defineEditor } from '@n3wtou/mnml-cms/editor';
 import { tables } from '@n3wtou/mnml-cms/table';
 
@@ -918,7 +1149,7 @@ In the editor, the node is a card with a one-line preview. Double-click or press
 
 Once, with its form fields, in a plain module the editor config and the site both import. `nodeAttributes(fields)` gives one attribute per field: starts empty, kept in HTML as `data-<name>`.
 
-```ts filename="src/youtube.ts"
+```ts filename="src/mnml/youtube.ts"
 import { Node } from '@tiptap/core';
 import { fields } from '@n3wtou/mnml-cms';
 import { nodeAttributes } from '@n3wtou/mnml-cms/editor';
@@ -940,7 +1171,7 @@ export const YouTube = Node.create({
 
 ## 2. Add the button
 
-```tsx filename="src/mnml-editor.tsx"
+```tsx filename="src/mnml/editor.tsx"
 export const editor = defineEditor({
   extensions: [YouTube],
   tools: [
@@ -989,7 +1220,7 @@ Link another entry from rich text, e.g. a card for another post.
 - `referenceNode({ name })`: a ready-made node for it.
 - Editor shows a card with the entry's title. Double-click to pick another.
 
-```tsx filename="src/mnml-editor.tsx"
+```tsx filename="src/mnml/editor.tsx"
 import { defineEditor, referenceNode, tools } from '@n3wtou/mnml-cms/editor';
 
 export const editor = defineEditor({
@@ -1045,7 +1276,7 @@ export function CodeBlock({ attrs, children }: RichTextNodeProps) {
 
 In the editor config. Keys are node names: `codeBlock`, `image`, `blockquote`, yours…
 
-```ts filename="src/mnml-editor.ts"
+```ts filename="src/mnml/editor.ts"
 export const editor = defineEditor({
   components: { codeBlock: CodeBlock },
 });
@@ -1067,222 +1298,6 @@ Async server components go here, e.g. a card fetching the linked entry.
 
 - Nodes without a component render as usual.
 - Components for unknown nodes are ignored.
-
----
-
-<!-- https://mnml-cms.vercel.app/agents.md -->
-
-# Agents (MCP)
-
-Let AI agents (Claude Code, Cursor, Zed) edit your content. The CMS has a built-in MCP server. Agents use the same checks as the admin.
-
-- Agents write drafts. Nothing goes live until `publish`.
-- Agents can't delete or discard alone. An editor approves in the admin.
-- Each agent has its own token. The token's scopes decide what it can do.
-
-## Set up
-
-1. Make a token (32+ random characters):
-
-   ```sh
-   openssl rand -hex 32
-   ```
-
-2. Put it in your env: `.env.local` locally, your host's settings in production.
-
-   ```sh
-   MNML_AGENT_TOKEN=…
-   ```
-
-3. Turn on the server:
-
-   ```ts
-   export const cms = createCms(config, {
-     // …
-     mcp: {
-       tokens: [{ name: 'claude', token: process.env.MNML_AGENT_TOKEN, scopes: ['read', 'draft'] }],
-     },
-   });
-   ```
-
-Done. The server lives at `<apiPath>/mcp`, e.g. `https://your-site.com/api/mnml/mcp`. Your route file (`export const { GET, POST } = cms.handlers`) already serves it.
-
-- No token set (and no `adminTokens`): the route is off (404).
-- Token under 32 characters: ignored, with a warning in the log.
-
-## Tokens
-
-The agent sends `Authorization: Bearer <token>`. It must match the value in your site's env exactly.
-
-| Option | What it does |
-| --- | --- |
-| `token` | The secret, e.g. `process.env.MNML_AGENT_TOKEN`. Unset: ignored. |
-| `name` | Shown as `change.by` in `onChange`, and on approval requests. Default `'agent'`. |
-| `scopes` | What the token can do. Default `['read', 'draft']`. |
-| `collections` | Only these keys, e.g. `['posts']`. Default: all. |
-
-One token per agent or person. Then each has its own scopes and name, and you can revoke one alone. To rotate, change the value on the site and in the agent.
-
-```ts
-mcp: {
-  tokens: [
-    { name: 'newton', token: process.env.MNML_TOKEN_NEWTON, scopes: ['read', 'draft', 'publish'] },
-    { name: 'blog-bot', token: process.env.MNML_TOKEN_BOT, collections: ['posts'] },
-  ],
-},
-```
-
-### Tokens from the admin
-
-Let editors make tokens in the admin instead of env vars:
-
-```ts
-mcp: { adminTokens: true },
-```
-
-- **Agent access** appears in the sidebar (under Tools).
-- Create: name, scopes (default `read` + `draft`), content (default all). The token (`mnml_…`) shows **once**, with a ready `claude mcp add` command. Copy it then.
-- Stored as a SHA-256 hash in the entries table. No migration.
-- The list shows each token's scopes, content, created and last used (updated at most once a minute).
-- **Revoke** cuts access on the agent's next request.
-- Config tokens still work alongside, and show in the list as "from config". Names are unique across both.
-- **Revoke** on a config token only explains what to do: remove it from the `mcp.tokens` option (or its environment variable) and redeploy. It keeps working until then, since it lives in your config, not in the database.
-
-### Scopes
-
-| Scope | Can | Tools |
-| --- | --- | --- |
-| `read` | Read schema and entries, drafts too | `get_schema`, `list_entries`, `get_entry`, `search`, `validate_entry`, `diff_entry`, `get_preview_url` |
-| `draft` | Create entries, save drafts, import images | `create_entry`, `update_entry`, `upload_media_from_url` |
-| `publish` | Go live, go offline, ask to discard | `publish`, `unpublish`, `discard_draft` |
-| `delete` | Ask to delete | `delete_entry` |
-
-- Scopes don't include each other. List each one you want.
-- Agents only see tools they have scopes for. Others fail with the missing scope's name.
-- A singleton without `drafts: true` has no draft: saving it goes live. So `update_entry` on it needs `publish` too.
-
-## Tools
-
-| Tool | What it does |
-| --- | --- |
-| `get_schema` | All content the token can use. Each field as JSON Schema: type, required, options, limits. Call first. |
-| `list_entries` | A collection's entries: `status`, `createdAt`, `updatedAt`, `hasDraftChanges`. Filter, sort, page. |
-| `get_entry` | One entry, latest version, drafts included. Shows a waiting approval request. Rich text as JSON or Markdown. |
-| `search` | Find text in entries, rich text too. |
-| `validate_entry` | Check data, save nothing. Returns errors per field. |
-| `diff_entry` | Fields where the draft differs from live. |
-| `get_preview_url` | Link to see the draft on your site. Editors only. |
-| `create_entry` | New collection entry, as a draft. Slug comes from the title unless given. Missing fields get their default. |
-| `update_entry` | Change some fields. The rest stay. |
-| `upload_media_from_url` | Copy an https image (4 MB max) into your storage. Returns a value for an `image` field. |
-| `publish` | Make the latest version live. |
-| `unpublish` | Take an entry off the site. It becomes a draft. |
-| `discard_draft` | Ask to throw away unpublished changes. |
-| `delete_entry` | Ask to delete an entry. |
-
-- Bad data returns errors per field, same checks as the admin.
-- Unknown field names fail. They are never dropped silently.
-
-### Rich text
-
-Agents write rich text as Markdown. The server turns it into Tiptap JSON.
-
-```json
-{ "title": "Hello", "content": "## Intro\n\nSome **bold** text and a [link](https://x.com).\n\n- one\n- two" }
-```
-
-- Works: headings, **bold**, *italic*, ~~strike~~, `code`, links, lists, quotes, code blocks, images, `---`.
-- Tables and raw HTML: refused with a field error. Send Tiptap JSON (`{ "type": "doc", "content": [...] }`) for those.
-- References and your own editor nodes: Tiptap JSON only.
-- Works in nested fields too (groups, arrays, blocks).
-
-To read rich text as Markdown, pass `richText: 'markdown'` to `get_entry` or `list_entries`. It's shorter than JSON. Nodes Markdown can't show come out as `<!-- mnml:<type> -->`, and the result has `lossy: true`. Don't write that Markdown back, or those nodes are lost.
-
-## Drafts
-
-Same rules as [Drafts and publishing](https://mnml-cms.vercel.app/drafts-and-publishing.md):
-
-- `create_entry`: a draft. 404 on the site.
-- `update_entry` on a published entry: live version stays. The edit waits beside it (orange dot in the admin).
-- `publish`: live, and the site revalidates.
-
-`get_preview_url` gives `<apiPath>/preview/open?key=…&slug=…`. It opens the page in Draft Mode, only for editors signed in to the admin. Everyone else goes to login.
-
-## Approval
-
-`delete_entry` and `discard_draft` change nothing. They create a request and return `status: 'awaiting_approval'` plus `approveUrl` (the entry's admin page).
-
-- The list shows **Awaiting approval**.
-- The entry page shows the request with **Reject** and **Approve**.
-- Discard is refused if the draft changed after the request.
-- One request per entry. A new one replaces the old.
-- Publishing the draft drops a discard request.
-
-`get_entry` returns a waiting request as `awaitingApproval`.
-
-## Connect an agent
-
-Locally, use `http://localhost:3000/api/mnml/mcp`. The header must be `Authorization`, value `Bearer <token>`.
-
-### Claude Code
-
-```sh
-claude mcp add --transport http mnml https://your-site.com/api/mnml/mcp --header "Authorization: Bearer $MNML_AGENT_TOKEN"
-```
-
-Or commit `.mcp.json` so your whole team gets it. The token comes from each person's env, never from git:
-
-```json
-{
-  "mcpServers": {
-    "mnml": {
-      "type": "http",
-      "url": "https://your-site.com/api/mnml/mcp",
-      "headers": { "Authorization": "Bearer ${MNML_AGENT_TOKEN}" }
-    }
-  }
-}
-```
-
-### Zed
-
-In `settings.json`:
-
-```json
-"context_servers": {
-  "mnml": {
-    "url": "https://your-site.com/api/mnml/mcp",
-    "headers": { "Authorization": "Bearer <token>" }
-  }
-}
-```
-
-### Cursor
-
-In `~/.cursor/mcp.json`. It holds the token, so keep it out of git.
-
-```json
-{
-  "mcpServers": {
-    "mnml": {
-      "url": "https://your-site.com/api/mnml/mcp",
-      "headers": { "Authorization": "Bearer <token>" }
-    }
-  }
-}
-```
-
-### Claude connectors
-
-Not yet. Connectors in claude.ai and the Claude apps need OAuth, and the server doesn't support it yet. Use a client that can send a header.
-
-## Security
-
-- Tokens live in env vars. Never commit them.
-- Give the fewest scopes. `['read', 'draft']` can't change the live site.
-- Limit with `collections` when you can.
-- `upload_media_from_url` only fetches public https hosts. Private, loopback and link-local addresses are refused, on every redirect too.
-- Browser requests from other sites are refused, same as the admin.
 
 ---
 
@@ -1382,7 +1397,7 @@ Slots: `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `DatePicke
 
 A `'use client'` file maps your components to the slots:
 
-```tsx filename="src/mnml-ui.tsx"
+```tsx filename="src/mnml/ui.tsx"
 'use client';
 import { uiProvider, type UiSlotProps } from '@n3wtou/mnml-cms/admin';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -1411,8 +1426,8 @@ export const AdminUi = uiProvider({ Select: AdminSelect });
 
 Pass it to `createCms`:
 
-```tsx filename="src/mnml.tsx"
-import { AdminUi } from './mnml-ui';
+```tsx filename="src/mnml/index.tsx"
+import { AdminUi } from './ui';
 
 export const cms = createCms(config, { /* … */ ui: AdminUi });
 ```
