@@ -59,6 +59,17 @@ describe('splitText', () => {
     expect(parts.every((p) => p.length <= 200)).toBe(true);
     expect(parts.join(' ').replace(/\s+/g, ' ')).toBe(text);
   });
+  it('cuts a run with no sentence breaks at a space, not inside a word', () => {
+    const text = 'word '.repeat(1000).trim();
+    const parts = splitText(text, 100);
+    expect(parts.every((p) => p.length <= 100 && /^(word )*word$/.test(p))).toBe(true);
+  });
+  it('never cuts an emoji in half', () => {
+    const text = `${'a'.repeat(MAX_CHUNK - 1)}😀${'b'.repeat(10)}`;
+    const parts = splitText(text);
+    expect(parts.join('')).toBe(text);
+    for (const p of parts) expect(p).not.toMatch(/[\ud800-\udbff]$|^[\udc00-\udfff]/);
+  });
   it('hard-splits a run with no break', () => {
     const parts = splitText('x'.repeat(MAX_CHUNK * 2 + 5));
     expect(parts.map((p) => p.length)).toEqual([MAX_CHUNK, MAX_CHUNK, 5]);

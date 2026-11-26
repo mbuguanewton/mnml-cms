@@ -142,6 +142,8 @@ export function createContext<C extends CmsConfig>(config: C, options: CmsOption
   if (searchOptions && !searchOptions.index && !db) {
     throw new Error('`search: true` needs the `database` option (a Drizzle Postgres database). With a custom `storage`, pass `search: { index }`.');
   }
+  const routeKeys = searchOptions && Array.isArray(searchOptions.route) ? searchOptions.route : [];
+  for (const k of routeKeys) if (!Object.hasOwn(config, k)) throw new Error(`search.route lists "${k}", which is not in the config.`);
   const search = searchOptions
     ? buildSearch({
         config,
@@ -159,7 +161,8 @@ export function createContext<C extends CmsConfig>(config: C, options: CmsOption
     readers: createStore(config, storage, { fit: true }),
     /** The search index, or null when `search` is off. */
     search,
-    searchRoute: !!searchOptions?.route,
+    /** `search.route`: off (false), on for everything (true), or the collections it may search. */
+    searchRoute: searchOptions?.route ?? false,
     authAdapter,
     session: sessionCodec(authAdapter ? undefined : (options.auth as PasswordAuth).secret),
     adminPath,

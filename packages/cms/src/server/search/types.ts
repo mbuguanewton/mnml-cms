@@ -56,7 +56,7 @@ export type SearchIndex = {
   put(entry: SearchEntry): Promise<void>;
   /** Drops the entry: it was unpublished or deleted. `slug` is null for a singleton. */
   remove(key: string, slug: string | null): Promise<void>;
-  /** The best passages for `q`, best first, at most `limit`. One per entry is best; the package keeps only the best of each. */
+  /** The best passages for `q`, best first, at most `limit`. The package asks for a few times more passages than the results it shows, because it keeps only the best passage of each entry. */
   query(q: string, o: { collections?: string[]; limit: number }): Promise<SearchMatch[]>;
   /** Optional. Drops every entry not in `live` (used by `reindex()`, for entries removed while indexing was off). */
   prune?(live: { key: string; slug: string | null }[]): Promise<void>;
@@ -65,8 +65,11 @@ export type SearchIndex = {
 export type SearchOptions = {
   /** Where passages go. Default: Postgres full-text search in your `database`. Needed with a custom `storage`. */
   index?: SearchIndex;
-  /** Turns on the public `GET <apiPath>/search?q=`. Off by default: a search may cost an embedding call. */
-  route?: boolean;
+  /**
+   * Turns on the public `GET <apiPath>/search?q=`. Off by default: a search may cost an embedding call, and it answers
+   * anyone. `true` searches every collection and singleton; a list of keys limits it to those, e.g. `['posts']`.
+   */
+  route?: boolean | string[];
   /** The built-in index's table. Default 'mnml_chunks'. */
   table?: string;
   /** The built-in index's Postgres text search configuration, e.g. 'english' (default) or 'simple'. Must match `chunksTable`. */

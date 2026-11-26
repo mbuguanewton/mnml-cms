@@ -8,5 +8,7 @@ import config from '../mnml.config';
 if (existsSync('.env.local')) process.loadEnvFile('.env.local');
 
 // Pass the same `search` options as createCms (here none: the built-in Postgres full-text index).
-const { entries, chunks } = await createSearch(config, { database: neonDatabase(process.env.DATABASE_URL) }).reindex();
+const { entries, chunks, failed } = await createSearch(config, { database: neonDatabase(process.env.DATABASE_URL) }).reindex();
 console.log(`Indexed ${entries} entries (${chunks} chunks).`);
+for (const f of failed) console.error(`Failed: ${f.key}/${f.slug ?? '-'}: ${f.message}`);
+if (failed.length) process.exitCode = 1;

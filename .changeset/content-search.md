@@ -9,6 +9,6 @@ Search over published content, for agents and RAG. Off by default; nothing chang
 - Each hit is the best passage of one entry: `{ key, slug, title, url, field, snippet, text, score }`. Drafts are never indexed.
 - Publish, unpublish and delete keep the index up to date after the response is sent. A failure is logged and never fails a save.
 - `cms.search.reindex()` rebuilds the index; `createSearch()` from `@n3wtou/mnml-cms/sync` does it from a script. Run it once for existing content.
-- `search: { route: true }` adds a rate-limited public `GET <apiPath>/search?q=`.
+- `search: { route: ['posts'] }` adds a rate-limited public `GET <apiPath>/search?q=` for those collections (`true`: all of them). Off by default.
 
-To turn on the built-in index: add `search: true`, run `drizzle-kit push` (the package's schema now includes the `mnml_chunks` table), then call `cms.search.reindex()` once.
+To turn on the built-in index: add `search: true`, add `./node_modules/@n3wtou/mnml-cms/dist/server/search/table.js` to `schema` in your drizzle config and run `drizzle-kit push` (it creates `mnml_chunks`; sites that leave search off get no new table), then call `cms.search.reindex()` once.

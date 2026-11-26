@@ -52,10 +52,12 @@ export function createHandlers(ctx: Context) {
   const mcp = ctx.options.mcp ? createMcpHandler(ctx, content) : null;
   const tokens = ctx.options.mcp?.adminTokens ? agentTokens(ctx) : null;
 
-  // Public and it may spend embedding credits: 30 searches a minute per client.
+  // Public and it may spend embedding credits: 30 searches a minute per client, and 300 in all (a client that sends a
+  // different x-forwarded-for each time still hits the second limit). Both are per server instance.
   const searchLimit = createLimiter({ max: 30, windowMs: 60_000 });
+  const searchLimitAll = createLimiter({ max: 300, windowMs: 60_000 });
   async function searchRoute(request: Request) {
-    const wait = searchLimit(clientIp(request));
+    const wait = Math.max(searchLimit(clientIp(request)), searchLimitAll('all'));
     if (wait > 0)
       return Response.json(
         { ok: false, message: `Too many searches. Try again in ${wait} seconds.` },
@@ -64,7 +66,12 @@ export function createHandlers(ctx: Context) {
     const params = new URL(request.url).searchParams;
     const q = params.get('q')?.trim() ?? '';
     if (!q || q.length > 200) return json({ ok: false, message: 'Send what to look for in ?q= (up to 200 characters).' }, 400);
-    const collections = params.get('collections')?.split(',').filter(Boolean);
+    let collections = params.get('collections')?.split(',').filter(Boolean);
+    // `search.route: ['posts']` limits what an anonymous visitor can search.
+    if (Array.isArray(ctx.searchRoute)) {
+      const allowed = ctx.searchRoute;
+      collections = collections ? collections.filter((k) => allowed.includes(k)) : allowed;
+    }
     const limit = Math.min(Number(params.get('limit')) || 10, 20);
     try {
       return json({ ok: true, results: await ctx.search!.query(q, { collections, limit }) });

@@ -204,6 +204,28 @@ describe('GET /search', () => {
     expect((await (await find('?q=refund&collections=notes')).json()).results).toHaveLength(1);
   });
 
+  it('limits an anonymous visitor to the collections in `route`', async () => {
+    app = build({ route: ['posts'] });
+    await save({ key: 'posts', slug: 'a', mode: 'create', data: { title: 'Alpha', body: 'refund policy' } });
+    await save({ key: 'notes', slug: 'n', mode: 'create', data: { title: 'Note', body: 'refund note' } });
+    const slugs = async (q: string) => (await (await find(q)).json()).results.map((r: { slug: string }) => r.slug);
+    expect(await slugs('?q=refund')).toEqual(['a']);
+    expect(await slugs('?q=refund&collections=notes')).toEqual([]);
+    expect(await slugs('?q=refund&collections=notes,posts')).toEqual(['a']);
+    // The site's own cms.search() is not limited by it.
+    expect((await app.ctx.search!.query('refund')).map((h) => h.slug).sort((x, y) => (x ?? '').localeCompare(y ?? ''))).toEqual(['a', 'n']);
+  });
+
+  it('refuses a route list with a collection that is not in the config', () => {
+    expect(() => build({ route: ['nope'] })).toThrow('"nope"');
+  });
+
+  it('caps all clients together, whatever x-forwarded-for says', async () => {
+    let limited = 0;
+    for (let i = 0; i < 305; i++) if ((await find('?q=refund', `10.0.${i >> 8}.${i & 255}`)).status === 429) limited++;
+    expect(limited).toBeGreaterThanOrEqual(5);
+  });
+
   it('rejects a missing or oversized query', async () => {
     expect((await find('')).status).toBe(400);
     expect((await find(`?q=${'x'.repeat(201)}`)).status).toBe(400);

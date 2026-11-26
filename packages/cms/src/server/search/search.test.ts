@@ -64,7 +64,7 @@ beforeEach(() => {
 describe('reindex', () => {
   it('puts published entries only, and counts them', async () => {
     const { entries, index } = memoryIndex();
-    expect(await buildSearch({ config: cms, storage, index }).reindex()).toEqual({ entries: 3, chunks: 3 });
+    expect(await buildSearch({ config: cms, storage, index }).reindex()).toEqual({ entries: 3, chunks: 3, failed: [] });
     expect([...entries.keys()].sort((a, b) => a.localeCompare(b))).toEqual(['posts/refunds', 'posts/shipping', 'settings/']);
   });
 
@@ -77,9 +77,27 @@ describe('reindex', () => {
     expect(entries.has('posts/shipping')).toBe(false);
   });
 
+  it('carries on when one entry fails, reports it, and does not prune it', async () => {
+    const { entries, index } = memoryIndex();
+    const pruned: unknown[] = [];
+    const flaky: SearchIndex = {
+      ...index,
+      put: async (e) => {
+        if (e.slug === 'refunds') throw new Error('provider said no');
+        await index.put(e);
+      },
+      prune: async (live) => void pruned.push(live),
+    };
+    const out = await buildSearch({ config: cms, storage, index: flaky }).reindex();
+    expect(out).toEqual({ entries: 2, chunks: 2, failed: [{ key: 'posts', slug: 'refunds', message: 'provider said no' }] });
+    expect(entries.has('posts/shipping')).toBe(true);
+    // The failed entry stays in the live list, so its old passages are not pruned.
+    expect(pruned[0]).toContainEqual({ key: 'posts', slug: 'refunds' });
+  });
+
   it('works with an index that has no prune', async () => {
     const { index } = memoryIndex({ prune: undefined });
-    expect(await buildSearch({ config: cms, storage, index }).reindex()).toMatchObject({ entries: 3 });
+    expect(await buildSearch({ config: cms, storage, index }).reindex()).toMatchObject({ entries: 3, failed: [] });
   });
 });
 
@@ -124,10 +142,11 @@ describe('query', () => {
       ['b', 'other'],
     ]);
     expect(await search.query('x', { limit: 1 })).toHaveLength(1);
-    expect(calls[1]).toEqual({ collections: undefined, limit: 1 });
+    // It asks the index for a wider window, because only the best passage of each entry is kept.
+    expect(calls[1]).toEqual({ collections: undefined, limit: 3 });
     expect(await search.query('x', { collections: ['nope'] })).toEqual([]);
     expect(await search.query('x', { limit: 9999 })).toBeDefined();
-    expect(calls.at(-1)).toMatchObject({ limit: 50 });
+    expect(calls.at(-1)).toMatchObject({ limit: 150 });
     expect(await search.query('   ')).toEqual([]);
   });
 });

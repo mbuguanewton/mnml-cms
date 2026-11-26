@@ -822,7 +822,11 @@ The package never embeds anything and has no vector code. Embedding models and v
 ## Set up the built-in index
 
 1. Turn on `search: true`.
-2. Run `drizzle-kit push`. The default `schema` in your drizzle config already includes the new `mnml_chunks` table.
+2. Add the search table to `schema` in your drizzle config, then run `drizzle-kit push`. It creates `mnml_chunks`. Sites that leave search off never get it.
+
+```ts filename="drizzle.config.ts"
+schema: ['./node_modules/@n3wtou/mnml-cms/dist/server/content/db.js', './node_modules/@n3wtou/mnml-cms/dist/server/search/table.js'],
+```
 3. Run `await cms.search.reindex()` once, for the content you already have (see [Reindex](#reindex)).
 
 From then on, every publish, unpublish and delete updates the index after the response is sent. A failure is logged and never fails the save.
@@ -855,7 +859,7 @@ createCms(config, { storage: myStorage, auth, search: { index: myIndex() } });
 ```
 
 - `put` gets only published entries, never drafts. Skip passages whose `hash` you already hold, so unchanged text is not embedded again.
-- `query` may return several passages of one entry. The package keeps the best of each.
+- `query` may return several passages of one entry. The package keeps the best of each, so it asks for about three times as many passages as results.
 - The index can live in another system from the entries. That is the normal case for Algolia and Typesense.
 - With a custom `storage` (no Drizzle `database`), `search: true` is not available. Pass an `index`.
 
@@ -904,8 +908,10 @@ These are not shipped as packages: your database, your embeddings, your adapter.
 - after changing your embedding model or adapter.
 
 ```ts
-const { entries, chunks } = await cms.search.reindex();
+const { entries, chunks, failed } = await cms.search.reindex();
 ```
+
+One entry that fails (say, your embedding provider rejects it) does not stop the rest. It is listed in `failed` as `{ key, slug, message }`, and its old passages are kept. Run `reindex()` again to retry.
 
 Scripts and cron jobs can run it without Next.js:
 
@@ -913,7 +919,8 @@ Scripts and cron jobs can run it without Next.js:
 import { createSearch, neonDatabase } from '@n3wtou/mnml-cms/sync';
 import config from '../mnml.config';
 
-await createSearch(config, { database: neonDatabase(process.env.DATABASE_URL) }).reindex();
+const { failed } = await createSearch(config, { database: neonDatabase(process.env.DATABASE_URL) }).reindex();
+if (failed.length) process.exitCode = 1;
 ```
 
 Pass the same `search` options you gave `createCms` (`index`, `table`, `language`), and `storage` instead of `database` for a custom storage.
@@ -931,21 +938,23 @@ With the [MCP server](https://mnml-cms.vercel.app/agents.md) on, agents get a `s
 ## Public route
 
 ```ts
-search: { route: true },
+search: { route: ['posts', 'pages'] },
 ```
 
-Turns on `GET <apiPath>/search?q=…&collections=posts,authors&limit=10` (JSON `{ ok, results }`). It is off by default because each search can cost an embedding call.
+Turns on `GET <apiPath>/search?q=…&collections=posts&limit=10` (JSON `{ ok, results }`). It answers anyone, with the full text of each passage, so it is off by default.
 
-- `q` up to 200 characters. `limit` up to 20.
-- 30 searches a minute for each client. Over that: `429` with `Retry-After`. The count is kept in memory on each server, so treat it as a guard, not a quota.
-- Only published content.
+- `route: true` searches every collection and singleton. A list of keys limits it to those. Use the list: a collection you publish but never show on the site would otherwise be searchable.
+- `cms.search()` in your own code is never limited by the list.
+- `q` up to 200 characters. `limit` up to 20. Only published content.
+- 30 searches a minute for each client and 300 in all. Over that: `429` with `Retry-After`.
+- The counts are kept in memory on each server, and clients are told apart by `x-forwarded-for`. Treat it as a guard, not a quota. If the index costs money per search, also limit the route at your host or CDN.
 
 ## Options
 
 | Option | Default | |
 | --- | --- | --- |
 | `index` | built-in Postgres | Your own `SearchIndex`. Needed with a custom `storage`. |
-| `route` | `false` | Turns on the public route. |
+| `route` | `false` | Turns on the public route: `true` (everything) or a list of collection keys. |
 | `table` | `'mnml_chunks'` | The built-in index's table. Match `chunksTable({ name })`. |
 | `language` | `'english'` | The built-in index's Postgres text search configuration, e.g. `'simple'` or `'german'`. Match `chunksTable({ language })`. |
 
@@ -1573,7 +1582,7 @@ Second argument of `createCms(config, options)`.
 | `editor` | Component from `editorProvider()`: extra extensions and buttons ([Extending the editor](https://mnml-cms.vercel.app/editor.md)) |
 | `ui` | Component from `uiProvider()`: your own Button, Select… in the admin ([Custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md)) |
 | `mcp` | `{ tokens, adminTokens }`: MCP server for AI agents at `<apiPath>/mcp`, with tokens from env and/or the admin ([Agents](https://mnml-cms.vercel.app/agents.md)) |
-| `search` | `true` or `{ index, route, table, language }`: search over published content, `cms.search()` and a `search_content` MCP tool. Built-in Postgres full-text index, or your own `SearchIndex` ([Search](https://mnml-cms.vercel.app/search.md)) |
+| `search` | `true` or `{ index, route, table, language }` (`route`: `true` or the collections the public route may search): search over published content, `cms.search()` and a `search_content` MCP tool. Built-in Postgres full-text index, or your own `SearchIndex` ([Search](https://mnml-cms.vercel.app/search.md)) |
 | `cache` | `true` or `{ revalidate }` (seconds, default 3600): keeps published reads between requests, dropped on each save or delete. Off by default, recommended ([Caching](https://mnml-cms.vercel.app/reading-content.md#caching)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |

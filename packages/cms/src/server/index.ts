@@ -39,7 +39,8 @@ export function createCms<C extends CmsConfig>(config: C, options: CmsOptions<C>
     throw new Error('Search is off. Turn it on with `search: true` in createCms().');
   };
   const search = Object.assign((query: string, o?: SearchQuery): Promise<SearchHit[]> => (ctx.search ? ctx.search.query(query, o) : off()), {
-    reindex: (): Promise<{ entries: number; chunks: number }> => (ctx.search ? ctx.search.reindex() : off()),
+    reindex: (): Promise<{ entries: number; chunks: number; failed: { key: string; slug: string | null; message: string }[] }> =>
+      ctx.search ? ctx.search.reindex() : off(),
   });
   return {
     config,

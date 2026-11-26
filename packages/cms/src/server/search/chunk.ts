@@ -49,6 +49,31 @@ function fieldsText(fields: Fields, data: Record<string, unknown>, out: string[]
   for (const [name, f] of Object.entries(fields)) fieldText(f, data[name], out);
 }
 
+/** Cuts a run with no sentence breaks into pieces of at most `max` characters, at a space when there is one, never inside an emoji. */
+function hardSplit(s: string, max: number): string[] {
+  const out: string[] = [];
+  let i = 0;
+  while (i < s.length) {
+    let end = i + max;
+    if (end >= s.length) {
+      out.push(s.slice(i));
+      break;
+    }
+    const space = s.lastIndexOf(' ', end);
+    if (space > i + max / 2) {
+      out.push(s.slice(i, space));
+      i = space + 1;
+      continue;
+    }
+    // Do not cut between the two halves of a surrogate pair.
+    const last = s.charCodeAt(end - 1);
+    if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+    out.push(s.slice(i, end));
+    i = end;
+  }
+  return out;
+}
+
 /** Splits text at paragraph breaks, then sentences, then (for a very long run) anywhere, into pieces of at most `max` characters. */
 export function splitText(text: string, max = MAX_CHUNK): string[] {
   const pieces: string[] = [];
@@ -64,7 +89,7 @@ export function splitText(text: string, max = MAX_CHUNK): string[] {
       if (sentence.length > max) {
         if (cur) pieces.push(cur);
         cur = '';
-        for (let i = 0; i < sentence.length; i += max) pieces.push(sentence.slice(i, i + max));
+        pieces.push(...hardSplit(sentence, max));
       } else if (cur && cur.length + 1 + sentence.length > max) {
         pieces.push(cur);
         cur = sentence;
