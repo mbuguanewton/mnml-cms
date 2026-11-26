@@ -9,7 +9,6 @@ import { createStore } from './content/store.js';
 import type { BrandOption } from './admin/brand.js';
 import type { CacheOption } from './content/cached-store.js';
 import { localMedia, type MediaStorage } from './media/media.js';
-import { postgresSearch } from './search/postgres.js';
 import { buildSearch } from './search/search.js';
 import type { SearchOptions } from './search/types.js';
 
@@ -120,11 +119,11 @@ export type CmsOptions<C extends CmsConfig> = StorageOptions & {
    */
   cache?: CacheOption;
   /**
-   * Search over published content, for agents and RAG: `cms.search(query)`, a `search_content` tool on the MCP server.
-   * `true` is Postgres full-text search in your `database` (no keys; run `drizzle-kit push` for the `mnml_chunks`
-   * table). `{ index }` plugs in your own `SearchIndex` (vectors, Mongo, Convex, Algolia…), and works with any `storage`.
+   * Search over published content, for agents and RAG: `cms.search(query)` and a `search_content` tool on the MCP
+   * server. The package cuts entries into passages and keeps `index` in step; the index (Postgres full-text, pgvector,
+   * Mongo, Convex, Algolia…) is yours: see the docs for examples. Works with any `storage`.
    */
-  search?: boolean | SearchOptions;
+  search?: SearchOptions;
   /** Called after each save or delete. Default: revalidatePath('/', 'layout'). */
   revalidate?: (change: Change) => void;
   /** Turns on the MCP server at <apiPath>/mcp, so agents (Claude Code, Cursor…) can manage content with a token. */
@@ -138,19 +137,10 @@ export function createContext<C extends CmsConfig>(config: C, options: CmsOption
   const storage = options.storage ?? drizzleStorage(typeof db === 'function' ? db : () => db!, options.table);
   const media = options.media ?? (process.env.NODE_ENV === 'development' ? localMedia() : undefined);
   const authAdapter = 'isAdmin' in options.auth ? options.auth : null;
-  const searchOptions: SearchOptions | null = options.search ? (options.search === true ? {} : options.search) : null;
-  if (searchOptions && !searchOptions.index && !db) {
-    throw new Error('`search: true` needs the `database` option (a Drizzle Postgres database). With a custom `storage`, pass `search: { index }`.');
-  }
-  const routeKeys = searchOptions && Array.isArray(searchOptions.route) ? searchOptions.route : [];
+  const searchOptions = options.search ?? null;
+  const routeKeys = Array.isArray(searchOptions?.route) ? searchOptions.route : [];
   for (const k of routeKeys) if (!Object.hasOwn(config, k)) throw new Error(`search.route lists "${k}", which is not in the config.`);
-  const search = searchOptions
-    ? buildSearch({
-        config,
-        storage,
-        index: searchOptions.index ?? postgresSearch({ database: db!, table: searchOptions.table, language: searchOptions.language }),
-      })
-    : null;
+  const search = searchOptions ? buildSearch({ config, storage, index: searchOptions.index }) : null;
   const adminPath = options.adminPath ?? '/admin';
   return {
     config,

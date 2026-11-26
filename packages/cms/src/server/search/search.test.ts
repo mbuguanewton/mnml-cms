@@ -28,10 +28,9 @@ const storage: EntryStorage = {
 /** An index in memory: a passage matches when it has every word of the query. */
 function memoryIndex(extra: Partial<SearchIndex> = {}) {
   const entries = new Map<string, SearchEntry>();
-  const id = (key: string, slug: string | null) => `${key}/${slug ?? ''}`;
   const index: SearchIndex = {
-    put: async (e) => void entries.set(id(e.key, e.slug), e),
-    remove: async (k, s) => void entries.delete(id(k, s)),
+    put: async (e) => void entries.set(e.id, e),
+    remove: async (id) => void entries.delete(id),
     query: async (q, { collections, limit }) => {
       const words = q.toLowerCase().match(/\w+/g) ?? [];
       const out: SearchMatch[] = [];
@@ -44,8 +43,7 @@ function memoryIndex(extra: Partial<SearchIndex> = {}) {
       return out.slice(0, limit);
     },
     prune: async (live) => {
-      const keep = new Set(live.map((e) => id(e.key, e.slug)));
-      for (const k of entries.keys()) if (!keep.has(k)) entries.delete(k);
+      for (const id of entries.keys()) if (!live.includes(id)) entries.delete(id);
     },
     ...extra,
   };
@@ -92,7 +90,7 @@ describe('reindex', () => {
     expect(out).toEqual({ entries: 2, chunks: 2, failed: [{ key: 'posts', slug: 'refunds', message: 'provider said no' }] });
     expect(entries.has('posts/shipping')).toBe(true);
     // The failed entry stays in the live list, so its old passages are not pruned.
-    expect(pruned[0]).toContainEqual({ key: 'posts', slug: 'refunds' });
+    expect(pruned[0]).toContain('posts/refunds');
   });
 
   it('works with an index that has no prune', async () => {

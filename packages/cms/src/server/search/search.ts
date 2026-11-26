@@ -1,7 +1,7 @@
 import type { CmsConfig } from '../../schema/define.js';
 import type { EntryStorage } from '../content/storage.js';
 import { SINGLETON_SLUG } from '../content/singleton.js';
-import { searchEntry } from './entry.js';
+import { entryId, searchEntry } from './entry.js';
 import { bestPerEntry, queryTerms, snippet } from './rank.js';
 import type { SearchHit, SearchIndex, SearchQuery } from './types.js';
 
@@ -24,11 +24,11 @@ export function buildSearch({ config, storage, index }: { config: CmsConfig; sto
     const row = await storage.readRow(key, slug);
     const entry = row?.status === 'published' ? searchEntry(config, key, slug, row.data) : null;
     if (entry) await index.put(entry);
-    else await index.remove(key, slugOf(key, slug));
+    else await index.remove(entryId(key, slugOf(key, slug)));
   }
 
   async function reindex(): Promise<{ entries: number; chunks: number; failed: { key: string; slug: string | null; message: string }[] }> {
-    const live: { key: string; slug: string | null }[] = [];
+    const live: string[] = [];
     const failed: { key: string; slug: string | null; message: string }[] = [];
     let chunks = 0;
     for (const [key, def] of Object.entries(config)) {
@@ -40,7 +40,7 @@ export function buildSearch({ config, storage, index }: { config: CmsConfig; sto
         if (row?.status !== 'published') continue;
         const entry = searchEntry(config, key, slug, row.data)!;
         // An entry that fails (say, the embedding API rejects it) must not stop the rest, nor be pruned with its old passages.
-        live.push({ key, slug: entry.slug });
+        live.push(entry.id);
         try {
           await index.put(entry);
           chunks += entry.chunks.length;

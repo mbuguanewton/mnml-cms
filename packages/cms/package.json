@@ -44,10 +44,6 @@
       "types": "./dist/sync/index.d.ts",
       "default": "./dist/sync/index.js"
     },
-    "./search-schema": {
-      "types": "./dist/server/search/table.d.ts",
-      "default": "./dist/server/search/table.js"
-    },
     "./schema": {
       "types": "./dist/server/content/db.d.ts",
       "default": "./dist/server/content/db.js"

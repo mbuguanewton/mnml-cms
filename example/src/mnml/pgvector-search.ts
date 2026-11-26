@@ -1,15 +1,61 @@
-// A SearchIndex that searches by meaning as well as by words, as a reference for writing your own (the `search.index`
-// option). It reuses the built-in Postgres index for the words and keeps the vectors in `mnml_vectors` (see
-// pgvector-schema.ts), then merges the two result lists with `fuseMatches`. Embedding is yours: pass any `embed`.
+// A search index that finds by meaning as well as by words, as an example of the `search.index` option. It wraps
+// postgres-search.ts for the words and keeps the vectors in `mnml_vectors` (scripts/search-vectors.sql), then merges
+// the two result lists with `fuseMatches`. Embedding is yours: pass any `embed` (openaiEmbed and geminiEmbed are below).
 //
-//   search: { index: pgvectorSearch({ database: neonDatabase(process.env.DATABASE_URL), embed: openaiEmbed, model: 'text-embedding-3-small' }) }
+//   search: { index: pgvectorSearch({ url: process.env.DATABASE_URL, embed: geminiEmbed(), model: 'gemini-embedding-001' }) }
 //
 // Run `cms.search.reindex()` once after switching it on, and again whenever you change `model`.
-import { sql } from 'drizzle-orm';
-import { fuseMatches, postgresSearch, type SearchIndex, type SearchMatch } from '@n3wtou/mnml-cms/sync';
-import type { Database } from '@n3wtou/mnml-cms/db';
+import { neon } from '@neondatabase/serverless';
+import { fuseMatches, type SearchIndex, type SearchMatch } from '@n3wtou/mnml-cms/sync';
+import { postgresSearch } from './postgres-search';
 
 export type Embed = (texts: string[], kind: 'document' | 'query') => Promise<number[][]>;
+
+export function pgvectorSearch({ url, embed, model }: { url: string | undefined; embed: Embed; model: string }): SearchIndex {
+  const words = postgresSearch(url);
+  const db = () => neon(url ?? '');
+  return {
+    async put(entry) {
+      await words.put(entry); // the words stay searchable even if embedding fails below
+      const sql = db();
+      const have = new Map((await sql`select idx, hash, model from mnml_vectors where entry = ${entry.id}`).map((r) => [r.idx as number, r]));
+      const stale = entry.chunks.filter((c) => have.get(c.idx)?.hash !== c.hash || have.get(c.idx)?.model !== model);
+      if (stale.length) {
+        const vectors = await embed(
+          stale.map((c) => `${entry.title}\n\n${c.text}`),
+          'document',
+        );
+        await sql`
+          insert into mnml_vectors (entry, idx, hash, model, embedding)
+          select ${entry.id}, i, h, ${model}, v::vector
+          from unnest(${stale.map((c) => c.idx)}::int[], ${stale.map((c) => c.hash)}::text[], ${vectors.map((v) => JSON.stringify(v))}::text[]) as c(i, h, v)
+          on conflict (entry, idx) do update set hash = excluded.hash, model = excluded.model, embedding = excluded.embedding`;
+      }
+      await sql`delete from mnml_vectors where entry = ${entry.id} and idx >= ${entry.chunks.length}`;
+    },
+
+    async remove(id) {
+      await words.remove(id);
+      await db()`delete from mnml_vectors where entry = ${id}`;
+    },
+
+    async prune(live) {
+      await words.prune!(live);
+      await db()`delete from mnml_vectors where entry <> all(${live})`;
+    },
+
+    async query(q, { collections, limit }) {
+      const [vector] = await embed([q], 'query');
+      const near = await db()`
+        select c.key, c.slug, c.title, c.url, c.field, c.text, 1 - (v.embedding <=> ${JSON.stringify(vector)}::vector) as score
+        from mnml_vectors v join mnml_chunks c on c.entry = v.entry and c.idx = v.idx
+        where v.model = ${model} and (${collections ?? null}::text[] is null or c.key = any(${collections ?? null}))
+        order by v.embedding <=> ${JSON.stringify(vector)}::vector limit ${limit}`;
+      const byWords = await words.query(q, { collections, limit });
+      return fuseMatches([byWords, near.map((r) => ({ ...(r as SearchMatch), score: Number(r.score) }))]).slice(0, limit);
+    },
+  };
+}
 
 /** OpenAI's embeddings API, called with `fetch` (key from OPENAI_API_KEY). */
 export const openaiEmbed =
@@ -27,7 +73,7 @@ export const openaiEmbed =
 
 /**
  * Google's Gemini embeddings (`gemini-embedding-001`, key from GEMINI_KEY), cut to 1536 numbers to fit
- * pgvector-schema.ts. Tested against the real API.
+ * search-vectors.sql. Tested against the real API.
  */
 export const geminiEmbed =
   (model = 'gemini-embedding-001'): Embed =>
@@ -52,68 +98,3 @@ export const geminiEmbed =
       return v.map((x) => x / n);
     });
   };
-
-const rowsOf = <T>(res: unknown): T[] => (Array.isArray(res) ? res : ((res as { rows?: T[] }).rows ?? [])) as T[];
-
-export function pgvectorSearch({ database, embed, model }: { database: () => Database; embed: Embed; model: string }): SearchIndex {
-  const words = postgresSearch({ database });
-  const run = async <T>(q: ReturnType<typeof sql>) => rowsOf<T>(await database().execute(q));
-  const slugOf = (slug: string | null) => slug ?? 'singleton';
-
-  return {
-    async put(entry) {
-      await words.put(entry); // the words stay searchable even if embedding fails below
-      const slug = slugOf(entry.slug);
-      const have = new Map(
-        (
-          await run<{ idx: number; hash: string; model: string }>(
-            sql`select idx, hash, model from mnml_vectors where collection = ${entry.key} and slug = ${slug}`,
-          )
-        ).map((r) => [r.idx, r]),
-      );
-      const stale = entry.chunks.filter((c) => have.get(c.idx)?.hash !== c.hash || have.get(c.idx)?.model !== model);
-      if (stale.length) {
-        const vectors = await embed(
-          stale.map((c) => `${entry.title}\n\n${c.text}`),
-          'document',
-        );
-        const values = stale.map((c, i) => sql`(${entry.key}, ${slug}, ${c.idx}, ${c.hash}, ${model}, ${JSON.stringify(vectors[i])}::vector)`);
-        await run(sql`
-          insert into mnml_vectors (collection, slug, idx, hash, model, embedding) values ${sql.join(values, sql`, `)}
-          on conflict (collection, slug, idx) do update set hash = excluded.hash, model = excluded.model, embedding = excluded.embedding`);
-      }
-      await run(sql`delete from mnml_vectors where collection = ${entry.key} and slug = ${slug} and idx >= ${entry.chunks.length}`);
-    },
-
-    async remove(key, slug) {
-      await words.remove(key, slug);
-      await run(sql`delete from mnml_vectors where collection = ${key} and slug = ${slugOf(slug)}`);
-    },
-
-    async query(q, { collections, limit }) {
-      const [vector] = await embed([q], 'query');
-      const v = sql`${JSON.stringify(vector)}::vector`;
-      const only = collections
-        ? sql`and v.collection in (${sql.join(
-            collections.map((c) => sql`${c}`),
-            sql`, `,
-          )})`
-        : sql``;
-      const near = await run<SearchMatch & { collection: string }>(sql`
-        select v.collection as key, v.slug, c.title, c.url, c.field, c.text, 1 - (v.embedding <=> ${v}) as score
-        from mnml_vectors v join mnml_chunks c on c.collection = v.collection and c.slug = v.slug and c.idx = v.idx
-        where v.model = ${model} ${only}
-        order by v.embedding <=> ${v}
-        limit ${limit * 3}`);
-      const byWords = await words.query(q, { collections, limit: limit * 3 });
-      return fuseMatches([byWords, near.map((m) => ({ ...m, score: Number(m.score) }))]).slice(0, limit);
-    },
-
-    async prune(live) {
-      await words.prune?.(live);
-      const keep = new Set(live.map((e) => `${e.key}\u0000${slugOf(e.slug)}`));
-      for (const e of await run<{ collection: string; slug: string }>(sql`select distinct collection, slug from mnml_vectors`))
-        if (!keep.has(`${e.collection}\u0000${e.slug}`)) await run(sql`delete from mnml_vectors where collection = ${e.collection} and slug = ${e.slug}`);
-    },
-  };
-}

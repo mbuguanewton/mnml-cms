@@ -1,16 +1,18 @@
 ---
-description: "Search published content for RAG and agents: cms.search(), the built-in Postgres full-text index, your own SearchIndex (pgvector, Mongo, Convex, Algolia), the search_content MCP tool, a public route and reindexing."
+description: "Search published content for RAG and agents: cms.search(), your own SearchIndex (Postgres full-text, pgvector, Mongo, Convex, Algolia), the search_content MCP tool, a public route and reindexing."
 ---
 
 # Search
 
 Search the published content from your own code, an agent or a RAG pipeline. Off by default.
 
+The package cuts each published entry into passages and keeps an **index** up to date. The index is yours, like [image storage](/image-storage): Postgres, Mongo, Convex, Algolia, Pinecone… with or without embeddings. The package ships no index and no embedding code, so it never ties you to a database or a provider. Below are working examples to copy.
+
 ```ts filename="src/mnml/index.ts"
 export const cms = createCms(config, {
-  database: neonDatabase(process.env.DATABASE_URL),
+  storage: myStorage, // any storage
   auth: { password: process.env.ADMIN_PASSWORD, secret: process.env.ADMIN_SESSION_SECRET },
-  search: true,
+  search: { index: myIndex },
 });
 ```
 
@@ -26,90 +28,125 @@ const hits = await cms.search('how do refunds work', { collections: ['posts'], l
 - `score`: higher is better. Compare scores only inside one result list.
 - Drafts are never indexed or returned. Unpublished and deleted entries drop out.
 
-## How it fits together
-
-The package cuts each published entry into passages and keeps an **index** up to date. Where the index lives and how it searches is a plug, like [image storage](/image-storage).
-
-| | |
-| --- | --- |
-| `search: true` | Built-in index: Postgres full-text search (stemming, ranking, no extension, no API key). Needs the `database` option. |
-| `search: { index }` | Your own `SearchIndex`: pgvector, Mongo, Convex, Algolia, Typesense, Pinecone… Works with any `storage`. |
-
-The package never embeds anything and has no vector code. Embedding models and vector databases change too often, and sites use different ones.
-
-## Set up the built-in index
-
-1. Turn on `search: true`.
-2. Add the search table to `schema` in your drizzle config, then run `drizzle-kit push`. It creates `mnml_chunks`. Sites that leave search off never get it.
-
-```ts filename="drizzle.config.ts"
-schema: ['./node_modules/@n3wtou/mnml-cms/dist/server/content/db.js', './node_modules/@n3wtou/mnml-cms/dist/server/search/table.js'],
-```
-3. Run `await cms.search.reindex()` once, for the content you already have (see [Reindex](#reindex)).
-
-From then on, every publish, unpublish and delete updates the index after the response is sent. A failure is logged and never fails the save.
-
-## Use your own index
+## The index
 
 A `SearchIndex` has three methods and one optional one:
 
 ```ts
 import type { SearchIndex } from '@n3wtou/mnml-cms/next';
 
-export const myIndex = (): SearchIndex => ({
+export const myIndex: SearchIndex = {
   // Replace everything stored for this entry.
-  async put({ key, slug, title, url, chunks }) {
-    // chunks: [{ field, idx, text, hash }]. Same hash as before: the passage did not change.
+  async put({ id, key, slug, title, url, chunks }) {
+    // id: 'posts/hello' ('settings/' for a singleton). chunks: [{ field, idx, text, hash }]
   },
-  // The entry was unpublished or deleted. `slug` is null for a singleton.
-  async remove(key, slug) {},
+  // The entry was unpublished or deleted.
+  async remove(id) {},
   // The best passages, best first: [{ key, slug, title, url, field, text, score }]
   async query(q, { collections, limit }) {
     return [];
   },
-  // Optional: drop everything not in `live` (used by reindex).
+  // Optional: drop every entry whose id is not in `live` (used by reindex).
   async prune(live) {},
-});
+};
 ```
 
-```ts
-createCms(config, { storage: myStorage, auth, search: { index: myIndex() } });
-```
-
-- `put` gets only published entries, never drafts. Skip passages whose `hash` you already hold, so unchanged text is not embedded again.
+- `put` gets only published entries, never drafts.
+- Make `put` one statement or transaction where you can: delete what the entry no longer has and write the rest together. Then two saves of one entry cannot leave half of each.
+- Each chunk has a `hash`. Skip passages whose hash you already hold, so unchanged text is not embedded again.
 - `query` may return several passages of one entry. The package keeps the best of each, so it asks for about three times as many passages as results.
 - The index can live in another system from the entries. That is the normal case for Algolia and Typesense.
-- With a custom `storage` (no Drizzle `database`), `search: true` is not available. Pass an `index`.
 
 Helpers, exported from `@n3wtou/mnml-cms/next` and `/sync`:
 
-- `searchEntry(config, key, slug, data)`: the title, link and passages of one entry, if you want to feed an index yourself.
-- `fuseMatches([keywordMatches, vectorMatches])`: merges ranked lists (reciprocal rank fusion), for hybrid search.
-- `postgresSearch({ database })`: the built-in index, to wrap or learn from.
+- `searchEntry(config, key, slug, data)`: the id, title, link and passages of one entry, if you want to feed an index yourself.
+- `fuseMatches([wordMatches, vectorMatches])`: merges ranked lists (reciprocal rank fusion), for hybrid search.
 
-### Search by meaning with pgvector
+## Example: Postgres full-text
 
-The repo's example has a tested adapter that adds vectors to the built-in index and merges both with `fuseMatches`: [`pgvector-search.ts`](https://github.com/mbuguanewton/mnml-cms/blob/main/example/src/mnml/pgvector-search.ts) and its table, [`pgvector-schema.ts`](https://github.com/mbuguanewton/mnml-cms/blob/main/example/src/mnml/pgvector-schema.ts). Copy them and pick or swap the `embed` function for your provider. The file has `openaiEmbed()` and `geminiEmbed()` (both small `fetch` calls; Gemini is tested against the real API, including a Spanish query finding English text). Voyage, Cohere or a local model work the same.
+Words only, with stemming and ranking. No extension, no API key. This is the whole adapter; the repo's example has it as [`postgres-search.ts`](https://github.com/mbuguanewton/mnml-cms/blob/main/example/src/mnml/postgres-search.ts).
 
-```ts
-search: { index: pgvectorSearch({ database: neonDatabase(process.env.DATABASE_URL), embed: openaiEmbed(), model: 'text-embedding-3-small' }) },
+```sql
+create table if not exists mnml_chunks (
+  entry text not null,
+  idx int not null,
+  key text not null,
+  slug text,
+  title text not null,
+  url text,
+  field text not null,
+  text text not null,
+  tsv tsvector generated always as (to_tsvector('english', title || ' ' || text)) stored,
+  primary key (entry, idx)
+);
+create index if not exists mnml_chunks_tsv_idx on mnml_chunks using gin (tsv);
 ```
 
-1. `create extension if not exists vector;` (Neon, Supabase and most hosts have pgvector).
-2. Add `pgvector-schema.ts` to `schema` in your drizzle config, then `drizzle-kit push`.
-3. `cms.search.reindex()`. Run it again when you change the model: the model is stored with each vector, so old and new vectors are never mixed.
+```ts filename="src/mnml/postgres-search.ts"
+import { neon } from '@neondatabase/serverless';
+import type { SearchIndex, SearchMatch } from '@n3wtou/mnml-cms/sync';
+
+export function postgresSearch(url: string | undefined): SearchIndex {
+  // Created when first used, so a build without DATABASE_URL still works.
+  const db = () => neon(url ?? '');
+  return {
+    async put({ id, key, slug, title, url, chunks }) {
+      // Upsert the passages and delete the ones past the end, in one statement.
+      await db()`
+        with up as (
+          insert into mnml_chunks (entry, idx, key, slug, title, url, field, text)
+          select ${id}, i, ${key}, ${slug}, ${title}, ${url}, f, t
+          from unnest(${chunks.map((c) => c.idx)}::int[], ${chunks.map((c) => c.field)}::text[], ${chunks.map((c) => c.text)}::text[]) as c(i, f, t)
+          on conflict (entry, idx) do update set key = excluded.key, slug = excluded.slug, title = excluded.title, url = excluded.url, field = excluded.field, text = excluded.text
+        )
+        delete from mnml_chunks where entry = ${id} and idx >= ${chunks.length}`;
+    },
+    async remove(id) {
+      await db()`delete from mnml_chunks where entry = ${id}`;
+    },
+    async prune(live) {
+      await db()`delete from mnml_chunks where entry <> all(${live})`;
+    },
+    async query(q, { collections, limit }) {
+      // Any word matches; passages with more of them rank higher.
+      const words = (q.match(/[\p{L}\p{N}]+/gu) ?? []).join(' or ');
+      const rows = await db()`
+        select key, slug, title, url, field, text, ts_rank_cd(tsv, query) as score
+        from mnml_chunks, websearch_to_tsquery('english', ${words}) as query
+        where tsv @@ query and (${collections ?? null}::text[] is null or key = any(${collections ?? null}))
+        order by score desc limit ${limit}`;
+      return rows.map((r) => ({ ...(r as SearchMatch), score: Number(r.score) }));
+    },
+  };
+}
+```
+
+Any Postgres client works the same way: swap Neon's `sql` for your own.
+
+## Example: search by meaning (pgvector)
+
+[`pgvector-search.ts`](https://github.com/mbuguanewton/mnml-cms/blob/main/example/src/mnml/pgvector-search.ts) wraps the Postgres example for the words, keeps vectors in a second table, and merges both lists with `fuseMatches`. Embedding is a function you pass:
+
+```ts
+search: { index: pgvectorSearch({ url: process.env.DATABASE_URL, embed: geminiEmbed(), model: 'gemini-embedding-001' }) },
+```
+
+The file has `openaiEmbed()` and `geminiEmbed()`, both small `fetch` calls. Gemini is tested against the real API, including a Spanish query finding English text. Voyage, Cohere or a local model work the same.
+
+1. `create extension if not exists vector;` and the vectors table: [`search-vectors.sql`](https://github.com/mbuguanewton/mnml-cms/blob/main/example/scripts/search-vectors.sql). Neon, Supabase and most hosts have pgvector.
+2. `cms.search.reindex()`. Run it again when you change the model: the model is stored with each vector, so old and new vectors are never mixed.
 
 Good to know:
 
 - Vector search always returns the nearest entries, even for a query with no real match. Cut by `score` or show fewer results if that matters.
-- Embed in `put`, after the words are stored, so a provider outage never makes new content unsearchable.
+- Embed in `put` after the words are stored, so a provider outage never makes new content unsearchable.
+- Embedding calls the network, so that `put` is not one statement. If two saves of one entry overlap, `reindex()` repairs it.
 - If embedding the query fails, answer from the words only.
 
-### Other databases
+## Other databases
 
 The pieces are the same everywhere: store passages on `put`, delete them on `remove`, search them on `query`.
 
-- **Postgres without pgvector:** the built-in index.
 - **MongoDB:** an Atlas Search index (text) and Atlas Vector Search on a collection of passages. `put`: delete the entry's passages and insert the new ones. `query`: `$search` and/or `$vectorSearch`.
 - **Convex:** a table of passages with a search index and a vector index. `put` and `remove` call mutations, `query` calls a query function.
 - **Firebase:** Firestore has no full-text or vector search. Use Typesense, Algolia, Meilisearch or Vertex AI Vector Search as the index.
@@ -123,7 +160,7 @@ These are not shipped as packages: your database, your embeddings, your adapter.
 
 - after turning `search` on for a site with content,
 - after [moving content](/moving-content) between databases,
-- after changing your embedding model or adapter.
+- after changing your embedding model or index.
 
 ```ts
 const { entries, chunks, failed } = await cms.search.reindex();
@@ -131,17 +168,17 @@ const { entries, chunks, failed } = await cms.search.reindex();
 
 One entry that fails (say, your embedding provider rejects it) does not stop the rest. It is listed in `failed` as `{ key, slug, message }`, and its old passages are kept. Run `reindex()` again to retry.
 
-Scripts and cron jobs can run it without Next.js:
+Scripts and cron jobs can run it without Next.js, with the same storage and index as `createCms`:
 
 ```ts filename="scripts/reindex.ts"
-import { createSearch, neonDatabase } from '@n3wtou/mnml-cms/sync';
+import { createSearch, drizzleStorage, neonDatabase } from '@n3wtou/mnml-cms/sync';
 import config from '../mnml.config';
+import { postgresSearch } from '../src/mnml/postgres-search';
 
-const { failed } = await createSearch(config, { database: neonDatabase(process.env.DATABASE_URL) }).reindex();
+const url = process.env.DATABASE_URL;
+const { failed } = await createSearch(config, { storage: drizzleStorage(neonDatabase(url)), index: postgresSearch(url) }).reindex();
 if (failed.length) process.exitCode = 1;
 ```
-
-Pass the same `search` options you gave `createCms` (`index`, `table`, `language`), and `storage` instead of `database` for a custom storage.
 
 ## What gets indexed
 
@@ -156,7 +193,7 @@ With the [MCP server](/agents) on, agents get a `search_content` tool (scope `re
 ## Public route
 
 ```ts
-search: { route: ['posts', 'pages'] },
+search: { index: myIndex, route: ['posts', 'pages'] },
 ```
 
 Turns on `GET <apiPath>/search?q=…&collections=posts&limit=10` (JSON `{ ok, results }`). It answers anyone, with the full text of each passage, so it is off by default.
@@ -171,7 +208,5 @@ Turns on `GET <apiPath>/search?q=…&collections=posts&limit=10` (JSON `{ ok, re
 
 | Option | Default | |
 | --- | --- | --- |
-| `index` | built-in Postgres | Your own `SearchIndex`. Needed with a custom `storage`. |
+| `index` | required | Your `SearchIndex`. |
 | `route` | `false` | Turns on the public route: `true` (everything) or a list of collection keys. |
-| `table` | `'mnml_chunks'` | The built-in index's table. Match `chunksTable({ name })`. |
-| `language` | `'english'` | The built-in index's Postgres text search configuration, e.g. `'simple'` or `'german'`. Match `chunksTable({ language })`. |

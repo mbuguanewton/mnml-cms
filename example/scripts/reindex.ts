@@ -2,13 +2,15 @@
 // `search` on for a site that already has content, or after changing the embedding model.
 //   pnpm db:reindex
 import { existsSync } from 'node:fs';
-import { createSearch, neonDatabase } from '@n3wtou/mnml-cms/sync';
+import { createSearch, drizzleStorage, neonDatabase } from '@n3wtou/mnml-cms/sync';
 import config from '../mnml.config';
+import { postgresSearch } from '../src/mnml/postgres-search';
 
 if (existsSync('.env.local')) process.loadEnvFile('.env.local');
 
-// Pass the same `search` options as createCms (here none: the built-in Postgres full-text index).
-const { entries, chunks, failed } = await createSearch(config, { database: neonDatabase(process.env.DATABASE_URL) }).reindex();
+// The same storage and index as createCms.
+const url = process.env.DATABASE_URL;
+const { entries, chunks, failed } = await createSearch(config, { storage: drizzleStorage(neonDatabase(url)), index: postgresSearch(url) }).reindex();
 console.log(`Indexed ${entries} entries (${chunks} chunks).`);
 for (const f of failed) console.error(`Failed: ${f.key}/${f.slug ?? '-'}: ${f.message}`);
 if (failed.length) process.exitCode = 1;

@@ -5,16 +5,16 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }
 vi.mock('next/server', () => ({ after: (fn: () => unknown) => void fn() }));
 vi.mock('next/headers', () => ({ draftMode: async () => ({ isEnabled: false }), cookies: async () => ({ get: () => undefined }) }));
 
-// The Postgres index is swapped for one in memory: it matches a passage when it has every word of the query.
-type Passage = { key: string; slug: string | null; field: string; text: string; title: string; url: string | null };
+// An index in memory: a passage matches when it has every word of the query.
+type Passage = { id: string; key: string; slug: string | null; field: string; text: string; title: string; url: string | null };
 const stored = vi.hoisted(() => ({ passages: [] as Passage[] }));
-const memory = vi.hoisted(() => ({
-  put: async (e: { key: string; slug: string | null; title: string; url: string | null; chunks: { field: string; text: string }[] }) => {
-    stored.passages = stored.passages.filter((p) => !(p.key === e.key && p.slug === e.slug));
-    for (const c of e.chunks) stored.passages.push({ key: e.key, slug: e.slug, field: c.field, text: c.text, title: e.title, url: e.url });
+const memory = {
+  put: async (e: { id: string; key: string; slug: string | null; title: string; url: string | null; chunks: { field: string; text: string }[] }) => {
+    stored.passages = stored.passages.filter((p) => p.id !== e.id);
+    for (const c of e.chunks) stored.passages.push({ id: e.id, key: e.key, slug: e.slug, field: c.field, text: c.text, title: e.title, url: e.url });
   },
-  remove: async (key: string, slug: string | null) => {
-    stored.passages = stored.passages.filter((p) => !(p.key === key && p.slug === slug));
+  remove: async (id: string) => {
+    stored.passages = stored.passages.filter((p) => p.id !== id);
   },
   query: async (q: string, o: { collections?: string[] }) =>
     stored.passages
@@ -24,8 +24,7 @@ const memory = vi.hoisted(() => ({
           (q.toLowerCase().match(/\w+/g) ?? []).every((w) => `${p.title} ${p.text}`.toLowerCase().includes(w)),
       )
       .map((p) => ({ ...p, score: 1 })),
-}));
-vi.mock('./postgres.js', () => ({ postgresSearch: () => memory }));
+};
 
 const { collection, config, fields } = await import('../../schema/define.js');
 const { createContext } = await import('../context.js');
@@ -73,7 +72,6 @@ const NOTES_TOKEN = 'n'.repeat(32);
 function build(search: unknown) {
   const ctx = createContext(cmsConfig, {
     storage: storage(),
-    database: (() => ({})) as never,
     auth: { isAdmin: async () => true, loginUrl: '/' },
     revalidate: () => {},
     mcp: {
@@ -82,7 +80,7 @@ function build(search: unknown) {
         { name: 'notes', token: NOTES_TOKEN, scopes: ['read'], collections: ['notes'] },
       ],
     },
-    search: search as never,
+    search: search === undefined ? undefined : { index: memory, ...(search as object) },
   } as never);
   return { ctx, handlers: createHandlers(ctx) };
 }
@@ -156,13 +154,13 @@ describe('createContext', () => {
     expect(build(undefined).ctx.search).toBeNull();
   });
 
-  it('needs a database for `search: true`, but not when you bring an index', () => {
-    const base = { storage: storage(), auth: { isAdmin: async () => true } };
-    expect(() => createContext(cmsConfig, { ...base, search: true } as never)).toThrow('`search: { index }`');
-    expect(createContext(cmsConfig, { ...base, search: { index: memory } } as never).search).not.toBeNull();
+  it('refuses a route list with a collection that is not in the config', () => {
+    expect(() =>
+      createContext(cmsConfig, { storage: storage(), auth: { isAdmin: async () => true }, search: { index: memory, route: ['nope'] } } as never),
+    ).toThrow('"nope"');
   });
 
-  it('feeds a custom index from a custom storage', async () => {
+  it('feeds the index from any storage', async () => {
     const custom = createContext(cmsConfig, {
       storage: storage(),
       auth: { isAdmin: async () => true },
@@ -191,7 +189,7 @@ describe('GET /search', () => {
   });
 
   it('is a 404 unless `route` is on', async () => {
-    app = build(true);
+    app = build({});
     expect((await find('?q=refund')).status).toBe(404);
   });
 
@@ -214,10 +212,6 @@ describe('GET /search', () => {
     expect(await slugs('?q=refund&collections=notes,posts')).toEqual(['a']);
     // The site's own cms.search() is not limited by it.
     expect((await app.ctx.search!.query('refund')).map((h) => h.slug).sort((x, y) => (x ?? '').localeCompare(y ?? ''))).toEqual(['a', 'n']);
-  });
-
-  it('refuses a route list with a collection that is not in the config', () => {
-    expect(() => build({ route: ['nope'] })).toThrow('"nope"');
   });
 
   it('caps all clients together, whatever x-forwarded-for says', async () => {

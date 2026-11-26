@@ -10,6 +10,8 @@ export type SearchChunk = {
 
 /** A published entry, cut into passages, as it goes into the index. */
 export type SearchEntry = {
+  /** Stable and unique, e.g. `posts/hello`, or `settings/` for a singleton: use it as the object ID, primary key or ID prefix. */
+  id: string;
   key: string;
   /** Null for a singleton. */
   slug: string | null;
@@ -47,31 +49,31 @@ export type SearchQuery = {
 };
 
 /**
- * Where passages are stored and searched: Postgres full-text (the built-in `postgresSearch`), pgvector, Mongo Atlas
- * Search, Convex, Algolia, Typesense, Pinecone… It owns embeddings and everything else that varies. The package
- * only hands it published entries, and never drafts.
+ * Where passages are stored and searched: Postgres full-text, pgvector, Mongo Atlas Search, Convex, Algolia,
+ * Typesense, Pinecone… The package has no index of its own: you write this (the docs have examples), so it owns the
+ * database, the embeddings and everything else that varies. The package only hands it published entries, never drafts.
  */
 export type SearchIndex = {
-  /** Replaces everything indexed for this entry (add new passages, update changed ones, drop the rest). Compare `hash` to skip passages that did not change. */
+  /**
+   * Replaces everything indexed for this entry: add its passages, drop the ones it no longer has. Run the delete and
+   * the insert as one statement or transaction where you can, so two saves of one entry cannot interleave. Compare
+   * each chunk's `hash` if you want to skip work (embedding, mostly) for passages that did not change.
+   */
   put(entry: SearchEntry): Promise<void>;
-  /** Drops the entry: it was unpublished or deleted. `slug` is null for a singleton. */
-  remove(key: string, slug: string | null): Promise<void>;
+  /** Drops the entry: it was unpublished or deleted. `id` is the `id` that `put` got. */
+  remove(id: string): Promise<void>;
   /** The best passages for `q`, best first, at most `limit`. The package asks for a few times more passages than the results it shows, because it keeps only the best passage of each entry. */
   query(q: string, o: { collections?: string[]; limit: number }): Promise<SearchMatch[]>;
-  /** Optional. Drops every entry not in `live` (used by `reindex()`, for entries removed while indexing was off). */
-  prune?(live: { key: string; slug: string | null }[]): Promise<void>;
+  /** Optional. Drops every entry whose id is not in `live` (used by `reindex()`, for entries removed while indexing was off). */
+  prune?(live: string[]): Promise<void>;
 };
 
 export type SearchOptions = {
-  /** Where passages go. Default: Postgres full-text search in your `database`. Needed with a custom `storage`. */
-  index?: SearchIndex;
+  /** Where passages go. Required: see the docs for examples. */
+  index: SearchIndex;
   /**
    * Turns on the public `GET <apiPath>/search?q=`. Off by default: a search may cost an embedding call, and it answers
    * anyone. `true` searches every collection and singleton; a list of keys limits it to those, e.g. `['posts']`.
    */
   route?: boolean | string[];
-  /** The built-in index's table. Default 'mnml_chunks'. */
-  table?: string;
-  /** The built-in index's Postgres text search configuration, e.g. 'english' (default) or 'simple'. Must match `chunksTable`. */
-  language?: string;
 };
