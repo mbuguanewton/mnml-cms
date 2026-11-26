@@ -10,6 +10,11 @@ import type { EntryStorage } from '../server/content/storage.js';
 export { drizzleStorage } from '../server/content/storage.js';
 export { neonDatabase } from '../server/content/db.js';
 export { localMedia, vercelBlobMedia, type MediaStorage } from '../server/media/media.js';
+export { createSearch, type CreateSearchOptions } from '../server/search/standalone.js';
+export { postgresSearch, type PostgresSearchOptions } from '../server/search/postgres.js';
+export { searchEntry } from '../server/search/entry.js';
+export { fuseMatches } from '../server/search/rank.js';
+export type { SearchChunk, SearchEntry, SearchHit, SearchIndex, SearchMatch, SearchOptions, SearchQuery } from '../server/search/types.js';
 export { importRemoteMedia, mediaImporter, type RemoteMediaOptions, type RemoteMediaResult } from './remote-media.js';
 export { markdownToRichText, richTextToMarkdown } from '../rich-text/markdown.js';
 

@@ -22,10 +22,11 @@ import { SESSION_COOKIE, sessionCookieOptions } from '../auth/session.js';
 import { IMAGE_TYPES, MAX_IMAGE_BYTES } from '../media/media.js';
 import { loadRefOptions } from '../content/ref-options.js';
 import { PREVIEW_COOKIE } from '../content/store.js';
+import { createLimiter } from '../search/limit.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
 //   POST: login · logout · logout-all · save · autosave · discard · bulk · delete · preview · preview/exit · references · reference/schema · upload · media/list · media/delete · request · tokens/create · tokens/revoke · mcp
-//   GET:  media/<key> (uploaded images, public) · preview/open (admins only)
+//   GET:  media/<key> (uploaded images, public) · preview/open (admins only) · search (public, only with `search: { route: true }`)
 
 const MEDIA_KEY = /^[\w.\-/]+$/;
 /** The most files one `media/delete` call takes. */
@@ -50,6 +51,28 @@ export function createHandlers(ctx: Context) {
   const content = createContentService(ctx);
   const mcp = ctx.options.mcp ? createMcpHandler(ctx, content) : null;
   const tokens = ctx.options.mcp?.adminTokens ? agentTokens(ctx) : null;
+
+  // Public and it may spend embedding credits: 30 searches a minute per client.
+  const searchLimit = createLimiter({ max: 30, windowMs: 60_000 });
+  async function searchRoute(request: Request) {
+    const wait = searchLimit(clientIp(request));
+    if (wait > 0)
+      return Response.json(
+        { ok: false, message: `Too many searches. Try again in ${wait} seconds.` },
+        { status: 429, headers: { 'Retry-After': String(wait) } },
+      );
+    const params = new URL(request.url).searchParams;
+    const q = params.get('q')?.trim() ?? '';
+    if (!q || q.length > 200) return json({ ok: false, message: 'Send what to look for in ?q= (up to 200 characters).' }, 400);
+    const collections = params.get('collections')?.split(',').filter(Boolean);
+    const limit = Math.min(Number(params.get('limit')) || 10, 20);
+    try {
+      return json({ ok: true, results: await ctx.search!.query(q, { collections, limit }) });
+    } catch (e) {
+      console.error('cms search failed:', e);
+      return json({ ok: false, message: 'Search failed.' }, 500);
+    }
+  }
 
   const routes: Record<string, (request: Request) => Promise<Response>> = {
     // The login form posts JSON. Without JavaScript (or before it loads) the browser posts the form itself,
@@ -303,6 +326,7 @@ export function createHandlers(ctx: Context) {
   async function GET(request: Request, { params }: { params: Promise<{ route?: string[] }> }) {
     const [first, ...rest] = (await params).route ?? [];
     if (first === 'preview' && rest.join('/') === 'open') return openPreview(request);
+    if (first === 'search' && rest.length === 0 && ctx.search && ctx.searchRoute) return searchRoute(request);
     if (first === 'mcp' && mcp && rest.length === 0) return new Response('Use POST.', { status: 405, headers: { Allow: 'POST' } });
     const key = rest.join('/');
     if (first !== 'media' || !ctx.options.media || !MEDIA_KEY.test(key) || key.includes('..')) return new Response('Not found', { status: 404 });

@@ -6,7 +6,8 @@ import { fitDefaults, type Mismatch } from '../../schema/fit.js';
 import { withDefaults, withDerived, type CmsConfig, type CollectionKey, type EntryFor, type SingletonKey } from '../../schema/define.js';
 import type { EntryStorage } from './storage.js';
 
-export const SINGLETON_SLUG = 'singleton';
+import { SINGLETON_SLUG } from './singleton.js';
+export { SINGLETON_SLUG };
 
 // Preview drafts live in the same table under `draft:<key>`. They are only read while Draft Mode is
 // on, which only signed-in editors can turn on, and only for the one entry named in PREVIEW_COOKIE,

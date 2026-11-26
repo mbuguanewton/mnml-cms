@@ -120,6 +120,7 @@ Everything else is in the docs at **https://mnml-cms.vercel.app**:
   [focal point](https://mnml-cms.vercel.app/fields/focal-point), [default values](https://mnml-cms.vercel.app/fields/default-values),
   [conditional fields](https://mnml-cms.vercel.app/fields/conditional-fields), [derived values](https://mnml-cms.vercel.app/fields/derived-values), [SEO](https://mnml-cms.vercel.app/fields/seo)
 - [Reading content](https://mnml-cms.vercel.app/reading-content)
+- [Search](https://mnml-cms.vercel.app/search): `cms.search()` for RAG and agents: built-in full-text index, or plug in your own (pgvector, Mongo, Convex…)
 - [Drafts and publishing](https://mnml-cms.vercel.app/drafts-and-publishing)
 - [Changing fields](https://mnml-cms.vercel.app/changing-fields): what editors see when stored content no longer fits a changed field
 - [Agents (MCP)](https://mnml-cms.vercel.app/agents): let Claude Code, Cursor or Zed manage content with scoped tokens

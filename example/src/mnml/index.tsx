@@ -26,6 +26,9 @@ export const cms = createCms(config, {
   },
   // An extra admin screen, built with the components from @n3wtou/mnml-cms/admin.
   pages: [{ path: 'cache', label: 'Cache', icon: <DatabaseZapIcon />, render: () => <CacheTool /> }],
+  // Search over published content: cms.search(), the search_content MCP tool and GET /api/mnml/search (`route`).
+  // `search: true` is Postgres full-text search, no key. For meaning-based search pass your own `index`: see pgvector-search.ts.
+  search: { route: true },
   // The MCP server at /api/mnml/mcp, for agents such as Claude Code.
   // adminTokens: editors also create and revoke tokens under Agent access in /admin.
   mcp: { adminTokens: true, tokens: [{ name: 'agent', token: process.env.MNML_AGENT_TOKEN, scopes: ['read', 'draft', 'publish'] }] },

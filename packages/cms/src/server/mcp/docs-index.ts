@@ -154,6 +154,24 @@ export const docsIndex: DocsPage[] = [
     ]
   },
   {
+    "title": "Search",
+    "url": "https://mnml-cms.vercel.app/search",
+    "markdown": "https://mnml-cms.vercel.app/search.md",
+    "description": "Search published content for RAG and agents: cms.search(), the built-in Postgres full-text index, your own SearchIndex (pgvector, Mongo, Convex, Algolia), the search_content MCP tool, a public route and reindexing.",
+    "headings": [
+      "How it fits together",
+      "Set up the built-in index",
+      "Use your own index",
+      "Search by meaning with pgvector",
+      "Other databases",
+      "Reindex",
+      "What gets indexed",
+      "For agents",
+      "Public route",
+      "Options"
+    ]
+  },
+  {
     "title": "Drafts and publishing",
     "url": "https://mnml-cms.vercel.app/drafts-and-publishing",
     "markdown": "https://mnml-cms.vercel.app/drafts-and-publishing.md",

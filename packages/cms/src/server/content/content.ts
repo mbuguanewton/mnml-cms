@@ -39,6 +39,16 @@ function changed(ctx: Context, change: Change) {
   // `expire: 0` drops it at once; 'max' would serve the old version to the next visitor.
   if (ctx.options.cache) revalidateTag(cacheTag(change.key), { expire: 0 });
   (ctx.options.revalidate ?? (() => revalidatePath('/', 'layout')))(change);
+  // Publish, unpublish and delete keep the search index in step. A failure only costs freshness, never the save.
+  const search = ctx.search;
+  if (search)
+    after(async () => {
+      try {
+        await search.sync(change.key, change.slug);
+      } catch (e) {
+        console.error('cms search index failed:', e);
+      }
+    });
   const onChange = ctx.options.onChange;
   if (onChange)
     after(async () => {

@@ -9,6 +9,9 @@ import { createStore } from './content/store.js';
 import type { BrandOption } from './admin/brand.js';
 import type { CacheOption } from './content/cached-store.js';
 import { localMedia, type MediaStorage } from './media/media.js';
+import { postgresSearch } from './search/postgres.js';
+import { buildSearch } from './search/search.js';
+import type { SearchOptions } from './search/types.js';
 
 /** A save or delete that reached the site. `by` is the agent token's name when the MCP server made it. */
 export type Change = { type: 'save' | 'delete'; key: string; slug: string; by?: string };
@@ -116,6 +119,12 @@ export type CmsOptions<C extends CmsConfig> = StorageOptions & {
    * written outside the CMS (scripts, SQL). Off by default; recommended. Draft Mode and the admin always read fresh.
    */
   cache?: CacheOption;
+  /**
+   * Search over published content, for agents and RAG: `cms.search(query)`, a `search_content` tool on the MCP server.
+   * `true` is Postgres full-text search in your `database` (no keys; run `drizzle-kit push` for the `mnml_chunks`
+   * table). `{ index }` plugs in your own `SearchIndex` (vectors, Mongo, Convex, Algolia…), and works with any `storage`.
+   */
+  search?: boolean | SearchOptions;
   /** Called after each save or delete. Default: revalidatePath('/', 'layout'). */
   revalidate?: (change: Change) => void;
   /** Turns on the MCP server at <apiPath>/mcp, so agents (Claude Code, Cursor…) can manage content with a token. */
@@ -129,6 +138,17 @@ export function createContext<C extends CmsConfig>(config: C, options: CmsOption
   const storage = options.storage ?? drizzleStorage(typeof db === 'function' ? db : () => db!, options.table);
   const media = options.media ?? (process.env.NODE_ENV === 'development' ? localMedia() : undefined);
   const authAdapter = 'isAdmin' in options.auth ? options.auth : null;
+  const searchOptions: SearchOptions | null = options.search ? (options.search === true ? {} : options.search) : null;
+  if (searchOptions && !searchOptions.index && !db) {
+    throw new Error('`search: true` needs the `database` option (a Drizzle Postgres database). With a custom `storage`, pass `search: { index }`.');
+  }
+  const search = searchOptions
+    ? buildSearch({
+        config,
+        storage,
+        index: searchOptions.index ?? postgresSearch({ database: db!, table: searchOptions.table, language: searchOptions.language }),
+      })
+    : null;
   const adminPath = options.adminPath ?? '/admin';
   return {
     config,
@@ -137,6 +157,9 @@ export function createContext<C extends CmsConfig>(config: C, options: CmsOption
     store: createStore(config, storage),
     // What the site's pages read: a stored value that doesn't fit its field reads as empty.
     readers: createStore(config, storage, { fit: true }),
+    /** The search index, or null when `search` is off. */
+    search,
+    searchRoute: !!searchOptions?.route,
     authAdapter,
     session: sessionCodec(authAdapter ? undefined : (options.auth as PasswordAuth).secret),
     adminPath,

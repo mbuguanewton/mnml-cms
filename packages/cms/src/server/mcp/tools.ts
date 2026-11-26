@@ -227,6 +227,27 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
       },
     },
 
+    ctx.search &&
+      anyKey && {
+        name: 'search_content',
+        description:
+          "Searches the published content by meaning and keywords and returns the best passages, best first, each with its entry, field, link on the site and the passage text. Drafts are not searched; use `search` for those. Use it to answer questions from the site's content.",
+        scope: 'read',
+        input: z.object({
+          query: z.string().min(1).max(500),
+          collections: z.array(anyKey).optional().describe('Default: everything this token can read.'),
+          limit: z.number().int().min(1).max(20).default(8),
+        }),
+        annotations: { readOnlyHint: true },
+        async run(a) {
+          const hits = await ctx.search!.query(a.query as string, {
+            collections: (a.collections as string[] | undefined) ?? [...keys],
+            limit: a.limit as number,
+          });
+          return { ok: true, total: hits.length, results: hits.map(({ key, ...h }) => ({ collection: key, ...h })) };
+        },
+      },
+
     anyKey && {
       name: 'search',
       description: 'Finds entries whose text (rich text included) contains the query, case-insensitive. Searches latest versions.',

@@ -21,6 +21,8 @@ export const entriesTable = (name = 'entries') =>
     (t) => [unique(`${name}_collection_slug`).on(t.collection, t.slug)],
   );
 
+export { chunks, chunksTable, type ChunksTableOptions } from '../search/table.js';
+
 /** The default table, for drizzle-kit (`schema` in drizzle.config.ts) and scripts. */
 export const entries = entriesTable();
 
