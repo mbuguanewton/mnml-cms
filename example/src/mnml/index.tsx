@@ -5,6 +5,7 @@ import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next'
 import config from '../../mnml.config';
 import { CacheTool } from '../admin/cache-tool';
 import { Editor } from './editor-client';
+import { postgresSearch } from './postgres-search';
 import { AdminUi } from './ui';
 
 export const cms = createCms(config, {
@@ -26,6 +27,9 @@ export const cms = createCms(config, {
   },
   // An extra admin screen, built with the components from @n3wtou/mnml-cms/admin.
   pages: [{ path: 'cache', label: 'Cache', icon: <DatabaseZapIcon />, render: () => <CacheTool /> }],
+  // Search over published content: cms.search(), the search_content MCP tool and GET /api/mnml/search (`route`, limited to
+  // these collections). The index is yours: postgres-search.ts is Postgres full-text; pgvector-search.ts adds meaning.
+  search: { index: postgresSearch(process.env.DATABASE_URL), route: ['posts', 'pages'] },
   // The MCP server at /api/mnml/mcp, for agents such as Claude Code.
   // adminTokens: editors also create and revoke tokens under Agent access in /admin.
   mcp: { adminTokens: true, tokens: [{ name: 'agent', token: process.env.MNML_AGENT_TOKEN, scopes: ['read', 'draft', 'publish'] }] },

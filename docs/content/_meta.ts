@@ -4,6 +4,7 @@ export default {
   agents: 'Agents (MCP)',
   fields: 'Fields',
   'reading-content': 'Reading content',
+  search: 'Search',
   'drafts-and-publishing': 'Drafts and publishing',
   'changing-fields': 'Changing fields',
   'moving-content': 'Moving content',

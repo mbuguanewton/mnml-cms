@@ -9,6 +9,8 @@
     "db:push": "drizzle-kit push",
     "db:seed": "vpx scripts/seed.ts",
     "db:mismatch": "vpx scripts/mismatch-demo.ts",
+    "db:search": "vpx scripts/search-setup.ts",
+    "db:reindex": "vpx scripts/reindex.ts",
     "db:export": "vpx scripts/content.ts export",
     "db:import": "vpx scripts/content.ts import",
     "db:sync": "vpx scripts/content.ts sync",
@@ -16,6 +18,7 @@
   },
   "dependencies": {
     "@n3wtou/mnml-cms": "workspace:*",
+    "@neondatabase/serverless": "^1.2.0",
     "@tiptap/core": "^3.31.4",
     "drizzle-orm": "^0.45.4",
     "lucide-react": "^1.48.0",
