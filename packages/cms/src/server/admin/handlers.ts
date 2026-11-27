@@ -70,6 +70,8 @@ export function createHandlers(ctx: Context) {
         { ok: false, message: `Too many questions. Try again in ${wait} seconds.` },
         { status: 429, headers: { 'Retry-After': String(wait) } },
       );
+    // Refuse a big body before reading it.
+    if (Number(request.headers.get('content-length')) > MAX_BODY) return json({ ok: false, message: 'That request is too large.' }, 413);
     const raw = await request.text();
     if (raw.length > MAX_BODY) return json({ ok: false, message: 'That request is too large.' }, 413);
     let input: AssistantInput;
@@ -94,17 +96,26 @@ export function createHandlers(ctx: Context) {
     };
     const encoder = new TextEncoder();
     const events = assistantChat(ctx, content, safe, request.signal);
+    let gone = false;
     const body = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
-          for await (const e of events) controller.enqueue(encoder.encode(`${JSON.stringify(e)}\n`));
+          for await (const e of events) {
+            if (gone) break;
+            controller.enqueue(encoder.encode(`${JSON.stringify(e)}\n`));
+          }
         } catch (e) {
-          if (!request.signal.aborted) {
+          if (!gone && !request.signal.aborted) {
             console.error('cms assistant failed:', e);
             controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'error', message: 'The model request failed. Check the server log.' })}\n`));
           }
         }
-        controller.close();
+        // The reader may have gone (Stop, New chat, a closed tab): the stream is already closed then.
+        if (!gone) controller.close();
+      },
+      cancel() {
+        gone = true;
+        void events.return(undefined);
       },
     });
     return new Response(body, { headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' } });

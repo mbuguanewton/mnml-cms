@@ -17,8 +17,25 @@ export type ChatMessage = {
   error?: string;
 };
 
-/** Most earlier messages sent along with a question. */
+/** Most earlier messages, and characters, sent along with a question. The server refuses more than 30 messages or 60,000 characters. */
 const HISTORY = 20;
+const HISTORY_CHARS = 50_000;
+
+/**
+ * The newest messages that fit, starting with a question: a model API refuses a conversation that opens with an
+ * answer, and the newest message is always the question being asked.
+ */
+export function recent<M extends { role: 'user' | 'assistant'; content: string }>(all: M[]): M[] {
+  let chars = 0;
+  const out: M[] = [];
+  for (let i = all.length - 1; i >= 0 && out.length < HISTORY; i--) {
+    chars += all[i].content.length;
+    if (chars > HISTORY_CHARS && out.length > 0) break;
+    out.unshift(all[i]);
+  }
+  while (out.length > 1 && out[0].role === 'assistant') out.shift();
+  return out;
+}
 
 /** Reads a stream of JSON lines, calling `onEvent` for each complete one. */
 export async function readEvents(body: ReadableStream<Uint8Array>, onEvent: (e: AssistantEvent) => void) {
@@ -61,10 +78,9 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
       const text = question.trim();
       if (!text || abort.current) return;
       const t = target.current;
-      const asked = [...history.current, { id: 0, role: 'user' as const, text, fills: [] }]
-        .filter((m) => m.text)
-        .slice(-HISTORY)
-        .map((m) => ({ role: m.role, content: m.text }));
+      const asked = recent(
+        [...history.current, { id: 0, role: 'user' as const, text, fills: [] }].filter((m) => m.text).map((m) => ({ role: m.role, content: m.text })),
+      );
       const userId = next.current++;
       const replyId = next.current++;
       setMessages((all) => [...all, { id: userId, role: 'user', text, fills: [] }, { id: replyId, role: 'assistant', text: '', fills: [] }]);
@@ -102,8 +118,11 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
         if ((e as Error).name !== 'AbortError') fail('Could not reach the server.');
       } finally {
         patch(replyId, (m) => ({ ...m, status: undefined }));
-        abort.current = null;
-        setBusy(false);
+        // A newer question may have started since (after New chat): only release what this send holds.
+        if (abort.current === controller) {
+          abort.current = null;
+          setBusy(false);
+        }
       }
     },
     [apiPath, target, patch],
@@ -113,8 +132,13 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
 
   const clear = useCallback(() => {
     abort.current?.abort();
+    abort.current = null;
+    setBusy(false);
     setMessages([]);
   }, []);
+
+  // Closing the page (or the panel's page changing) stops the model request.
+  useEffect(() => () => abort.current?.abort(), []);
 
   /** Puts a filled field back to what it was. Only works while the same form is open. */
   const undo = useCallback(

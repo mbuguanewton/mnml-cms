@@ -303,6 +303,7 @@ export const docsIndex: DocsPage[] = [
     "headings": [
       "Set up",
       "What a slot gets",
+      "Another Markdown renderer",
       "Colours: the token bridge",
       "Popovers in dialogs"
     ]

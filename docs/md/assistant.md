@@ -31,6 +31,8 @@ export const cms = createCms(config, {
 
 The key stays on the server. The browser only talks to `<apiPath>/ai/chat`.
 
+Replies are shown as Markdown by a small built-in renderer. To use your own (for tables or code highlighting), give the `Markdown` slot of the [custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md) a component.
+
 For answers about the whole site, turn on [search](https://mnml-cms.vercel.app/search.md) too. Without it, the assistant can still list and read entries and search by keyword, but not by meaning.
 
 ## Name and tone

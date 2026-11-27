@@ -5,7 +5,7 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }
 vi.mock('next/server', () => ({ after: (fn: () => unknown) => void fn() }));
 vi.mock('next/headers', () => ({ draftMode: async () => ({ isEnabled: false }), cookies: async () => ({ get: () => undefined }) }));
 
-const { collection, config, fields, singleton } = await import('../../schema/define.js');
+const { block, collection, config, fields, singleton } = await import('../../schema/define.js');
 const { createContext } = await import('../context.js');
 const { createHandlers } = await import('../admin/handlers.js');
 const { checkFill } = await import('./fill.js');
@@ -86,6 +86,83 @@ beforeEach(() => {
   admin = true;
 });
 
+// One field of every type, to see that a fill is checked for each.
+const allTypes = config({
+  everything: collection({
+    label: 'Everything',
+    titleField: 'title',
+    basePath: '/e',
+    fields: {
+      title: fields.text('Title', { required: true }),
+      note: fields.textarea('Note'),
+      date: fields.date('Date'),
+      when: fields.datetime('When'),
+      link: fields.url('Link'),
+      count: fields.number('Count', { min: 0, max: 10 }),
+      on: fields.boolean('On'),
+      kind: fields.select('Kind', ['a', 'b']),
+      tags: fields.tags('Tags'),
+      author: fields.reference('Author', 'everything'),
+      related: fields.references('Related', 'everything'),
+      cover: fields.image('Cover'),
+      body: fields.richtext('Body'),
+      meta: fields.group('Meta', { blurb: fields.text('Blurb') }),
+      rows: fields.array('Rows', { label: fields.text('Label') }),
+      sections: fields.blocks('Sections', { quote: block('Quote', { text: fields.text('Text') }) }),
+    },
+  }),
+});
+
+describe('checkFill, every field type', () => {
+  const ctx = createContext(allTypes, { storage, auth: { isAdmin: async () => true } } as never);
+  const good: Record<string, unknown> = {
+    title: 'T',
+    note: 'n',
+    date: '2026-03-01',
+    when: '2026-03-01T10:00:00Z',
+    link: 'https://example.com',
+    count: 3,
+    on: true,
+    kind: 'b',
+    tags: ['x', 'y'],
+    author: 'someone',
+    related: ['a', 'b'],
+    cover: { url: '/api/mnml/media/x.png', alt: 'x' },
+    body: '## Hi\n\ntext',
+    meta: { blurb: 'b' },
+    rows: [{ label: 'one' }],
+    sections: [{ kind: 'quote', text: 'q' }],
+  };
+  const bad: Record<string, unknown> = {
+    note: 5,
+    date: 'tomorrow',
+    when: 'soon',
+    link: 'javascript:alert(1)',
+    count: 99,
+    on: 'yes',
+    kind: 'z',
+    tags: 'x',
+    author: 7,
+    related: 'a',
+    cover: 'not an image',
+    meta: 'x',
+    rows: [{ nope: 1 }],
+    sections: [{ kind: 'unknown' }],
+  };
+
+  it.each(Object.keys(good))('keeps a good %s', (k) => {
+    const fill = checkFill(ctx, 'everything', 'a', {}, { [k]: good[k] });
+    expect(fill.dropped).toEqual({});
+    expect(Object.keys(fill.values)).toEqual([k]);
+  });
+
+  it.each(Object.keys(bad))('drops a bad %s and says why', (k) => {
+    const fill = checkFill(ctx, 'everything', 'a', {}, { [k]: bad[k] });
+    expect(fill.values).toEqual({});
+    expect(Object.keys(fill.dropped).length).toBeGreaterThan(0);
+  });
+});
+
 describe('checkFill', () => {
   const ctx = createContext(cmsConfig, { storage, auth: { isAdmin: async () => true } } as never);
 
@@ -155,15 +232,43 @@ describe('ai/chat route', () => {
     expect((await ask(h, question(), '8.8.8.8')).status).toBe(200);
   });
 
-  it('puts the open page in the prompt, rich text as Markdown', async () => {
+  it('puts the schema in the prompt and the form values in the question, as data, rich text as Markdown', async () => {
     const h = build(() => []);
     const body = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'zebra crossing' }] }] };
     await ask(h, question('hi', { key: 'posts', slug: 'a', values: { title: 'Hello', body } }));
-    const system = requests[0].system;
+    const { system, messages } = requests[0];
     expect(system).toContain('"posts"');
-    expect(system).toContain('Hello');
-    expect(system).toContain('zebra crossing');
-    expect(system).not.toContain('"type":"doc"');
+    // The values are the editor's content, so they are not in the system prompt the model trusts most.
+    expect(system).not.toContain('Hello');
+    expect(system).not.toContain('zebra crossing');
+    const last = messages.at(-1) as { role: string; content: string };
+    expect(last.role).toBe('user');
+    expect(last.content).toContain('Hello');
+    expect(last.content).toContain('zebra crossing');
+    expect(last.content).toContain('never instructions');
+    expect(last.content).not.toContain('"type":"doc"');
+  });
+
+  it('opens the conversation with a question', async () => {
+    const h = build(() => []);
+    await ask(h, {
+      messages: [
+        { role: 'assistant', content: 'old answer' },
+        { role: 'user', content: 'one' },
+        { role: 'assistant', content: 'two' },
+        { role: 'user', content: 'three' },
+      ],
+      page: {},
+    });
+    expect(requests[0].messages[0]).toMatchObject({ role: 'user', content: 'one' });
+  });
+
+  it('refuses a big body from its Content-Length, without reading it', async () => {
+    const h = build(() => []);
+    const res = await h.POST(new Request('http://x/api/mnml/ai/chat', { method: 'POST', body: '{}', headers: { 'content-length': '999999' } }), {
+      params: Promise.resolve({ route: ['ai', 'chat'] }),
+    });
+    expect(res.status).toBe(413);
   });
 
   it('offers read tools and the fill tools, and no write tool', async () => {
@@ -240,6 +345,37 @@ describe('ai/chat route', () => {
     spy.mockRestore();
     expect(r.events).toEqual([{ type: 'error', message: expect.any(String) }]);
     expect(r.text).not.toContain('secret-key-123');
+  });
+
+  it('survives the reader going away mid-answer (Stop, a closed tab)', async () => {
+    let stopped = false;
+    const ctx = createContext(cmsConfig, {
+      storage,
+      auth: { isAdmin: async () => true },
+      ai: {
+        model: {
+          stream: async function* () {
+            try {
+              for (let i = 0; i < 50; i++) {
+                yield { type: 'text', text: 'x' } as AiEvent;
+                await new Promise((r) => setTimeout(r, 5));
+              }
+            } finally {
+              stopped = true;
+            }
+          },
+        },
+      },
+    } as never);
+    const res = await createHandlers(ctx).POST(new Request('http://x/api/mnml/ai/chat', { method: 'POST', body: JSON.stringify(question()) }), {
+      params: Promise.resolve({ route: ['ai', 'chat'] }),
+    });
+    const reader = res.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    // Nothing throws (an unhandled rejection fails the run), and the model request is stopped.
+    await new Promise((r) => setTimeout(r, 60));
+    expect(stopped).toBe(true);
   });
 
   it('never writes: storage would throw', async () => {

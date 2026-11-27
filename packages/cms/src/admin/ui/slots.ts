@@ -134,3 +134,8 @@ export type MenuProps = {
   /** Classes for the trigger button, replacing the default ghost icon button look. */
   className?: string;
 };
+
+export type MarkdownProps = {
+  /** The assistant's reply as Markdown. It grows as the reply streams in, so it can end mid-sentence or inside an open `**`. */
+  text: string;
+};

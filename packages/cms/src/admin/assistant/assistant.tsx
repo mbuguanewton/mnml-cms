@@ -5,6 +5,7 @@ import { ArrowUpIcon, PlusIcon, SparklesIcon, SquareIcon, Undo2Icon, XIcon } fro
 import { Button } from '../ui/button.js';
 import { useAdmin } from '../shell/context.js';
 import { useAssistant } from './assistant-context.js';
+import { Markdown } from './markdown.js';
 import { useAssistantChat, type ChatMessage } from './use-assistant-chat.js';
 
 const PANEL_WIDTH = '26rem';
@@ -88,7 +89,7 @@ export function Assistant({ name = 'Assistant' }: { name?: string }) {
         onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
         className="mnml-root fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-mnml-line bg-mnml-bg text-sm text-mnml-text shadow-xl [font-family:ui-sans-serif,system-ui,sans-serif] sm:w-[26rem] print:hidden"
       >
-        <header className="flex items-center gap-2 border-b border-mnml-line px-4 py-3">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-mnml-line px-4">
           <SparklesIcon aria-hidden className="size-4 text-mnml-text-mute" />
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-medium">{name}</h2>
@@ -187,7 +188,7 @@ function Message({ m, busy, onUndo }: { m: ChatMessage; busy: boolean; onUndo: (
   }
   return (
     <div className="flex flex-col gap-2">
-      {m.text && <p className="whitespace-pre-wrap">{m.text}</p>}
+      {m.text && <Markdown text={m.text} />}
       {m.status && <p className="text-xs text-mnml-text-mute">{m.status}</p>}
       {!m.text && !m.status && !m.error && busy && m.fills.length === 0 && <p className="text-xs text-mnml-text-mute">Thinking…</p>}
       {m.fills.map((f) => (

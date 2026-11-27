@@ -177,7 +177,8 @@ export function geminiModel({ apiKey, model = 'gemini-2.5-flash' }: { apiKey: st
 
 /** The adapter for whichever provider key is set, or undefined (the assistant stays off). */
 export function modelFromEnv(): AiModel | undefined {
-  const { ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_KEY } = process.env;
+  const { ANTHROPIC_API_KEY, OPENAI_API_KEY } = process.env;
+  const GEMINI_KEY = process.env.GEMINI_KEY ?? process.env.GEMINI_API_KEY;
   if (ANTHROPIC_API_KEY) return anthropicModel({ apiKey: ANTHROPIC_API_KEY });
   if (OPENAI_API_KEY) return openaiModel({ apiKey: OPENAI_API_KEY });
   if (GEMINI_KEY) return geminiModel({ apiKey: GEMINI_KEY });
