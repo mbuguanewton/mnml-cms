@@ -105,7 +105,7 @@ describe('runBulk', () => {
     const r = await bulk('posts', ['p4', 'p4', 'p1'], 'delete');
     if (!r.ok) throw new Error();
     expect(r.results).toEqual({ done: ['p4', 'p1'], skipped: [], failed: [] });
-    expect(rows.map((x) => x.slug)).toEqual(['p2', 'p3', 'p5']);
+    expect(rows.filter((x) => x.collection === 'posts').map((x) => x.slug)).toEqual(['p2', 'p3', 'p5']);
     expect(revalidate).toHaveBeenCalledTimes(2);
   });
 

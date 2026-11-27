@@ -28,6 +28,8 @@ export const cms = createCms(config, {
   media: process.env.BLOB_READ_WRITE_TOKEN ? vercelBlobMedia() : undefined,
   // Published reads are kept between requests, and dropped on each save or delete.
   cache: true,
+  // Names the editor in each entry's Activity. The example has one shared password, so everyone is the same person.
+  actor: () => ({ id: 'admin', label: 'Site admin' }),
   // The sidebar and sign-in page show the logo (a different file in the dark theme) next to the name.
   brand: { name: 'Example', logo: { src: '/logo.svg', dark: '/logo-dark.svg' } },
   icons: { settings: <SettingsIcon />, home: <HouseIcon />, authors: <UserIcon />, posts: <FileTextIcon /> },

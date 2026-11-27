@@ -79,3 +79,36 @@ export type AssistantTurn = {
   usage?: { inputTokens?: number; outputTokens?: number };
   durationMs?: number;
 };
+
+/** Who did something. `label` is what the Activity view shows; `id` is the site's own identifier, if it gave one. */
+export type ActivityActor = { type: 'admin' | 'agent' | 'assistant'; id?: string; label: string };
+
+export type ActivityAction = 'create' | 'update' | 'autosave' | 'draft' | 'publish' | 'unpublish' | 'discard' | 'delete' | 'request' | 'reject' | 'assistant';
+
+/** What the assistant did in one answer, kept on its activity event. */
+export type ActivityAssistant = {
+  chatId: string;
+  question: string;
+  status: AssistantTurn['status'];
+  model?: string;
+  tools: { name: string; input?: unknown }[];
+  fills: AssistantFill[];
+};
+
+/** One row of an entry's Activity view. */
+export type ActivityEvent = {
+  id: string;
+  key: string;
+  /** `singleton` for a singleton. */
+  slug: string;
+  action: ActivityAction;
+  by: ActivityActor;
+  /** For an assistant event, the editor who asked. */
+  for?: ActivityActor;
+  /** ISO time. */
+  at: string;
+  summary?: string;
+  /** Top-level fields that changed. */
+  fields?: string[];
+  assistant?: ActivityAssistant;
+};

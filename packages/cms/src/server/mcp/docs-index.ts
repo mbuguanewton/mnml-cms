@@ -190,6 +190,18 @@ export const docsIndex: DocsPage[] = [
     ]
   },
   {
+    "title": "Activity",
+    "url": "https://mnml-cms.vercel.app/activity",
+    "markdown": "https://mnml-cms.vercel.app/activity.md",
+    "description": "Activity: a log on each entry and singleton of who saved, published or deleted it and when, with the assistant's tools and fills. Kept in your entries table, no setup.",
+    "headings": [
+      "What is recorded",
+      "Who",
+      "The assistant's events",
+      "Where it is kept"
+    ]
+  },
+  {
     "title": "Drafts and publishing",
     "url": "https://mnml-cms.vercel.app/drafts-and-publishing",
     "markdown": "https://mnml-cms.vercel.app/drafts-and-publishing.md",

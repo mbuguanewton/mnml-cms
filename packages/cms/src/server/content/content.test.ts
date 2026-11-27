@@ -23,7 +23,8 @@ let handlers: ReturnType<typeof createHandlers>;
 const row = (c: string, s: string) => rows.find((r) => r.collection === c && r.slug === s);
 
 /** The handlers over `rows`, with extra `createCms` options. */
-function build(extra: { cache?: boolean } = {}) {
+function build(extra: { cache?: boolean; actor?: (request: Request) => Promise<{ label: string; id?: string } | null>; isAdmin?: boolean } = {}) {
+  const { isAdmin = true, ...options } = extra;
   const now = new Date();
   return createHandlers(
     createContext(cmsConfig, {
@@ -41,10 +42,10 @@ function build(extra: { cache?: boolean } = {}) {
           if (r) rows.splice(rows.indexOf(r), 1);
         },
       },
-      auth: { isAdmin: async () => true, loginUrl: '/' },
+      auth: { isAdmin: async () => isAdmin, loginUrl: '/' },
       revalidate,
       onChange,
-      ...extra,
+      ...options,
     }) as never,
   );
 }
@@ -128,5 +129,84 @@ describe('read cache invalidation', () => {
     handlers = build();
     await post('save', { key: 'posts', slug: 'live', mode: 'update', data: { title: 'Now' } });
     expect(revalidateTag).not.toHaveBeenCalled();
+  });
+});
+
+describe('activity', () => {
+  const events = async (slug = 'live', as = handlers) => {
+    const res = await as.GET(new Request(`http://x/api/mnml/activity?key=posts&slug=${slug}`), { params: Promise.resolve({ route: ['activity'] }) });
+    return { status: res.status, body: await res.json() };
+  };
+
+  it('records saves, publishes and unpublishes with the changed fields, newest first', async () => {
+    await post('save', { key: 'posts', slug: 'live', mode: 'update', action: 'draft', data: { title: 'Live 2' } });
+    await post('save', { key: 'posts', slug: 'live', mode: 'update', action: 'publish', data: { title: 'Live 2' } });
+    await post('save', { key: 'posts', slug: 'live', mode: 'update', action: 'unpublish', data: { title: 'Live 2' } });
+    const r = await events();
+    expect(r.status).toBe(200);
+    expect(r.body.events.map((e: { action: string }) => e.action)).toEqual(['unpublish', 'publish', 'draft']);
+    expect(r.body.events[2]).toMatchObject({ fields: ['title'], by: { type: 'admin', label: 'Admin' } });
+  });
+
+  it('records a new entry as created', async () => {
+    await post('save', { key: 'posts', slug: 'fresh', mode: 'create', data: { title: 'Fresh' } });
+    expect((await events('fresh')).body.events).toMatchObject([{ action: 'create', summary: 'Published at once' }]);
+  });
+
+  it('merges autosaves and records discard and delete', async () => {
+    const rev = revOf(cmsConfig.posts, { title: 'Live' });
+    const a = await post('autosave', { key: 'posts', slug: 'live', mode: 'update', data: { title: 'Live A' }, rev });
+    await post('autosave', { key: 'posts', slug: 'live', mode: 'update', data: { title: 'Live AB' }, rev: a.body.rev });
+    await post('discard', { key: 'posts', slug: 'live' });
+    await post('delete', { key: 'posts', slug: 'live' });
+    expect((await events()).body.events.map((e: { action: string }) => e.action)).toEqual(['delete', 'discard', 'autosave']);
+  });
+
+  it("names the editor from the site's actor, and falls back to Admin when it fails or says nothing", async () => {
+    const named = build({ actor: async () => ({ id: 'u1', label: 'Ada' }) });
+    await named.POST(
+      new Request('http://x/api/mnml/save', { method: 'POST', body: JSON.stringify({ key: 'posts', slug: 'live', mode: 'update', data: { title: 'B' } }) }),
+      {
+        params: Promise.resolve({ route: ['save'] }),
+      },
+    );
+    expect((await events('live', named)).body.events[0].by).toEqual({ type: 'admin', id: 'u1', label: 'Ada' });
+    const broken = build({
+      actor: async () => {
+        throw new Error('no session');
+      },
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await broken.POST(
+      new Request('http://x/api/mnml/save', { method: 'POST', body: JSON.stringify({ key: 'posts', slug: 'live', mode: 'update', data: { title: 'C' } }) }),
+      { params: Promise.resolve({ route: ['save'] }) },
+    );
+    expect((await res.json()).ok).toBe(true);
+    expect((await events('live', broken)).body.events[0].by.label).toBe('Admin');
+  });
+
+  it('never fails a write because the log failed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const real = rows.push.bind(rows);
+    rows.push = ((...r: Row[]) => {
+      if (r.some((x) => x.collection.startsWith('activity:'))) throw new Error('disk full');
+      return real(...r);
+    }) as never;
+    const r = await post('save', { key: 'posts', slug: 'fresh2', mode: 'create', data: { title: 'Fresh' } });
+    expect(r.body.ok).toBe(true);
+    expect(row('posts', 'fresh2')?.status).toBe('published');
+  });
+
+  it('is for signed-in editors and known content only', async () => {
+    expect((await events('live', build({ isAdmin: false }))).status).toBe(401);
+    const bad = await handlers.GET(new Request('http://x/api/mnml/activity?key=nope&slug=x'), { params: Promise.resolve({ route: ['activity'] }) });
+    expect(bad.status).toBe(400);
+    const badSlug = await handlers.GET(new Request('http://x/api/mnml/activity?key=posts&slug=../x'), { params: Promise.resolve({ route: ['activity'] }) });
+    expect(badSlug.status).toBe(400);
+  });
+
+  it('wants a slug for a collection', async () => {
+    const res = await handlers.GET(new Request('http://x/api/mnml/activity?key=posts'), { params: Promise.resolve({ route: ['activity'] }) });
+    expect(res.status).toBe(400);
   });
 });

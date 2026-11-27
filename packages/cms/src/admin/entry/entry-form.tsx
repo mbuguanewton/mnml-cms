@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { EyeIcon, FileXIcon, Undo2Icon } from 'lucide-react';
+import { EyeIcon, FileXIcon, HistoryIcon, Undo2Icon } from 'lucide-react';
 import { isVisible, slugify, type Collection, type Fields, type Singleton } from '../../schema/define.js';
 import type { AutosaveResult, EntryInput, EntryStatus, SaveAction, SaveResult } from '../../api.js';
 import { ActionMenu, MenuItem } from '../shell/action-menu.js';
@@ -17,6 +17,7 @@ import { fieldLabelAt, setIn, type Mismatch } from '../../schema/fit.js';
 import { EntryContext } from './entry-context.js';
 import { useAssistantTarget } from '../assistant/assistant-context.js';
 import { LivePreview } from './live-preview.js';
+import { ActivityDialog } from './activity-dialog.js';
 import { AdminHeader, type Crumb } from '../shell/header.js';
 import { StatusDot, dotLabels } from './status-dot.js';
 import { bodyClass, labelClass } from '../ui/styles.js';
@@ -220,6 +221,7 @@ export function EntryForm({
   }, [unsaved]);
 
   const input = (): EntryInput => ({ key: schemaKey, slug: def.kind === 'collection' ? slug : undefined, mode, data });
+  const [activityOpen, setActivityOpen] = useState(false);
   const canPreview = def.preview !== undefined && def.preview !== false;
   const [previewHidden, setPreviewHidden] = useState(false);
   const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
@@ -379,7 +381,7 @@ export function EntryForm({
                     {pending ? 'Saving…' : 'Save'}
                   </Button>
                 )}
-                {((isCollection && published) || (autosave && published && changes) || actions) && (
+                {(mode === 'update' || (autosave && published && changes) || actions) && (
                   <ActionMenu>
                     {autosave && published && changes && (
                       <MenuItem disabled={pending} onClick={discard}>
@@ -391,11 +393,17 @@ export function EntryForm({
                         <FileXIcon /> Unpublish
                       </MenuItem>
                     )}
+                    {mode === 'update' && (
+                      <MenuItem onClick={() => setActivityOpen(true)}>
+                        <HistoryIcon /> Activity
+                      </MenuItem>
+                    )}
                     {actions}
                   </ActionMenu>
                 )}
               </AdminHeader>
               {banner}
+              {activityOpen && <ActivityDialog schemaKey={schemaKey} slug={existingSlug} onClose={() => setActivityOpen(false)} />}
               <MismatchBanner items={Object.values(unsettled)} version={mismatchVersion} />
               <div className="flex flex-1">
                 <div className={showPreview ? 'w-[min(36rem,45%)] shrink-0' : 'w-full'}>

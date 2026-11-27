@@ -37,14 +37,18 @@ let rows: Row[];
 const storage: EntryStorage = {
   readRow: async (c, s) => rows.find((r) => r.collection === c && r.slug === s),
   readRows: async (c) => rows.filter((r) => r.collection === c).map((r) => ({ ...r, createdAt: new Date(), updatedAt: new Date() })),
-  upsert: async () => {
-    throw new Error('the assistant must never write');
+  // Only the activity log may be written (by the server, after an answer): never an entry.
+  upsert: async (c, s, data, status) => {
+    if (!c.startsWith('activity:')) throw new Error('the assistant must never write');
+    rows.push({ collection: c, slug: s, data, status });
   },
   insertIfAbsent: async () => {
     throw new Error('the assistant must never write');
   },
-  remove: async () => {
-    throw new Error('the assistant must never write');
+  remove: async (c, s) => {
+    if (!c.startsWith('activity:')) throw new Error('the assistant must never write');
+    const i = rows.findIndex((r) => r.collection === c && r.slug === s);
+    if (i >= 0) rows.splice(i, 1);
   },
 };
 
@@ -665,6 +669,64 @@ describe('assistant store', () => {
   it('records nothing without a store', async () => {
     const r = await ask(build(scripted(say('fine'))), question());
     expect(r.events).toEqual([{ type: 'text', text: 'fine' }]);
+  });
+});
+
+// ---- what the assistant did, on the entry's Activity view
+describe('assistant activity', () => {
+  const settle = () => new Promise((r) => setTimeout(r, 20));
+  const activity = async (h: ReturnType<typeof build>, slug = 'a') => {
+    const res = await h.GET(new Request(`http://x/api/mnml/activity?key=posts&slug=${slug}`), { params: Promise.resolve({ route: ['activity'] }) });
+    return (await res.json()).events as Record<string, unknown>[];
+  };
+  const fillScript = scripted((turn) =>
+    turn === 0
+      ? {
+          calls: [
+            { name: 'get_entry', args: { collection: 'posts', slug: 'a' } },
+            { name: 'fill_entry', args: { data: { title: 'New' } } },
+          ],
+        }
+      : { text: ['Done.'] },
+  );
+
+  it('adds an event with the tools it ran and what it filled, even without a store', async () => {
+    rows.push({ collection: 'posts', slug: 'a', status: 'published', data: { title: 'Alpha' } });
+    const h = build(fillScript, { name: 'Scribe' });
+    await ask(h, { ...question('rewrite it', { key: 'posts', slug: 'a', values: { title: 'Old' } }), chatId: 'c1' });
+    await settle();
+    const [e] = await activity(h);
+    expect(e).toMatchObject({
+      action: 'assistant',
+      by: { type: 'assistant', label: 'Scribe' },
+      for: { type: 'admin', label: 'Admin' },
+      summary: 'Filled title',
+      fields: ['title'],
+      assistant: {
+        chatId: 'c1',
+        question: 'rewrite it',
+        status: 'done',
+        tools: [{ name: 'get_entry' }, { name: 'fill_entry' }],
+        fills: [{ fields: ['title'], before: { title: 'Old' }, after: { title: 'New' } }],
+      },
+    });
+  });
+
+  it('adds nothing for a plain answer, or away from an entry', async () => {
+    rows.push({ collection: 'posts', slug: 'a', status: 'published', data: { title: 'Alpha' } });
+    const h = build(scripted(say()));
+    await ask(h, question('hi', { key: 'posts', slug: 'a', values: {} }));
+    await ask(build(fillScript), question('hi', {}));
+    await settle();
+    expect(await activity(h)).toEqual([]);
+  });
+
+  it('puts a singleton fill on the singleton', async () => {
+    const h = build(scripted((turn) => (turn === 0 ? { calls: [{ name: 'fill_entry', args: { data: { tagline: 'Hi' } } }] } : { text: ['ok'] })));
+    await ask(h, question('x', { key: 'settings', values: {} }));
+    await settle();
+    const res = await h.GET(new Request('http://x/api/mnml/activity?key=settings'), { params: Promise.resolve({ route: ['activity'] }) });
+    expect((await res.json()).events).toMatchObject([{ action: 'assistant', slug: SINGLETON_SLUG }]);
   });
 });
 

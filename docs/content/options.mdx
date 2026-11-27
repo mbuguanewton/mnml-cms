@@ -25,6 +25,7 @@ Second argument of `createCms(config, options)`.
 | `cache` | `true` or `{ revalidate }` (seconds, default 3600): keeps published reads between requests, dropped on each save or delete. Off by default, recommended ([Caching](/reading-content#caching)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
 | `ai` | `assistant({ model, tools?, name?, tone?, maxSteps?, store? })` from `@n3wtou/mnml-cms/ai`: the admin assistant, a chat panel that answers from your content and fills fields for the editor to review. `model` is an AI Gateway id (`'anthropic/claude-sonnet-5-5'`) or any AI SDK model; needs the `ai` package ([Assistant](/assistant)) |
+| `actor` | `(request) => { label, id? }`: names the signed-in editor in each entry's [Activity](/activity). Default: "Admin" |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
 
 ## Brand and logo

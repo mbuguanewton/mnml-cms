@@ -6,6 +6,7 @@ export default {
   'reading-content': 'Reading content',
   search: 'Search',
   assistant: 'Assistant',
+  activity: 'Activity',
   'drafts-and-publishing': 'Drafts and publishing',
   'changing-fields': 'Changing fields',
   'moving-content': 'Moving content',

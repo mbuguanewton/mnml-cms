@@ -1,0 +1,63 @@
+---
+description: "Activity: a log on each entry and singleton of who saved, published or deleted it and when, with the assistant's tools and fills. Kept in your entries table, no setup."
+---
+
+# Activity
+
+Each entry and singleton keeps a log of what happened to it. Open **Activity** in the entry's **⋮** menu: a tree of days, newest first, each with its events. Click an event to open it.
+
+It needs no setup and no new table.
+
+## What is recorded
+
+| Event | When |
+| --- | --- |
+| Created, Saved | The editor saves a new entry, or a singleton. |
+| Saved a draft | A draft is saved by hand, or by an agent. |
+| Autosaved | The form autosaves. A run of autosaves by one person within 10 minutes is **one** event, so typing doesn't fill the log, and an autosave that adds nothing new writes nothing. |
+| Published, Unpublished | The editor, a bulk action or an agent changes the status. |
+| Discarded changes, Deleted | The editor, or an editor approving an agent's request (the event says whose). |
+| Asked for approval, Rejected a request | An [agent](/agents) asks to delete or discard, and an editor answers. |
+| Used the assistant | The [assistant](/assistant) ran tools or filled fields on this entry. |
+
+Each event has the time, who did it, and the **fields that changed** (top-level field names, not the values). An autosave that changes nothing is not recorded.
+
+Media uploads and the Agent access page are not part of an entry's activity.
+
+## Who
+
+| `by` | Means |
+| --- | --- |
+| Admin (or the name you give) | An editor in the admin. |
+| An agent, with the token's name | A write made through the [MCP server](/agents). |
+| The assistant's name | The assistant. The editor who asked is shown as "Asked by". |
+
+The package has one shared admin password, so by default every editor is "Admin". To show real names, read your own session in `actor`:
+
+```ts
+createCms(config, {
+  actor: async (request) => {
+    const user = await getUser(request); // your auth
+    return user && { id: user.id, label: user.name };
+  },
+});
+```
+
+`actor` runs on each write. Return nothing, or throw, and the editor shows as "Admin"; the write still goes through.
+
+## The assistant's events
+
+An assistant event opens to the question, the model, **the tools it ran** (searches, reads, your own tools, with their input) and what it put in the form: each field's value before and after, and what was left out and why. Large values are cut out of the event.
+
+The assistant only fills the form. The editor's own save comes after it, as its own event, so a typical story reads: *Used the assistant: Filled summary* then *Saved*.
+
+This works without a [`store`](/assistant#keeping-a-record). A `store` is still the place for the full record of every question, including ones that ran nothing.
+
+## Where it is kept
+
+As rows in your entries table, in a collection named `activity:<key>` (like `pending:<key>` for unpublished changes). That works with any [storage](/image-storage) and needs no `drizzle-kit push`.
+
+- The last **200** events of each entry are kept. The oldest go first.
+- Deleting an entry keeps its log. It is the record of what happened.
+- A failure to write the log is printed in the server log and never fails the save.
+- `GET <apiPath>/activity?key=posts&slug=hello` returns the events as JSON, for signed-in editors only.
