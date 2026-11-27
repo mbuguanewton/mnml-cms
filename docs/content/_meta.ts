@@ -5,6 +5,7 @@ export default {
   fields: 'Fields',
   'reading-content': 'Reading content',
   search: 'Search',
+  assistant: 'Assistant',
   'drafts-and-publishing': 'Drafts and publishing',
   'changing-fields': 'Changing fields',
   'moving-content': 'Moving content',

@@ -23,9 +23,11 @@ import { IMAGE_TYPES, MAX_IMAGE_BYTES } from '../media/media.js';
 import { loadRefOptions } from '../content/ref-options.js';
 import { PREVIEW_COOKIE } from '../content/store.js';
 import { createLimiter } from '../search/limit.js';
+import type { AssistantInput } from '../../api.js';
+import { assistantChat, MAX_CHARS, MAX_MESSAGES } from '../ai/chat.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
-//   POST: login · logout · logout-all · save · autosave · discard · bulk · delete · preview · preview/exit · references · reference/schema · upload · media/list · media/delete · request · tokens/create · tokens/revoke · mcp
+//   POST: login · logout · logout-all · save · autosave · discard · bulk · delete · preview · preview/exit · references · reference/schema · ai/chat (assistant, only with `ai`) · upload · media/list · media/delete · request · tokens/create · tokens/revoke · mcp
 //   GET:  media/<key> (uploaded images, public) · preview/open (admins only) · search (public, only with `search: { route: true }`)
 
 const MEDIA_KEY = /^[\w.\-/]+$/;
@@ -56,6 +58,58 @@ export function createHandlers(ctx: Context) {
   // different x-forwarded-for each time still hits the second limit). Both are per server instance.
   const searchLimit = createLimiter({ max: 30, windowMs: 60_000 });
   const searchLimitAll = createLimiter({ max: 300, windowMs: 60_000 });
+  // The assistant spends the site's model credits: 20 questions a minute per client, admins only. Per server instance.
+  const aiLimit = createLimiter({ max: 20, windowMs: 60_000 });
+  const MAX_BODY = 400_000;
+  async function aiChat(request: Request) {
+    if (!ctx.ai) return json({ error: 'Not found' }, 404);
+    if (!(await isAdmin(ctx))) return unauthorized();
+    const wait = aiLimit(clientIp(request));
+    if (wait > 0)
+      return Response.json(
+        { ok: false, message: `Too many questions. Try again in ${wait} seconds.` },
+        { status: 429, headers: { 'Retry-After': String(wait) } },
+      );
+    const raw = await request.text();
+    if (raw.length > MAX_BODY) return json({ ok: false, message: 'That request is too large.' }, 413);
+    let input: AssistantInput;
+    try {
+      input = JSON.parse(raw) as AssistantInput;
+    } catch {
+      return json({ ok: false, message: 'Send JSON.' }, 400);
+    }
+    const msgs = Array.isArray(input?.messages) ? input.messages : [];
+    const valid =
+      msgs.length > 0 && msgs.length <= MAX_MESSAGES && msgs.every((m) => (m?.role === 'user' || m?.role === 'assistant') && typeof m.content === 'string');
+    if (!valid || msgs[msgs.length - 1].role !== 'user' || msgs.reduce((n, m) => n + m.content.length, 0) > MAX_CHARS)
+      return json({ ok: false, message: 'Send up to 30 messages, ending with a question, and at most 60000 characters.' }, 400);
+    const page = input.page && typeof input.page === 'object' ? input.page : {};
+    const safe: AssistantInput = {
+      messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+      page: {
+        key: typeof page.key === 'string' && Object.hasOwn(ctx.config, page.key) ? page.key : undefined,
+        slug: typeof page.slug === 'string' ? page.slug : undefined,
+        values: page.values,
+      },
+    };
+    const encoder = new TextEncoder();
+    const events = assistantChat(ctx, content, safe, request.signal);
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          for await (const e of events) controller.enqueue(encoder.encode(`${JSON.stringify(e)}\n`));
+        } catch (e) {
+          if (!request.signal.aborted) {
+            console.error('cms assistant failed:', e);
+            controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'error', message: 'The model request failed. Check the server log.' })}\n`));
+          }
+        }
+        controller.close();
+      },
+    });
+    return new Response(body, { headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' } });
+  }
+
   async function searchRoute(request: Request) {
     const wait = Math.max(searchLimit(clientIp(request)), searchLimitAll('all'));
     if (wait > 0)
@@ -120,6 +174,8 @@ export function createHandlers(ctx: Context) {
       (await cookies()).delete(SESSION_COOKIE);
       return Response.redirect(new URL(ctx.loginUrl, request.url), 303);
     },
+
+    'ai/chat': aiChat,
 
     async save(request) {
       if (!(await isAdmin(ctx))) return unauthorized();

@@ -31,3 +31,16 @@ export type ReferenceSchemaResult =
       refOptions: Record<string, { slug: string; label: string }[]>;
     }
   | Invalid;
+
+/** The page the editor has open, sent with each assistant question. `values` are the form's current values. */
+export type AssistantPage = { key?: string; slug?: string; values?: unknown };
+export type AssistantInput = { messages: { role: 'user' | 'assistant'; content: string }[]; page: AssistantPage };
+/**
+ * What `<apiPath>/ai/chat` streams, one JSON object per line. `fill` carries values the editor's form should take
+ * (already checked like a save) and the fields that were left out, with the reason.
+ */
+export type AssistantEvent =
+  | { type: 'text'; text: string }
+  | { type: 'status'; text: string }
+  | { type: 'fill'; values: Record<string, unknown>; dropped: Record<string, string> }
+  | { type: 'error'; message: string };

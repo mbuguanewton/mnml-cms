@@ -1,0 +1,173 @@
+---
+title: "Assistant"
+description: "The admin assistant: a chat panel that knows the open page, answers questions from your content and fills fields for the editor to review. You plug in the model with a small adapter (Claude, OpenAI, Gemini)."
+url: https://mnml-cms.vercel.app/assistant
+---
+
+# Assistant
+
+A chat panel in the admin. A button at the bottom right opens it. Off by default.
+
+The assistant knows the page the editor has open: the fields and their current values. Editors can:
+
+- **Ask about the content.** "Which posts mention refunds?" It searches the published content and answers from it.
+- **Ask it to write.** "Write a summary", "Suggest a better title", "Fill in the empty fields". What it writes goes into the form as an **unsaved edit**. The editor reads it, changes it or presses **Undo**, then saves or publishes as usual.
+
+The assistant can read content. It cannot save, publish, unpublish or delete anything. Only the editor does that.
+
+## Turn it on
+
+The model is yours, like [image storage](https://mnml-cms.vercel.app/image-storage.md) and [search](https://mnml-cms.vercel.app/search.md). The package has no provider code and no AI dependency. You give it an adapter:
+
+```ts filename="src/mnml/index.ts"
+import { anthropicModel } from './ai'; // an adapter, below
+
+export const cms = createCms(config, {
+  database: neonDatabase(process.env.DATABASE_URL),
+  auth: { password: process.env.ADMIN_PASSWORD, secret: process.env.ADMIN_SESSION_SECRET },
+  ai: { model: anthropicModel({ apiKey: process.env.ANTHROPIC_API_KEY! }) },
+});
+```
+
+The key stays on the server. The browser only talks to `<apiPath>/ai/chat`.
+
+For answers about the whole site, turn on [search](https://mnml-cms.vercel.app/search.md) too. Without it, the assistant can still list and read entries and search by keyword, but not by meaning.
+
+## Name and tone
+
+Give it a name and a voice. The name is what the button and the panel are called, and what the model calls itself. The tone is how it answers and how it writes into fields.
+
+```ts
+ai: {
+  model,
+  name: 'Scribe', // default 'Assistant'
+  tone: 'Friendly and concise. Plain words, no jargon.',
+},
+```
+
+Write the tone in your own words: "Formal, British spelling", "Short sentences, no exclamation marks". It applies to the answers and to the text the assistant puts in fields.
+
+## The adapter
+
+An adapter has one method. It sends one turn to the model and streams back text and tool calls.
+
+```ts
+type AiModel = {
+  stream(request: {
+    system: string; // instructions and the open page
+    messages: AiMessage[]; // the conversation so far
+    tools: { name: string; description: string; parameters: object }[]; // `parameters` is JSON Schema
+    signal?: AbortSignal; // stop when it aborts
+  }): AsyncIterable<
+    | { type: 'text'; text: string } // a piece of the answer
+    | { type: 'tool_call'; id: string; name: string; args: object } // once its arguments are complete
+  >;
+};
+
+type AiMessage =
+  | { role: 'user'; content: string }
+  | { role: 'assistant'; content: string; toolCalls?: { id: string; name: string; args: object }[] }
+  | { role: 'tool'; id: string; name: string; content: string }; // the answer to the call with this id
+```
+
+When the model calls a tool, the package runs it, adds a `tool` message and calls `stream()` again. This repeats up to `maxSteps` times (default 6).
+
+Here is an adapter for Claude. It is one `fetch` call.
+
+```ts filename="src/mnml/ai.ts"
+import type { AiModel } from '@n3wtou/mnml-cms/next';
+
+export function anthropicModel({ apiKey, model = 'claude-sonnet-5-5' }: { apiKey: string; model?: string }): AiModel {
+  return {
+    async *stream({ system, messages, tools, signal }) {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        signal,
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          max_tokens: 4096,
+          stream: true,
+          system,
+          messages: messages.map((m) =>
+            m.role === 'tool'
+              ? { role: 'user', content: [{ type: 'tool_result', tool_use_id: m.id, content: m.content }] }
+              : m.role === 'assistant' && m.toolCalls?.length
+                ? {
+                    role: 'assistant',
+                    content: [
+                      ...(m.content ? [{ type: 'text', text: m.content }] : []),
+                      ...m.toolCalls.map((c) => ({ type: 'tool_use', id: c.id, name: c.name, input: c.args })),
+                    ],
+                  }
+                : { role: m.role, content: m.content },
+          ),
+          tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })),
+        }),
+      });
+      if (!res.ok || !res.body) throw new Error(`Model request failed (${res.status})`);
+
+      let call: { id: string; name: string; json: string } | null = null;
+      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += value;
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          const e = JSON.parse(line.slice(5));
+          if (e.type === 'content_block_start' && e.content_block.type === 'tool_use') call = { id: e.content_block.id, name: e.content_block.name, json: '' };
+          else if (e.type === 'content_block_delta' && e.delta.type === 'text_delta') yield { type: 'text', text: e.delta.text };
+          else if (e.type === 'content_block_delta' && e.delta.type === 'input_json_delta' && call) call.json += e.delta.partial_json;
+          else if (e.type === 'content_block_stop' && call) {
+            yield { type: 'tool_call', id: call.id, name: call.name, args: call.json ? JSON.parse(call.json) : {} };
+            call = null;
+          }
+        }
+      }
+    },
+  };
+}
+```
+
+`example/src/mnml/ai.ts` in the repo also has adapters for **OpenAI** (Chat Completions, which many other providers copy) and **Gemini**, and a `modelFromEnv()` that picks one from whichever key is set. The differences are only in the request shape:
+
+| Provider | Endpoint | Tools | Tool results |
+| --- | --- | --- | --- |
+| Claude | `POST /v1/messages` | `input_schema` | `tool_result` block in a `user` message |
+| OpenAI | `POST /v1/chat/completions` | `{ type: 'function', function }` | `role: 'tool'` message |
+| Gemini | `POST …:streamGenerateContent?alt=sse` | `functionDeclarations` with `parametersJsonSchema` | `functionResponse` part |
+
+## What the model can do
+
+| It can | Through |
+| --- | --- |
+| Read the schema, list entries, read an entry | the same read tools as the [MCP server](https://mnml-cms.vercel.app/agents.md) |
+| Search the published content by meaning | `search_content` (needs [`search`](https://mnml-cms.vercel.app/search.md)) |
+| Search by keyword, drafts included | `search` |
+| Put values in the open entry | `fill_field` and `fill_entry` |
+
+It has no tool that saves, publishes or deletes.
+
+Before values reach the form, the server checks each field the way a save does. Rich text can be Markdown. A value that does not fit its field, or a field that does not exist, is left out, and the model is told which and why so it can try again. The panel lists what was left out.
+
+## Limits and safety
+
+- Only signed-in editors can use it: `POST <apiPath>/ai/chat` returns 401 otherwise, and 404 when `ai` is off.
+- 20 questions a minute for each client, per server instance.
+- A request carries at most 30 messages and 60,000 characters. The form's values sent to the model are cut at 40,000 characters.
+- Content is data, not instructions: the model is told never to follow instructions it finds in content. Even if it did, it can only fill the open form. The editor sees the result before anything is saved.
+- Filled values are **unsaved edits** in the form. A collection entry that already exists autosaves as a draft like any other edit, and the live version only changes when the editor publishes.
+- A model that fails does not leak its error to the browser. The detail goes to the server log.
+
+## Options
+
+| Option | |
+| --- | --- |
+| `ai.model` | Your adapter. Required. |
+| `ai.maxSteps` | Most model turns for one question. Default 6. |
+| `ai.name` | What the panel and button are called, and what the model calls itself. Default `Assistant`. Up to 40 characters. |
+| `ai.tone` | How it writes and answers, in your words. Up to 300 characters. |

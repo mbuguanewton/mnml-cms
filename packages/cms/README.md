@@ -121,6 +121,7 @@ Everything else is in the docs at **https://mnml-cms.vercel.app**:
   [conditional fields](https://mnml-cms.vercel.app/fields/conditional-fields), [derived values](https://mnml-cms.vercel.app/fields/derived-values), [SEO](https://mnml-cms.vercel.app/fields/seo)
 - [Reading content](https://mnml-cms.vercel.app/reading-content)
 - [Search](https://mnml-cms.vercel.app/search): `cms.search()` for RAG and agents, over an index you plug in (Postgres, pgvector, Mongo, Convex…)
+- [Assistant](https://mnml-cms.vercel.app/assistant): a chat panel in the admin that answers from your content and fills fields for review, over a model adapter you plug in (Claude, OpenAI, Gemini)
 - [Drafts and publishing](https://mnml-cms.vercel.app/drafts-and-publishing)
 - [Changing fields](https://mnml-cms.vercel.app/changing-fields): what editors see when stored content no longer fits a changed field
 - [Agents (MCP)](https://mnml-cms.vercel.app/agents): let Claude Code, Cursor or Zed manage content with scoped tokens

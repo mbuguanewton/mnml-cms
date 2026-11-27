@@ -4,9 +4,12 @@ import { revalidatePath } from 'next/cache';
 import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next';
 import config from '../../mnml.config';
 import { CacheTool } from '../admin/cache-tool';
+import { modelFromEnv } from './ai';
 import { Editor } from './editor-client';
 import { postgresSearch } from './postgres-search';
 import { AdminUi } from './ui';
+
+const model = modelFromEnv();
 
 export const cms = createCms(config, {
   database: neonDatabase(process.env.DATABASE_URL),
@@ -30,6 +33,9 @@ export const cms = createCms(config, {
   // Search over published content: cms.search(), the search_content MCP tool and GET /api/mnml/search (`route`, limited to
   // these collections). The index is yours: postgres-search.ts is Postgres full-text; pgvector-search.ts adds meaning.
   search: { index: postgresSearch(process.env.DATABASE_URL), route: ['posts', 'pages'] },
+  // The assistant: a chat panel in the admin that answers from the content and fills fields for review. It needs a
+  // model: src/mnml/ai.ts has adapters for Claude, OpenAI and Gemini, picked from whichever key is set.
+  ai: model ? { model, name: 'Scribe', tone: 'Friendly and concise. Plain words, no jargon.' } : undefined,
   // The MCP server at /api/mnml/mcp, for agents such as Claude Code.
   // adminTokens: editors also create and revoke tokens under Agent access in /admin.
   mcp: { adminTokens: true, tokens: [{ name: 'agent', token: process.env.MNML_AGENT_TOKEN, scopes: ['read', 'draft', 'publish'] }] },

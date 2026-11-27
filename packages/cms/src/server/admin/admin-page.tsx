@@ -25,6 +25,8 @@ import { menuItemClass } from '../../admin/shell/action-menu.js';
 import { StatusDot } from '../../admin/entry/status-dot.js';
 import { AdminProvider } from '../../admin/shell/context.js';
 import { FormDialogProvider } from '../../admin/editor/form-dialog.js';
+import { Assistant } from '../../admin/assistant/assistant.js';
+import { AssistantProvider } from '../../admin/assistant/assistant-context.js';
 import { AgentAccess } from '../../admin/agent/agent-access.js';
 import { AgentRequest } from '../../admin/agent/agent-request.js';
 import { ListColumns } from '../../admin/entry/list-columns.js';
@@ -113,10 +115,19 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
     const Ui = options.ui;
     const withEditor = (children: React.ReactNode) => (Editor ? <Editor>{children}</Editor> : children);
     // The site's UI slots wrap everything, so the confirm and form dialogs use them too.
-    const provider = (children: React.ReactNode) => {
+    // The assistant (`ai`) is for signed-in editors, so not on the login page.
+    const provider = (children: React.ReactNode, assistant = false) => {
+      const body = <FormDialogProvider>{withEditor(children)}</FormDialogProvider>;
       const admin = (
         <AdminProvider value={{ adminPath, apiPath, mediaLibrary: options.media?.list ? true : false }}>
-          <FormDialogProvider>{withEditor(children)}</FormDialogProvider>
+          {assistant && ctx.ai ? (
+            <AssistantProvider>
+              {body}
+              <Assistant name={ctx.ai.name?.trim() || undefined} />
+            </AssistantProvider>
+          ) : (
+            body
+          )}
         </AdminProvider>
       );
       return Ui ? <Ui>{admin}</Ui> : admin;
@@ -201,6 +212,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
         <AdminNav brand={brand.name} logo={brand.logo} groups={navGroups()} signOutEverywhere={!ctx.authAdapter} />
         <div className="flex min-w-0 flex-1 flex-col">{content}</div>
       </div>,
+      true,
     );
   };
 

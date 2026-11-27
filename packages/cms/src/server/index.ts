@@ -10,6 +10,7 @@ import { createPreviewBanner } from './admin/preview-banner.js';
 
 export type { BrandLogo, BrandOption } from './admin/brand.js';
 export type { AdminPageDef, AgentScope, AgentToken, Change, CmsOptions, ListAction, McpOptions } from './context.js';
+export type { AiEvent, AiMessage, AiModel, AiOptions, AiRequest, AiTool, AiToolCall } from './ai/types.js';
 export type { AuthAdapter, PasswordAuth } from './auth/auth.js';
 export type { CacheOption } from './content/cached-store.js';
 export type { ListOptions, ReadOptions } from './content/store.js';

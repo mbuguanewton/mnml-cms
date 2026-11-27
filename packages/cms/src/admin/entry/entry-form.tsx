@@ -15,6 +15,7 @@ import { remapRowErrors } from './sortable.js';
 import { MismatchBanner, MismatchContext } from './mismatch-panel.js';
 import { fieldLabelAt, setIn, type Mismatch } from '../../schema/fit.js';
 import { EntryContext } from './entry-context.js';
+import { useAssistantTarget } from '../assistant/assistant-context.js';
 import { LivePreview } from './live-preview.js';
 import { AdminHeader, type Crumb } from '../shell/header.js';
 import { StatusDot, dotLabels } from './status-dot.js';
@@ -138,6 +139,24 @@ export function EntryForm({
   const snapshot = () => JSON.stringify([data, slug, settled]);
   const [baseline, setBaseline] = useState(snapshot);
   const dirty = snapshot() !== baseline;
+
+  // The assistant reads this form and can fill it. `apply` returns what the fields held before, for its Undo. A filled
+  // field is remounted (its key changes), because editors like the rich text one only read their value when they mount.
+  const [filled, setFilled] = useState<Record<string, number>>({});
+  useAssistantTarget(
+    {
+      key: schemaKey,
+      slug: existingSlug,
+      values: data,
+      apply: (values) => {
+        const before = Object.fromEntries(Object.keys(values).map((k) => [k, (data as Record<string, unknown>)[k]]));
+        for (const [k, v] of Object.entries(values)) set(k, v);
+        setFilled((f) => ({ ...f, ...Object.fromEntries(Object.keys(values).map((k) => [k, (f[k] ?? 0) + 1])) }));
+        return before;
+      },
+    },
+    existingSlug ? `${def.label}: ${existingSlug}` : def.label,
+  );
 
   // Collections autosave once they exist, and so do singletons that opt in with `drafts`. Publish makes the draft live.
   const draftable = isCollection || (def.kind === 'singleton' && !!def.drafts);
@@ -414,7 +433,7 @@ export function EntryForm({
                     {Object.entries(fields)
                       .filter(([k]) => inTab(k))
                       .map(([k, f]) => (
-                        <div key={k} className="contents">
+                        <div key={`${k}:${filled[k] ?? 0}`} className="contents">
                           <FieldRenderer field={f} value={data[k]} onChange={(v) => set(k, v)} path={k} errors={errors} siblings={data} />
                           {def.kind === 'collection' && k === def.titleField && slugField}
                           {derived

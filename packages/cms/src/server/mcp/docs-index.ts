@@ -171,6 +171,20 @@ export const docsIndex: DocsPage[] = [
     ]
   },
   {
+    "title": "Assistant",
+    "url": "https://mnml-cms.vercel.app/assistant",
+    "markdown": "https://mnml-cms.vercel.app/assistant.md",
+    "description": "The admin assistant: a chat panel that knows the open page, answers questions from your content and fills fields for the editor to review. You plug in the model with a small adapter (Claude, OpenAI, Gemini).",
+    "headings": [
+      "Turn it on",
+      "Name and tone",
+      "The adapter",
+      "What the model can do",
+      "Limits and safety",
+      "Options"
+    ]
+  },
+  {
     "title": "Drafts and publishing",
     "url": "https://mnml-cms.vercel.app/drafts-and-publishing",
     "markdown": "https://mnml-cms.vercel.app/drafts-and-publishing.md",
