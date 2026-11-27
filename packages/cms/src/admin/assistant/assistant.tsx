@@ -8,30 +8,37 @@ import { Menu } from '../ui/menu.js';
 import { useAdmin } from '../shell/context.js';
 import { useAssistant } from './assistant-context.js';
 import { Markdown } from './markdown.js';
-import { useAssistantChat, type ChatMessage } from './use-assistant-chat.js';
+import { useAssistantChat, type ChatMessage, type HistorySource } from './use-assistant-chat.js';
 
 const PANEL_WIDTH = '26rem';
 const ENTRY_STARTERS = ['Summarize this entry', 'Suggest a better title', 'Fill in the empty fields'];
 const SITE_STARTERS = ['What does the site say about…?', 'Which entries are about…?'];
 
 /** The FAB and the chat panel on the right. Mounted by the admin only when `ai` is set. */
-export function Assistant({ name = 'Assistant' }: { name?: string }) {
+export function Assistant({ name = 'Assistant', history = 'browser' }: { name?: string; history?: HistorySource }) {
   const a = useAssistant();
   // Open or closed stays when the page changes (the entry form registers itself just after load).
   const [open, setOpen] = useState(false);
   // Keyed by the page: another page is another conversation (and its own earlier chats).
-  return a ? <Panel key={a.page?.id ?? 'site'} a={a} pageId={a.page?.id ?? 'site'} name={name} open={open} setOpen={setOpen} /> : null;
+  return a ? <Panel key={a.page?.id ?? 'site'} a={a} pageId={a.page?.id ?? 'site'} name={name} history={history} open={open} setOpen={setOpen} /> : null;
 }
 
-type PanelProps = { a: NonNullable<ReturnType<typeof useAssistant>>; pageId: string; name: string; open: boolean; setOpen: (open: boolean) => void };
+type PanelProps = {
+  a: NonNullable<ReturnType<typeof useAssistant>>;
+  pageId: string;
+  name: string;
+  history: HistorySource;
+  open: boolean;
+  setOpen: (open: boolean) => void;
+};
 
-function Panel({ a, pageId, name, open, setOpen }: PanelProps) {
+function Panel({ a, pageId, name, history, open, setOpen }: PanelProps) {
   const { apiPath } = useAdmin();
   const panelId = useId();
   const fab = useRef<HTMLButtonElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const log = useRef<HTMLDivElement>(null);
-  const chat = useAssistantChat(apiPath, a.target, pageId);
+  const chat = useAssistantChat(apiPath, a.target, pageId, history);
   const [draft, setDraft] = useState('');
 
   // Focus the box on open, and give focus back to the FAB on close.
@@ -117,7 +124,7 @@ function Panel({ a, pageId, name, open, setOpen }: PanelProps) {
               }
               items={[
                 ...chat.chats.map((c) => ({ id: c.id, label: c.title, checked: c.id === chat.chatId, onSelect: () => chat.open(c.id) })),
-                ...(chat.chats.some((c) => c.id === chat.chatId)
+                ...(chat.canDelete && chat.chats.some((c) => c.id === chat.chatId)
                   ? [{ id: 'delete-chat', label: 'Delete this chat', icon: <Trash2Icon aria-hidden />, danger: true, onSelect: () => chat.remove(chat.chatId) }]
                   : []),
               ]}

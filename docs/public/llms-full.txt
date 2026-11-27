@@ -1114,13 +1114,82 @@ They search (when [`search`](https://mnml-cms.vercel.app/search.md) is on), list
 
 ## Earlier chats
 
-**New chat** starts a fresh conversation. The ones before stay: a **History** button in the panel lists the earlier chats of the page the editor has open, newest first, and opens one on click. **Delete this chat** is in the same menu. An entry only sees its own chats, and the dashboard and list screens share one list.
+**New chat** starts a fresh conversation. The ones before stay: a **History** button in the panel lists the earlier chats of the page the editor has open, newest first, and opens one to read or carry on in. An entry only sees its own chats, and the dashboard and list screens share one list.
 
-- Chats are kept in the editor's browser (`localStorage`), not on your server or in your database. They are not shared between editors or devices.
-- Only the words are kept: the questions, the answers and which fields were filled. The form's values are never stored.
-- The last 12 chats of each page are kept, within about 150,000 characters. The oldest go first.
-- A chat opened from the list can be continued. Its old fills have no **Undo**, because the form has moved on.
+By default the chats are kept in the editor's browser (`localStorage`):
+
+- They are not on your server or in your database, and not shared between editors or devices.
+- Each answer is kept as a **turn**: the question, the answer and which fields were filled. The form's values are never stored.
+- The last 12 chats of each page are kept, within about 150,000 characters. When there are more, the oldest chat goes, with all its turns.
+- **Delete this chat**, in the History menu, removes one yourself.
+- A reopened chat's old fills have no **Undo**, because the form has moved on.
 - The chats stay in the browser after the editor signs out. On a shared computer, clear the site's data.
+
+To keep them in your own database, and to keep a record of what the assistant did, give `assistant()` a [`store`](#keeping-a-record).
+
+## Keeping a record
+
+To see what the assistant did over time (what it was asked, which tools it used, what it changed in the forms, what it cost), keep every turn in your own database. You write a small store for your database, like [search](https://mnml-cms.vercel.app/search.md)'s index. The package has no database code.
+
+```ts
+ai: assistant({
+  model: 'anthropic/claude-sonnet-5-5',
+  store: {
+    // Append one row per question. Runs after the answer is sent, so it never slows it.
+    async record(turn, { request }) {
+      await db.insert(assistantTurns).values({ ...turn, by: (await sessionOf(request))?.user.id });
+    },
+    // Optional: read the History menu from your table instead of the browser.
+    async turns(page) {
+      return db.select().from(assistantTurns).where(eq(assistantTurns.page, page)).orderBy(desc(assistantTurns.at)).limit(300);
+    },
+  },
+}),
+```
+
+A **turn** is one question and its answer:
+
+| Field | |
+| --- | --- |
+| `chatId`, `page`, `at` | The chat it belongs to, the page (`posts/hello`, `settings/` for a singleton, or `site`), and when the answer finished. |
+| `question`, `answer` | What was asked and said. |
+| `status` | `done`, `stopped` (the editor stopped it, or it ran out of steps) or `error`. |
+| `tools` | Every tool it called, with its input (cut when long): searches, reads, your own tools. |
+| `fills` | What it put in the form: `fields`, `before` and `after` values, and `dropped` (what was left out, and why). |
+| `model`, `usage`, `durationMs` | The model, tokens used, and how long it took. |
+
+- **Append only.** Never update or delete these rows: it is the record. That is why the History menu has no Delete when it reads from your table.
+- **Who asked.** `record` and `turns` get the editor's `Request`. The package doesn't know your login, but your code does: read your session there and fill a `by` column.
+- **Failures.** A failed `record` is logged and never shown. A failed `turns` shows an empty list.
+- **Privacy.** `before` and `after` can hold your content. They go only to your database. Keep what you need and set a retention for the table.
+- **`record` is required, `turns` is optional.** With `record` alone you keep the audit trail and the History menu stays in the browser.
+- Use parameterised queries: the `page` comes from the request. The package checks and caps what `turns` returns (300 turns, newest first).
+
+`groupTurns(turns)`, from `@n3wtou/mnml-cms/ai`, puts turns back into chats (newest first, each with its messages), if you want a history page of your own.
+
+### Example: Postgres
+
+`example/src/mnml/postgres-assistant-store.ts` in the repo is a store for Postgres (Neon's `sql` tag), with the table in `example/scripts/assistant.sql` and `pnpm db:assistant` to create it:
+
+```sql
+create table if not exists mnml_assistant_turns (
+  id bigint generated always as identity primary key,
+  chat_id text not null,
+  page text not null,
+  at timestamptz not null,
+  question text not null,
+  answer text not null,
+  status text not null,
+  model text,
+  tools jsonb,
+  fills jsonb,
+  usage jsonb,
+  duration_ms int,
+  by text
+);
+create index if not exists mnml_assistant_turns_page_idx on mnml_assistant_turns (page, at desc);
+create index if not exists mnml_assistant_turns_chat_idx on mnml_assistant_turns (chat_id);
+```
 
 ## What the model can do
 
@@ -1138,7 +1207,7 @@ Before values reach the form, the server checks each field the way a save does. 
 
 ## Limits and safety
 
-- Only signed-in editors can use it: `POST <apiPath>/ai/chat` returns 401 otherwise, and 404 when `ai` is off.
+- Only signed-in editors can use it: `POST <apiPath>/ai/chat` returns 401 otherwise, and 404 when `ai` is off. `GET <apiPath>/ai/chats?page=` (only with a `store` that has `turns`) is the same.
 - 20 questions a minute for each client, per server instance. This is a guard, not a budget: for a real spend cap use the AI Gateway's budgets, or your provider's.
 - A request carries at most 30 messages and 60,000 characters. The form's values sent to the model are cut at 40,000 characters.
 - Content is data, not instructions: the model is told never to follow instructions it finds in content. Even if it did, it can only fill the open form. The editor sees the result before anything is saved.
@@ -1154,6 +1223,7 @@ The options of `assistant()`:
 | `model` | A Gateway id string or an AI SDK model. Required. |
 | `tools` | Your own tools, as an object or a function of the open page. |
 | `maxSteps` | Most model turns for one question. Default 6. |
+| `store` | Where the record of turns goes, in your database ([Keeping a record](#keeping-a-record)). Default: none, and the panel keeps its chats in the browser. |
 | `name` | What the panel and button are called, and what the model calls itself. Default `Assistant`. Up to 40 characters. |
 | `tone` | How it writes and answers, in your words. Up to 300 characters. |
 
@@ -1784,7 +1854,7 @@ Second argument of `createCms(config, options)`.
 | `search` | `{ index, route }`: search over published content, `cms.search()` and a `search_content` MCP tool. `index` is your own `SearchIndex` (Postgres, pgvector, Mongo, Convex…); `route` opens a public search route ([Search](https://mnml-cms.vercel.app/search.md)) |
 | `cache` | `true` or `{ revalidate }` (seconds, default 3600): keeps published reads between requests, dropped on each save or delete. Off by default, recommended ([Caching](https://mnml-cms.vercel.app/reading-content.md#caching)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
-| `ai` | `assistant({ model, tools?, name?, tone?, maxSteps? })` from `@n3wtou/mnml-cms/ai`: the admin assistant, a chat panel that answers from your content and fills fields for the editor to review. `model` is an AI Gateway id (`'anthropic/claude-sonnet-5-5'`) or any AI SDK model; needs the `ai` package ([Assistant](https://mnml-cms.vercel.app/assistant.md)) |
+| `ai` | `assistant({ model, tools?, name?, tone?, maxSteps?, store? })` from `@n3wtou/mnml-cms/ai`: the admin assistant, a chat panel that answers from your content and fills fields for the editor to review. `model` is an AI Gateway id (`'anthropic/claude-sonnet-5-5'`) or any AI SDK model; needs the `ai` package ([Assistant](https://mnml-cms.vercel.app/assistant.md)) |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
 
 ## Brand and logo

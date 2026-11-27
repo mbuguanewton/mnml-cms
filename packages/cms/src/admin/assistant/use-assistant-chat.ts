@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { AssistantEvent } from '../../api.js';
+import type { AssistantEvent, AssistantTurn } from '../../api.js';
+import { groupTurns, parseTurns } from '../../assistant-turns.js';
 import type { AssistantTarget } from './assistant-context.js';
-import { browserStore, chatTitle, parseChats, rawChats, readChats, subscribeChats, upsertChat, writeChats, type SavedMessage } from './chat-store.js';
+import { appendTurn, browserStore, parseStored, rawTurns, removeChat, subscribeChats } from './chat-store.js';
 
 /** What happened to the form during an answer: the fields that were filled (and can be undone) and those left out. */
 export type FillNote = {
@@ -71,56 +72,62 @@ export async function readEvents(body: ReadableStream<Uint8Array>, onEvent: (e: 
 
 const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
-/** What is kept of a chat: the words, and which fields were filled. */
-const toSaved = (messages: ChatMessage[]): SavedMessage[] =>
-  messages
-    .filter((m) => m.text || m.error || m.fills.length)
-    .map((m) => ({
-      role: m.role,
-      text: m.text,
-      ...(m.error && { error: m.error }),
-      ...(m.fills.length && { fills: m.fills.map((f) => ({ keys: f.keys, dropped: f.dropped })) }),
-    }));
+/** A page's turns from the site's store, through the server; null when they can't be had (the list stays as it was). */
+async function fetchTurns(apiPath: string, pageId: string): Promise<AssistantTurn[] | null> {
+  try {
+    const res = await fetch(`${apiPath}/ai/chats?page=${encodeURIComponent(pageId)}`);
+    const json = await res.json();
+    return json.ok ? parseTurns(json.turns) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Where the earlier chats come from: the browser (the default), or the site's own store through the server. */
+export type HistorySource = 'browser' | 'server';
 
 /**
- * The conversation with the assistant. `pageId` names the page it is on: its earlier chats are kept in the browser
- * under that id, and only that page's chats are listed. A different page needs a different hook state: key the
- * component that calls this by `pageId`.
+ * The conversation with the assistant. `pageId` names the page it is on: its earlier chats are kept under that id, and
+ * only that page's chats are listed. A different page needs a different hook state: key the component that calls
+ * this by `pageId`.
+ *
+ * Every finished answer is a turn. With the `browser` history the turn is kept here (words only); with `server` the
+ * server records it in the site's store and the list is fetched from there.
  */
-export function useAssistantChat(apiPath: string, target: { current: AssistantTarget | null }, pageId: string) {
+export function useAssistantChat(apiPath: string, target: { current: AssistantTarget | null }, pageId: string, history: HistorySource = 'browser') {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
-  // The earlier chats of this page, read from the browser's storage. Nothing on the server, so the first client render
-  // matches the HTML and they appear right after.
-  const raw = useSyncExternalStore(
-    subscribeChats,
-    () => rawChats(browserStore(), pageId),
-    () => '',
-  );
-  const chats = useMemo(() => parseChats(raw), [raw]);
   const [chatId, setChatId] = useState(newId);
+  // The chat a question is asked in, read when it is sent.
+  const chat = useRef(chatId);
   const abort = useRef<AbortController | null>(null);
   const next = useRef(1);
-  // A chat just opened from the history is not saved again (that would move it to the top for nothing).
-  const opened = useRef(false);
-  const history = useRef<ChatMessage[]>([]);
-  useEffect(() => {
-    history.current = messages;
-  }, [messages]);
 
-  // Keep the chat when an answer is finished (not on every word of it).
+  // The earlier chats of this page. The browser's record comes from storage (nothing on the server, so the first client
+  // render matches the HTML and they appear right after); the site's store is fetched.
+  const raw = useSyncExternalStore(
+    subscribeChats,
+    () => (history === 'browser' ? rawTurns(browserStore(), pageId) : ''),
+    () => '',
+  );
+  const [served, setServed] = useState<AssistantTurn[]>([]);
+  const loadServed = useCallback(() => {
+    if (history === 'server') void fetchTurns(apiPath, pageId).then((turns) => turns && setServed(turns));
+  }, [apiPath, pageId, history]);
   useEffect(() => {
-    if (busy || messages.length === 0) return;
-    if (opened.current) {
-      opened.current = false;
-      return;
-    }
-    const saved = toSaved(messages);
-    if (saved.length === 0) return;
-    const store = browserStore();
-    const list = upsertChat(readChats(store, pageId), { id: chatId, title: chatTitle(saved), updatedAt: Date.now(), messages: saved });
-    writeChats(store, pageId, list);
-  }, [messages, busy, chatId, pageId]);
+    if (history !== 'server') return;
+    let current = true;
+    void fetchTurns(apiPath, pageId).then((turns) => current && turns && setServed(turns));
+    return () => {
+      current = false;
+    };
+  }, [apiPath, pageId, history]);
+  const chats = useMemo(() => groupTurns(history === 'browser' ? parseStored(raw) : served), [history, raw, served]);
+
+  const log = useRef<ChatMessage[]>([]);
+  useEffect(() => {
+    log.current = messages;
+  }, [messages]);
 
   const patch = useCallback((id: number, change: (m: ChatMessage) => ChatMessage) => setMessages((all) => all.map((m) => (m.id === id ? change(m) : m))), []);
 
@@ -129,20 +136,29 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
       const text = question.trim();
       if (!text || abort.current) return;
       const t = target.current;
+      const thisChat = chat.current;
       const asked = recent(
-        [...history.current, { id: 0, role: 'user' as const, text, fills: [] }].filter((m) => m.text).map((m) => ({ role: m.role, content: m.text })),
+        [...log.current, { id: 0, role: 'user' as const, text, fills: [] }].filter((m) => m.text).map((m) => ({ role: m.role, content: m.text })),
       );
       const userId = next.current++;
       const replyId = next.current++;
       setMessages((all) => [...all, { id: userId, role: 'user', text, fills: [] }, { id: replyId, role: 'assistant', text: '', fills: [] }]);
       const controller = (abort.current = new AbortController());
       setBusy(true);
-      const fail = (error: string) => patch(replyId, (m) => ({ ...m, error, status: undefined }));
+
+      // What the turn will be, filled in as the answer comes.
+      let answer = '';
+      let status: AssistantTurn['status'] = 'done';
+      const fills: { fields: string[]; dropped: Record<string, string> }[] = [];
+      const fail = (error: string) => {
+        status = 'error';
+        patch(replyId, (m) => ({ ...m, error, status: undefined }));
+      };
       try {
         const res = await fetch(`${apiPath}/ai/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: asked, page: t ? { key: t.key, slug: t.slug, values: t.values } : {} }),
+          body: JSON.stringify({ messages: asked, chatId: thisChat, page: t ? { key: t.key, slug: t.slug, values: t.values } : {} }),
           signal: controller.signal,
         });
         if (!res.ok || !res.body) {
@@ -151,13 +167,16 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
           return;
         }
         await readEvents(res.body, (e) => {
-          if (e.type === 'text') patch(replyId, (m) => ({ ...m, text: m.text + e.text, status: undefined }));
-          else if (e.type === 'status') patch(replyId, (m) => ({ ...m, status: e.text }));
+          if (e.type === 'text') {
+            answer += e.text;
+            patch(replyId, (m) => ({ ...m, text: m.text + e.text, status: undefined }));
+          } else if (e.type === 'status') patch(replyId, (m) => ({ ...m, status: e.text }));
           else if (e.type === 'error') fail(e.message);
           else if (e.type === 'fill') {
             const form = target.current;
             if (!form) return;
             const before = form.apply(e.values);
+            fills.push({ fields: Object.keys(e.values), dropped: e.dropped });
             patch(replyId, (m) => ({
               ...m,
               status: undefined,
@@ -166,7 +185,8 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
           }
         });
       } catch (e) {
-        if ((e as Error).name !== 'AbortError') fail('Could not reach the server.');
+        if ((e as Error).name === 'AbortError') status = 'stopped';
+        else fail('Could not reach the server.');
       } finally {
         patch(replyId, (m) => ({ ...m, status: undefined }));
         // A newer question may have started since (after New chat): only release what this send holds.
@@ -174,34 +194,52 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
           abort.current = null;
           setBusy(false);
         }
+        // A turn that got nowhere (a refused request, nothing answered) is not worth keeping.
+        if (answer || fills.length) {
+          if (history === 'browser') {
+            appendTurn(browserStore(), pageId, {
+              chatId: thisChat,
+              page: pageId,
+              at: new Date().toISOString(),
+              question: text,
+              answer,
+              status,
+              ...(fills.length && { fills }),
+            });
+          } else {
+            // The server records it after the response, so look a moment later.
+            setTimeout(loadServed, 1200);
+          }
+        }
       }
     },
-    [apiPath, target, patch],
+    [apiPath, target, patch, history, pageId, loadServed],
   );
 
   const stop = useCallback(() => abort.current?.abort(), []);
 
-  /** A new, empty chat. The one before stays in the history. */
-  const clear = useCallback(() => {
+  const startChat = useCallback((id: string) => {
     abort.current?.abort();
     abort.current = null;
     setBusy(false);
-    setMessages([]);
-    setChatId(newId());
+    chat.current = id;
+    setChatId(id);
   }, []);
 
-  /** Opens an earlier chat of this page. */
+  /** A new, empty chat. The one before stays in the history. */
+  const clear = useCallback(() => {
+    startChat(newId());
+    setMessages([]);
+  }, [startChat]);
+
+  /** Opens an earlier chat of this page, to read and to carry on in. */
   const open = useCallback(
     (id: string) => {
-      const chat = readChats(browserStore(), pageId).find((c) => c.id === id);
-      if (!chat) return;
-      abort.current?.abort();
-      abort.current = null;
-      setBusy(false);
-      opened.current = true;
-      setChatId(chat.id);
+      const found = chats.find((c) => c.id === id);
+      if (!found) return;
+      startChat(found.id);
       setMessages(
-        chat.messages.map((m) => ({
+        found.messages.map((m) => ({
           id: next.current++,
           role: m.role,
           text: m.text,
@@ -210,18 +248,17 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
         })),
       );
     },
-    [pageId],
+    [chats, startChat],
   );
 
-  /** Deletes an earlier chat. Deleting the open one starts a new one. */
+  /** Deletes an earlier chat from the browser's record. The site's store is an audit record: no delete there. */
   const remove = useCallback(
     (id: string) => {
-      const store = browserStore();
-      const list = readChats(store, pageId).filter((c) => c.id !== id);
-      writeChats(store, pageId, list);
-      if (id === chatId) clear();
+      if (history !== 'browser') return;
+      removeChat(browserStore(), pageId, id);
+      if (id === chat.current) clear();
     },
-    [pageId, chatId, clear],
+    [history, pageId, clear],
   );
 
   // Closing the page (or the panel's page changing) stops the model request.
@@ -231,7 +268,7 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
   const undo = useCallback(
     (messageId: number, fillId: number) => {
       const form = target.current;
-      const fill = history.current.find((m) => m.id === messageId)?.fills.find((f) => f.id === fillId);
+      const fill = log.current.find((m) => m.id === messageId)?.fills.find((f) => f.id === fillId);
       if (!form || !fill || fill.undone || !fill.before) return false;
       form.apply(fill.before);
       patch(messageId, (m) => ({ ...m, fills: m.fills.map((f) => (f.id === fillId ? { ...f, undone: true } : f)) }));
@@ -240,5 +277,5 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
     [target, patch],
   );
 
-  return { messages, busy, chats, chatId, send, stop, clear, open, remove, undo };
+  return { messages, busy, chats, chatId, canDelete: history === 'browser', send, stop, clear, open, remove, undo };
 }

@@ -26,7 +26,7 @@ Second argument of `createCms(config, options)`.
 | `search` | `{ index, route }`: search over published content, `cms.search()` and a `search_content` MCP tool. `index` is your own `SearchIndex` (Postgres, pgvector, Mongo, Convex…); `route` opens a public search route ([Search](https://mnml-cms.vercel.app/search.md)) |
 | `cache` | `true` or `{ revalidate }` (seconds, default 3600): keeps published reads between requests, dropped on each save or delete. Off by default, recommended ([Caching](https://mnml-cms.vercel.app/reading-content.md#caching)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
-| `ai` | `assistant({ model, tools?, name?, tone?, maxSteps? })` from `@n3wtou/mnml-cms/ai`: the admin assistant, a chat panel that answers from your content and fills fields for the editor to review. `model` is an AI Gateway id (`'anthropic/claude-sonnet-5-5'`) or any AI SDK model; needs the `ai` package ([Assistant](https://mnml-cms.vercel.app/assistant.md)) |
+| `ai` | `assistant({ model, tools?, name?, tone?, maxSteps?, store? })` from `@n3wtou/mnml-cms/ai`: the admin assistant, a chat panel that answers from your content and fills fields for the editor to review. `model` is an AI Gateway id (`'anthropic/claude-sonnet-5-5'`) or any AI SDK model; needs the `ai` package ([Assistant](https://mnml-cms.vercel.app/assistant.md)) |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
 
 ## Brand and logo

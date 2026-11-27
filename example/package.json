@@ -10,6 +10,7 @@
     "db:seed": "vpx scripts/seed.ts",
     "db:mismatch": "vpx scripts/mismatch-demo.ts",
     "db:search": "vpx scripts/search-setup.ts",
+    "db:assistant": "vpx scripts/assistant-setup.ts",
     "db:reindex": "vpx scripts/reindex.ts",
     "db:export": "vpx scripts/content.ts export",
     "db:import": "vpx scripts/content.ts import",

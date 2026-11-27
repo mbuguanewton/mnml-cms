@@ -23,12 +23,14 @@ import { IMAGE_TYPES, MAX_IMAGE_BYTES } from '../media/media.js';
 import { loadRefOptions } from '../content/ref-options.js';
 import { PREVIEW_COOKIE } from '../content/store.js';
 import { createLimiter } from '../search/limit.js';
-import type { AssistantInput } from '../../api.js';
+import type { AssistantInput, AssistantTurn } from '../../api.js';
+import { parseTurns } from '../../assistant-turns.js';
+import { after } from 'next/server';
 import { MAX_CHARS, MAX_MESSAGES } from '../ai/limits.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
 //   POST: login · logout · logout-all · save · autosave · discard · bulk · delete · preview · preview/exit · references · reference/schema · ai/chat (assistant, only with `ai`) · upload · media/list · media/delete · request · tokens/create · tokens/revoke · mcp
-//   GET:  media/<key> (uploaded images, public) · preview/open (admins only) · search (public, only with `search: { route: true }`)
+//   GET:  media/<key> (uploaded images, public) · preview/open (admins only) · search (public, only with `search: { route: true }`) · ai/chats (admins only, only with an assistant `store` that has `turns`)
 
 const MEDIA_KEY = /^[\w.\-/]+$/;
 /** The most files one `media/delete` call takes. */
@@ -87,6 +89,7 @@ export function createHandlers(ctx: Context) {
       return json({ ok: false, message: 'Send up to 30 messages, ending with a question, and at most 60000 characters.' }, 400);
     const page = input.page && typeof input.page === 'object' ? input.page : {};
     const safe: AssistantInput = {
+      chatId: typeof input.chatId === 'string' && input.chatId.length > 0 && input.chatId.length <= 100 ? input.chatId : undefined,
       messages: msgs.map((m) => ({ role: m.role, content: m.content })),
       page: {
         key: typeof page.key === 'string' && Object.hasOwn(ctx.config, page.key) ? page.key : undefined,
@@ -99,7 +102,22 @@ export function createHandlers(ctx: Context) {
     // aborts `request.signal` or only closes the response.
     const abort = new AbortController();
     request.signal.addEventListener('abort', () => abort.abort(), { once: true });
-    const events = ctx.ai.run({ ctx, content, input: safe, signal: abort.signal })[Symbol.asyncIterator]();
+    // The record of the turn goes to the site's `store` after the response is sent, so it never slows an answer.
+    const store = ctx.ai.store;
+    let turnDone: (turn?: AssistantTurn) => void = () => {};
+    if (store) {
+      const turn = new Promise<AssistantTurn | undefined>((resolve) => (turnDone = resolve));
+      after(async () => {
+        const t = await turn;
+        if (!t) return;
+        try {
+          await store.record(t, { request });
+        } catch (e) {
+          console.error('cms assistant record failed:', e);
+        }
+      });
+    }
+    const events = ctx.ai.run({ ctx, content, input: safe, signal: abort.signal, onTurn: store ? turnDone : undefined })[Symbol.asyncIterator]();
     let gone = false;
     const body = new ReadableStream<Uint8Array>({
       async start(controller) {
@@ -115,16 +133,45 @@ export function createHandlers(ctx: Context) {
             controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'error', message: 'The model request failed. Check the server log.' })}\n`));
           }
         }
+        // Nothing to record when the engine never got to run (it throws before it can).
+        turnDone(undefined);
         // The reader may have gone (Stop, New chat, a closed tab): the stream is already closed then.
         if (!gone) controller.close();
       },
       cancel() {
         gone = true;
         abort.abort();
+        // The engine reports a stopped answer as it unwinds; `start` settles the promise if it never does.
         void events.return?.(undefined);
       },
     });
     return new Response(body, { headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' } });
+  }
+
+  // The earlier chats of a page, from the site's store (`turns`): admins only, and a lighter limit than a question.
+  const chatsLimit = createLimiter({ max: 60, windowMs: 60_000 });
+  async function aiChats(request: Request) {
+    const store = ctx.ai?.store;
+    if (!store?.turns) return json({ error: 'Not found' }, 404);
+    if (!(await isAdmin(ctx))) return unauthorized();
+    const wait = chatsLimit(clientIp(request));
+    if (wait > 0)
+      return Response.json(
+        { ok: false, message: `Too many requests. Try again in ${wait} seconds.` },
+        { status: 429, headers: { 'Retry-After': String(wait) } },
+      );
+    const page = new URL(request.url).searchParams.get('page') ?? '';
+    if (!page || page.length > 200) return json({ ok: false, message: 'Send the page in ?page=.' }, 400);
+    try {
+      // Checked and capped: whatever the site's store returns, the browser gets turns, a few hundred at most.
+      const turns = parseTurns(await store.turns(page, { request }))
+        .sort((a, b) => b.at.localeCompare(a.at))
+        .slice(0, 300);
+      return json({ ok: true, turns });
+    } catch (e) {
+      console.error('cms assistant turns failed:', e);
+      return json({ ok: false, message: 'Could not load the earlier chats.' }, 500);
+    }
   }
 
   async function searchRoute(request: Request) {
@@ -407,6 +454,7 @@ export function createHandlers(ctx: Context) {
     const [first, ...rest] = (await params).route ?? [];
     if (first === 'preview' && rest.join('/') === 'open') return openPreview(request);
     if (first === 'search' && rest.length === 0 && ctx.search && ctx.searchRoute) return searchRoute(request);
+    if (first === 'ai' && rest.join('/') === 'chats' && ctx.ai?.store?.turns) return aiChats(request);
     if (first === 'mcp' && mcp && rest.length === 0) return new Response('Use POST.', { status: 405, headers: { Allow: 'POST' } });
     const key = rest.join('/');
     if (first !== 'media' || !ctx.options.media || !MEDIA_KEY.test(key) || key.includes('..')) return new Response('Not found', { status: 404 });

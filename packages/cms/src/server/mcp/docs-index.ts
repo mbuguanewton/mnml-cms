@@ -182,6 +182,8 @@ export const docsIndex: DocsPage[] = [
       "Your own tools",
       "The CMS's tools in your own code",
       "Earlier chats",
+      "Keeping a record",
+      "Example: Postgres",
       "What the model can do",
       "Limits and safety",
       "Options"

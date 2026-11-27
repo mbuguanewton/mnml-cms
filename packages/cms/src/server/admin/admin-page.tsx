@@ -123,7 +123,7 @@ export function createAdminPage<C extends CmsConfig>(ctx: Context<C>) {
           {assistant && ctx.ai ? (
             <AssistantProvider>
               {body}
-              <Assistant name={ctx.ai.name} />
+              <Assistant name={ctx.ai.name} history={ctx.ai.store?.turns ? 'server' : 'browser'} />
             </AssistantProvider>
           ) : (
             body

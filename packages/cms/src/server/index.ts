@@ -12,7 +12,7 @@ import { readTools } from './ai/tools.js';
 
 export type { BrandLogo, BrandOption } from './admin/brand.js';
 export type { AdminPageDef, AgentScope, AgentToken, Change, CmsOptions, ListAction, McpOptions } from './context.js';
-export type { AssistantEngine } from './ai/types.js';
+export type { AssistantEngine, AssistantStore } from './ai/types.js';
 export type { AuthAdapter, PasswordAuth } from './auth/auth.js';
 export type { CacheOption } from './content/cached-store.js';
 export type { ListOptions, ReadOptions } from './content/store.js';

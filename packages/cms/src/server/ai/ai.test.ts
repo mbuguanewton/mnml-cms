@@ -516,3 +516,222 @@ describe('cms.tools() (readTools)', () => {
     expect(Object.keys(readTools(ctx, content, ['settings']))).toContain('get_schema');
   });
 });
+
+// ---- the record of what the assistant did (`store`)
+describe('assistant store', () => {
+  const settle = () => new Promise((r) => setTimeout(r, 20));
+  const storeOf = (extra: { turns?: (page: string) => Promise<unknown[]>; record?: (t: unknown) => unknown } = {}) => {
+    const recorded: { turn: Record<string, unknown>; request: Request }[] = [];
+    return {
+      recorded,
+      store: {
+        record: async (turn: unknown, o: { request: Request }) => {
+          recorded.push({ turn: turn as Record<string, unknown>, request: o.request });
+          await extra.record?.(turn);
+        },
+        ...(extra.turns && { turns: extra.turns as never }),
+      },
+    };
+  };
+
+  it('records one turn after an answer: question, answer, tools, fills with before and after, model and usage', async () => {
+    const { recorded, store } = storeOf();
+    rows.push({ collection: 'posts', slug: 'a', status: 'published', data: { title: 'Alpha' } });
+    const model = scripted((turn) =>
+      turn === 0
+        ? {
+            calls: [
+              { name: 'get_entry', args: { collection: 'posts', slug: 'a' } },
+              { name: 'fill_entry', args: { data: { title: 'New', category: 'nope' } } },
+            ],
+          }
+        : { text: ['Done.'] },
+    );
+    await ask(build(model, { store }), {
+      ...question('rewrite it', { key: 'posts', slug: 'a', values: { title: 'Old', category: 'news' } }),
+      chatId: 'chat-1',
+    });
+    await settle();
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0].request).toBeInstanceOf(Request);
+    expect(recorded[0].turn).toMatchObject({
+      chatId: 'chat-1',
+      page: 'posts/a',
+      question: 'rewrite it',
+      answer: 'Done.',
+      status: 'done',
+      model: expect.stringContaining('mock-model-id'),
+      tools: [{ name: 'get_entry', input: { collection: 'posts', slug: 'a' } }, { name: 'fill_entry' }],
+      fills: [{ fields: ['title'], dropped: { category: expect.any(String) }, before: { title: 'Old' }, after: { title: 'New' } }],
+      usage: { inputTokens: expect.any(Number), outputTokens: expect.any(Number) },
+    });
+    expect(typeof recorded[0].turn.durationMs).toBe('number');
+    expect(Number.isNaN(Date.parse(recorded[0].turn.at as string))).toBe(false);
+  });
+
+  it('names the page `site` away from an entry, and `settings/` for a singleton', async () => {
+    const { recorded, store } = storeOf();
+    const h = build(scripted(say()), { store });
+    await ask(h, question('hi', {}));
+    await ask(h, question('hi', { key: 'settings', values: {} }));
+    await settle();
+    expect(recorded.map((r) => r.turn.page)).toEqual(['site', 'settings/']);
+  });
+
+  it('makes a chat id when the browser sent none or a silly one', async () => {
+    const { recorded, store } = storeOf();
+    const h = build(scripted(say()), { store });
+    await ask(h, question());
+    await ask(h, { ...question(), chatId: 'x'.repeat(101) });
+    await settle();
+    expect(recorded.map((r) => typeof r.turn.chatId)).toEqual(['string', 'string']);
+    expect((recorded[1].turn.chatId as string).length).toBeLessThan(101);
+  });
+
+  it('records a failed answer as an error, without the provider message', async () => {
+    const { recorded, store } = storeOf();
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        throw new Error('secret-key-123 rejected');
+      },
+    });
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await ask(build(model as never, { store }), question('hi'));
+    spy.mockRestore();
+    await settle();
+    expect(recorded[0].turn).toMatchObject({ status: 'error', question: 'hi', answer: '' });
+  });
+
+  it('records an answer that ran out of steps as stopped', async () => {
+    const { recorded, store } = storeOf();
+    await ask(
+      build(
+        scripted(() => ({ calls: [{ name: 'get_schema', args: {} }] })),
+        { store, maxSteps: 2 },
+      ),
+      question(),
+    );
+    await settle();
+    expect(recorded[0].turn.status).toBe('stopped');
+  });
+
+  it('records an answer the editor stopped, with what was said so far', async () => {
+    const { recorded, store } = storeOf();
+    const model = new MockLanguageModelV4({
+      doStream: async (o) => ({
+        stream: new ReadableStream({
+          async start(c) {
+            c.enqueue({ type: 'text-start', id: 't' });
+            c.enqueue({ type: 'text-delta', id: 't', delta: 'Partial' });
+            for (let i = 0; i < 100 && !o.abortSignal?.aborted; i++) await new Promise((r) => setTimeout(r, 5));
+            try {
+              c.close();
+            } catch {
+              // Already closed.
+            }
+          },
+        }) as never,
+      }),
+    });
+    const res = await build(model as never, { store }).POST(
+      new Request('http://x/api/mnml/ai/chat', { method: 'POST', body: JSON.stringify(question('go')) }),
+      {
+        params: Promise.resolve({ route: ['ai', 'chat'] }),
+      },
+    );
+    const reader = res.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    await new Promise((r) => setTimeout(r, 120));
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0].turn).toMatchObject({ status: 'stopped', question: 'go', answer: expect.stringContaining('Partial') });
+  });
+
+  it('logs a store that fails and still answers', async () => {
+    const { store } = storeOf({
+      record: () => {
+        throw new Error('db down');
+      },
+    });
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await ask(build(scripted(say('fine')), { store }), question());
+    await settle();
+    expect(r.events).toEqual([{ type: 'text', text: 'fine' }]);
+    expect(spy).toHaveBeenCalledWith('cms assistant record failed:', expect.any(Error));
+    spy.mockRestore();
+  });
+
+  it('records nothing without a store', async () => {
+    const r = await ask(build(scripted(say('fine'))), question());
+    expect(r.events).toEqual([{ type: 'text', text: 'fine' }]);
+  });
+});
+
+describe('ai/chats route', () => {
+  const turn = (chatId: string, at: string, page = 'posts/a') => ({ chatId, page, at, question: 'q', answer: 'a', status: 'done' });
+  const get = (h: ReturnType<typeof build>, query = '?page=posts/a', ip = '5.5.5.5') =>
+    h.GET(new Request(`http://x/api/mnml/ai/chats${query}`, { headers: { 'x-forwarded-for': ip } }), { params: Promise.resolve({ route: ['ai', 'chats'] }) });
+  const record = async () => {};
+
+  it('is a 404 unless the store has `turns`', async () => {
+    expect((await get(build(scripted(say())))).status).toBe(404);
+    expect((await get(build(scripted(say()), { store: { record } }))).status).toBe(404);
+  });
+
+  it('is for admins only, and never asks the store otherwise', async () => {
+    admin = false;
+    let asked = 0;
+    const h = build(scripted(say()), { store: { record, turns: async () => (asked++, []) } });
+    expect((await get(h)).status).toBe(401);
+    expect(asked).toBe(0);
+  });
+
+  it("returns the page's turns, newest first, checked, and passes the page and the request on", async () => {
+    let seen: { page?: string; request?: Request } = {};
+    const h = build(scripted(say()), {
+      store: {
+        record,
+        turns: async (page: string, o: { request: Request }) => {
+          seen = { page, request: o.request };
+          return [turn('a', '2026-01-01T00:00:00Z'), { junk: true }, turn('b', '2026-01-02T00:00:00Z'), 'nope'];
+        },
+      },
+    });
+    const res = await get(h, '?page=posts%2Fhello');
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.turns.map((t: { chatId: string }) => t.chatId)).toEqual(['b', 'a']);
+    expect(seen.page).toBe('posts/hello');
+    expect(seen.request).toBeInstanceOf(Request);
+  });
+
+  it('asks for a page, and not a silly one', async () => {
+    const h = build(scripted(say()), { store: { record, turns: async () => [] } });
+    expect((await get(h, '')).status).toBe(400);
+    expect((await get(h, `?page=${'x'.repeat(201)}`)).status).toBe(400);
+  });
+
+  it('caps what it returns', async () => {
+    const many = Array.from({ length: 500 }, (_, i) => turn(`c${i}`, new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString()));
+    const json = await (await get(build(scripted(say()), { store: { record, turns: async () => many } }))).json();
+    expect(json.turns).toHaveLength(300);
+    expect(json.turns[0].chatId).toBe('c499');
+  });
+
+  it('does not leak a failing store', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await get(
+      build(scripted(say()), {
+        store: {
+          record,
+          turns: async () => {
+            throw new Error('password=hunter2');
+          },
+        },
+      }),
+    );
+    spy.mockRestore();
+    expect(res.status).toBe(500);
+    expect(await res.text()).not.toContain('hunter2');
+  });
+});

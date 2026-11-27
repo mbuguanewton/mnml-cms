@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { chatTitle, MAX_CHARS, MAX_CHATS, readChats, upsertChat, writeChats, type SavedChat } from './chat-store.js';
+import type { AssistantTurn } from '../../api.js';
+import { groupTurns } from '../../assistant-turns.js';
+import { appendTurn, MAX_CHARS, MAX_CHATS, parseStored, rawTurns, removeChat } from './chat-store.js';
 
 const memory = () => {
   const data = new Map<string, string>();
@@ -10,92 +12,74 @@ const memory = () => {
     data,
   };
 };
-const chat = (id: string, at: number, text = 'hello'): SavedChat => ({
-  id,
-  title: chatTitle([{ role: 'user', text }]),
-  updatedAt: at,
-  messages: [{ role: 'user', text }],
+const turn = (chatId: string, minute: number, question = 'hello', answer = 'hi'): AssistantTurn => ({
+  chatId,
+  page: 'p',
+  at: new Date(Date.UTC(2026, 0, 1, 0, minute)).toISOString(),
+  question,
+  answer,
+  status: 'done',
 });
+const chats = (s: ReturnType<typeof memory>, page: string) => groupTurns(parseStored(rawTurns(s, page)));
 
-describe('chat store', () => {
-  it('keeps the chats of one page apart from another', () => {
+describe('browser store', () => {
+  it('keeps the turns of one page apart from another', () => {
     const s = memory();
-    writeChats(s, 'posts/a', [chat('1', 1)]);
-    writeChats(s, 'posts/b', [chat('2', 2)]);
-    expect(readChats(s, 'posts/a').map((c) => c.id)).toEqual(['1']);
-    expect(readChats(s, 'posts/b').map((c) => c.id)).toEqual(['2']);
-    expect(readChats(s, 'posts/c')).toEqual([]);
+    appendTurn(s, 'posts/a', turn('1', 1));
+    appendTurn(s, 'posts/b', turn('2', 2));
+    expect(chats(s, 'posts/a').map((c) => c.id)).toEqual(['1']);
+    expect(chats(s, 'posts/b').map((c) => c.id)).toEqual(['2']);
+    expect(chats(s, 'posts/c')).toEqual([]);
   });
 
-  it('returns the newest first', () => {
+  it('adds the turns of a chat to that chat', () => {
     const s = memory();
-    writeChats(s, 'p', upsertChat(upsertChat([], chat('old', 1)), chat('new', 9)));
-    expect(readChats(s, 'p').map((c) => c.id)).toEqual(['new', 'old']);
+    appendTurn(s, 'p', turn('1', 1, 'first'));
+    appendTurn(s, 'p', turn('1', 2, 'second'));
+    const [chat] = chats(s, 'p');
+    expect(chat.messages.map((m) => m.text)).toEqual(['first', 'hi', 'second', 'hi']);
   });
 
-  it('replaces a chat with the same id instead of adding another', () => {
-    const list = upsertChat(upsertChat([], chat('a', 1, 'first')), chat('a', 2, 'second'));
-    expect(list).toHaveLength(1);
-    expect(list[0].messages[0].text).toBe('second');
-  });
-
-  it('keeps at most MAX_CHATS, dropping the oldest', () => {
-    let list: SavedChat[] = [];
-    for (let i = 0; i < MAX_CHATS + 5; i++) list = upsertChat(list, chat(String(i), i));
-    expect(list).toHaveLength(MAX_CHATS);
-    expect(list.at(-1)!.id).toBe('5');
-    expect(list[0].id).toBe(String(MAX_CHATS + 4));
-  });
-
-  it('stays under the size limit, but always keeps the newest chat', () => {
-    const big = (id: string, at: number) => chat(id, at, 'x'.repeat(MAX_CHARS / 2 + 1));
-    const list = upsertChat(upsertChat([], big('a', 1)), big('b', 2));
-    expect(list.map((c) => c.id)).toEqual(['b']);
-    expect(upsertChat([], big('only', 1)).map((c) => c.id)).toEqual(['only']);
-  });
-
-  it('removes the entry when the list is empty', () => {
+  it('drops the oldest chats past MAX_CHATS, whole', () => {
     const s = memory();
-    writeChats(s, 'p', [chat('1', 1)]);
-    writeChats(s, 'p', []);
+    for (let i = 0; i < MAX_CHATS + 3; i++) appendTurn(s, 'p', turn(`c${i}`, i));
+    const ids = chats(s, 'p').map((c) => c.id);
+    expect(ids).toHaveLength(MAX_CHATS);
+    expect(ids).not.toContain('c0');
+    expect(ids).toContain(`c${MAX_CHATS + 2}`);
+  });
+
+  it('stays under the size limit, but keeps the newest chat', () => {
+    const s = memory();
+    const big = 'x'.repeat(MAX_CHARS / 2 + 1);
+    appendTurn(s, 'p', turn('a', 1, big));
+    appendTurn(s, 'p', turn('b', 2, big));
+    expect(chats(s, 'p').map((c) => c.id)).toEqual(['b']);
+  });
+
+  it('removes a chat with all its turns, and the entry when none are left', () => {
+    const s = memory();
+    appendTurn(s, 'p', turn('1', 1));
+    appendTurn(s, 'p', turn('1', 2));
+    appendTurn(s, 'p', turn('2', 3));
+    removeChat(s, 'p', '1');
+    expect(chats(s, 'p').map((c) => c.id)).toEqual(['2']);
+    removeChat(s, 'p', '2');
     expect(s.data.size).toBe(0);
   });
 
   it('survives corrupt or foreign data', () => {
     const s = memory();
-    for (const raw of ['not json', '{}', '[1,"x",null]', '[{"id":"a"}]', '[{"id":"a","title":"t","messages":[{"role":"system","text":"x"}]}]']) {
-      s.setItem('mnml-assistant:p', raw);
-      expect(readChats(s, 'p')).toEqual([]);
+    for (const raw of ['not json', '{}', '[1,"x",null]', '[{"chatId":"a"}]']) {
+      s.setItem('mnml-assistant-turns:p', raw);
+      expect(parseStored(rawTurns(s, 'p'))).toEqual([]);
     }
-    expect(readChats(null, 'p')).toEqual([]);
-  });
-
-  it('drops messages that are not messages and keeps the rest', () => {
-    const s = memory();
-    s.setItem(
-      'mnml-assistant:p',
-      JSON.stringify([
-        {
-          id: 'a',
-          title: 't',
-          updatedAt: 1,
-          messages: [
-            { role: 'user', text: 'hi' },
-            { role: 'x', text: 'no' },
-            7,
-            { role: 'assistant', text: 'yo', fills: [{ keys: ['title'], dropped: { a: 'b' } }, 'bad'] },
-          ],
-        },
-      ]),
-    );
-    expect(readChats(s, 'p')[0].messages).toEqual([
-      { role: 'user', text: 'hi' },
-      { role: 'assistant', text: 'yo', fills: [{ keys: ['title'], dropped: { a: 'b' } }] },
-    ]);
+    expect(parseStored(rawTurns(null, 'p'))).toEqual([]);
   });
 
   it('does not throw when storage is full or blocked', () => {
     const full = {
+      getItem: () => null,
       setItem: () => {
         throw new Error('QuotaExceededError');
       },
@@ -103,26 +87,8 @@ describe('chat store', () => {
         throw new Error('blocked');
       },
     };
-    expect(() => writeChats(full, 'p', [chat('1', 1)])).not.toThrow();
-    expect(() => writeChats(full, 'p', [])).not.toThrow();
-    expect(() => writeChats(null, 'p', [chat('1', 1)])).not.toThrow();
-  });
-});
-
-describe('chatTitle', () => {
-  it('is the first question, on one line and shortened', () => {
-    expect(
-      chatTitle([
-        { role: 'assistant', text: 'x' },
-        { role: 'user', text: '  What does\n the site   say? ' },
-      ]),
-    ).toBe('What does the site say?');
-    const t = chatTitle([{ role: 'user', text: 'a'.repeat(200) }]);
-    expect(t.length).toBeLessThanOrEqual(48);
-    expect(t.endsWith('…')).toBe(true);
-  });
-
-  it('has a fallback', () => {
-    expect(chatTitle([])).toBe('Chat');
+    expect(() => appendTurn(full, 'p', turn('1', 1))).not.toThrow();
+    expect(() => removeChat(full, 'p', '1')).not.toThrow();
+    expect(() => appendTurn(null, 'p', turn('1', 1))).not.toThrow();
   });
 });

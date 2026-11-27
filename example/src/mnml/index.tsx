@@ -8,6 +8,7 @@ import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next'
 import config from '../../mnml.config';
 import { CacheTool } from '../admin/cache-tool';
 import { Editor } from './editor-client';
+import { postgresAssistantStore } from './postgres-assistant-store';
 import { postgresSearch } from './postgres-search';
 import { AdminUi } from './ui';
 
@@ -49,6 +50,11 @@ export const cms = createCms(config, {
         model,
         name: 'Scribe',
         tone: 'Friendly and concise. Plain words, no jargon.',
+        // What the assistant did, in Postgres (postgres-assistant-store.ts). MNML_ASSISTANT_HISTORY=server also reads the
+        // History menu from the table; by default the panel keeps its chat list in the browser.
+        store: process.env.DATABASE_URL
+          ? postgresAssistantStore(process.env.DATABASE_URL, { turns: process.env.MNML_ASSISTANT_HISTORY === 'server' })
+          : undefined,
         tools: {
           site_counts: tool({
             description: 'How many published posts and pages the site has.',
