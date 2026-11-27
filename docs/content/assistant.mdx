@@ -6,6 +6,8 @@ description: "The admin assistant: a chat panel that knows the open page, answer
 
 A chat panel in the admin. A button at the bottom right opens it. Off by default.
 
+Whether the panel is open is in the address: `?assistant=1`. A link with it opens the panel, a reload keeps it open, and closing takes it off. When the editor goes to another page the panel stays open with a fresh chat for that page; the earlier chat is in History.
+
 The assistant knows the page the editor has open: the fields and their current values. Editors can:
 
 - **Ask about the content.** "Which posts mention refunds?" It searches the published content and answers from it.

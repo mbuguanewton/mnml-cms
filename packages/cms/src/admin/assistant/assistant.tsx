@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ArrowUpIcon, HistoryIcon, PlusIcon, SparklesIcon, SquareIcon, Trash2Icon, Undo2Icon, XIcon } from 'lucide-react';
 import { Button } from '../ui/button.js';
 import { buttonVariants } from '../ui/button-variants.js';
@@ -14,13 +15,43 @@ const PANEL_WIDTH = '26rem';
 const ENTRY_STARTERS = ['Summarize this entry', 'Suggest a better title', 'Fill in the empty fields'];
 const SITE_STARTERS = ['What does the site say about…?', 'Which entries are about…?'];
 
-/** The FAB and the chat panel on the right. Mounted by the admin only when `ai` is set. */
+/** The URL says the panel is open: `?assistant=1`. A reload or a shared link opens it. */
+export const OPEN_PARAM = 'assistant';
+
+/**
+ * Whether the editor wants the panel open, kept across the in-app navigations of this page load. The pages of the
+ * admin remount when the address changes and links don't carry a query string, so the URL alone would close the panel
+ * on every click. A reload resets this, and then the URL speaks for itself.
+ */
+let wanted = false;
+
+/**
+ * Opens or closes the panel by writing the URL. No navigation and no server round trip: Next follows `replaceState`,
+ * but only when it is given no state of its own (`null`); with Next's state it takes the call for its own.
+ */
+function writeOpen(open: boolean) {
+  wanted = open;
+  const url = new URL(window.location.href);
+  if (open) url.searchParams.set(OPEN_PARAM, '1');
+  else url.searchParams.delete(OPEN_PARAM);
+  window.history.replaceState(null, '', url);
+}
+
+/**
+ * The FAB and the chat panel on the right. Mounted by the admin only when `ai` is set. Open or closed comes from the
+ * URL; moving to another page keeps it open with a fresh chat there (the earlier one is in History).
+ */
 export function Assistant({ name = 'Assistant', history = 'browser' }: { name?: string; history?: HistorySource }) {
   const a = useAssistant();
-  // Open or closed stays when the page changes (the entry form registers itself just after load).
-  const [open, setOpen] = useState(false);
+  const params = useSearchParams();
+  const inUrl = params.has(OPEN_PARAM);
+  const open = inUrl || wanted;
+  // Another page, or a link that dropped the query: put it back in the address.
+  useEffect(() => {
+    if (wanted && !inUrl) writeOpen(true);
+  }, [inUrl]);
   // Keyed by the page: another page is another conversation (and its own earlier chats).
-  return a ? <Panel key={a.page?.id ?? 'site'} a={a} pageId={a.page?.id ?? 'site'} name={name} history={history} open={open} setOpen={setOpen} /> : null;
+  return a ? <Panel key={a.page?.id ?? 'site'} a={a} pageId={a.page?.id ?? 'site'} name={name} history={history} open={open} setOpen={writeOpen} /> : null;
 }
 
 type PanelProps = {
@@ -103,7 +134,7 @@ function Panel({ a, pageId, name, history, open, setOpen }: PanelProps) {
         aria-label={name}
         hidden={!open}
         onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
-        className="mnml-root fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-mnml-line bg-mnml-bg text-sm text-mnml-text shadow-xl [font-family:ui-sans-serif,system-ui,sans-serif] sm:w-[26rem] print:hidden"
+        className="mnml-root fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-mnml-line bg-mnml-panel text-sm text-mnml-text [font-family:ui-sans-serif,system-ui,sans-serif] sm:w-[26rem] print:hidden"
       >
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-mnml-line px-4">
           <SparklesIcon aria-hidden className="size-4 text-mnml-text-mute" />
@@ -169,7 +200,7 @@ function Panel({ a, pageId, name, history, open, setOpen }: PanelProps) {
             submit();
           }}
         >
-          <div className="flex flex-col rounded-[22px] border border-mnml-line bg-mnml-panel shadow-sm transition-colors focus-within:border-mnml-primary">
+          <div className="flex flex-col rounded-[22px] border border-mnml-line bg-mnml-bg transition-colors focus-within:border-mnml-primary">
             <textarea
               ref={input}
               value={draft}
@@ -185,7 +216,7 @@ function Panel({ a, pageId, name, history, open, setOpen }: PanelProps) {
                 type="button"
                 disabled={chat.messages.length === 0}
                 onClick={chat.clear}
-                className="mnml-state flex h-9 cursor-pointer items-center gap-1.5 rounded-full border border-mnml-line bg-mnml-bg px-3.5 text-xs text-mnml-text shadow-sm outline-none hover:bg-mnml-surface focus-visible:ring-2 focus-visible:ring-mnml-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4"
+                className="mnml-state flex h-9 cursor-pointer items-center gap-1.5 rounded-full border border-mnml-line bg-mnml-bg px-3.5 text-xs text-mnml-text outline-none hover:bg-mnml-surface focus-visible:ring-2 focus-visible:ring-mnml-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4"
               >
                 <PlusIcon aria-hidden />
                 New chat
