@@ -1,11 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { AssistantEvent } from '../../api.js';
 import type { AssistantTarget } from './assistant-context.js';
+import { browserStore, chatTitle, parseChats, rawChats, readChats, subscribeChats, upsertChat, writeChats, type SavedMessage } from './chat-store.js';
 
 /** What happened to the form during an answer: the fields that were filled (and can be undone) and those left out. */
-export type FillNote = { id: number; keys: string[]; dropped: Record<string, string>; undone: boolean; before: Record<string, unknown> };
+export type FillNote = {
+  id: number;
+  keys: string[];
+  dropped: Record<string, string>;
+  undone: boolean;
+  /** What the fields held before, for Undo. Missing on a chat opened from the history: the form has moved on. */
+  before?: Record<string, unknown>;
+};
 
 export type ChatMessage = {
   id: number;
@@ -61,15 +69,58 @@ export async function readEvents(body: ReadableStream<Uint8Array>, onEvent: (e: 
   flush(buffer + decoder.decode());
 }
 
-export function useAssistantChat(apiPath: string, target: { current: AssistantTarget | null }) {
+const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+/** What is kept of a chat: the words, and which fields were filled. */
+const toSaved = (messages: ChatMessage[]): SavedMessage[] =>
+  messages
+    .filter((m) => m.text || m.error || m.fills.length)
+    .map((m) => ({
+      role: m.role,
+      text: m.text,
+      ...(m.error && { error: m.error }),
+      ...(m.fills.length && { fills: m.fills.map((f) => ({ keys: f.keys, dropped: f.dropped })) }),
+    }));
+
+/**
+ * The conversation with the assistant. `pageId` names the page it is on: its earlier chats are kept in the browser
+ * under that id, and only that page's chats are listed. A different page needs a different hook state: key the
+ * component that calls this by `pageId`.
+ */
+export function useAssistantChat(apiPath: string, target: { current: AssistantTarget | null }, pageId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
+  // The earlier chats of this page, read from the browser's storage. Nothing on the server, so the first client render
+  // matches the HTML and they appear right after.
+  const raw = useSyncExternalStore(
+    subscribeChats,
+    () => rawChats(browserStore(), pageId),
+    () => '',
+  );
+  const chats = useMemo(() => parseChats(raw), [raw]);
+  const [chatId, setChatId] = useState(newId);
   const abort = useRef<AbortController | null>(null);
   const next = useRef(1);
+  // A chat just opened from the history is not saved again (that would move it to the top for nothing).
+  const opened = useRef(false);
   const history = useRef<ChatMessage[]>([]);
   useEffect(() => {
     history.current = messages;
   }, [messages]);
+
+  // Keep the chat when an answer is finished (not on every word of it).
+  useEffect(() => {
+    if (busy || messages.length === 0) return;
+    if (opened.current) {
+      opened.current = false;
+      return;
+    }
+    const saved = toSaved(messages);
+    if (saved.length === 0) return;
+    const store = browserStore();
+    const list = upsertChat(readChats(store, pageId), { id: chatId, title: chatTitle(saved), updatedAt: Date.now(), messages: saved });
+    writeChats(store, pageId, list);
+  }, [messages, busy, chatId, pageId]);
 
   const patch = useCallback((id: number, change: (m: ChatMessage) => ChatMessage) => setMessages((all) => all.map((m) => (m.id === id ? change(m) : m))), []);
 
@@ -130,12 +181,48 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
 
   const stop = useCallback(() => abort.current?.abort(), []);
 
+  /** A new, empty chat. The one before stays in the history. */
   const clear = useCallback(() => {
     abort.current?.abort();
     abort.current = null;
     setBusy(false);
     setMessages([]);
+    setChatId(newId());
   }, []);
+
+  /** Opens an earlier chat of this page. */
+  const open = useCallback(
+    (id: string) => {
+      const chat = readChats(browserStore(), pageId).find((c) => c.id === id);
+      if (!chat) return;
+      abort.current?.abort();
+      abort.current = null;
+      setBusy(false);
+      opened.current = true;
+      setChatId(chat.id);
+      setMessages(
+        chat.messages.map((m) => ({
+          id: next.current++,
+          role: m.role,
+          text: m.text,
+          error: m.error,
+          fills: (m.fills ?? []).map((f) => ({ id: next.current++, keys: f.keys, dropped: f.dropped, undone: false })),
+        })),
+      );
+    },
+    [pageId],
+  );
+
+  /** Deletes an earlier chat. Deleting the open one starts a new one. */
+  const remove = useCallback(
+    (id: string) => {
+      const store = browserStore();
+      const list = readChats(store, pageId).filter((c) => c.id !== id);
+      writeChats(store, pageId, list);
+      if (id === chatId) clear();
+    },
+    [pageId, chatId, clear],
+  );
 
   // Closing the page (or the panel's page changing) stops the model request.
   useEffect(() => () => abort.current?.abort(), []);
@@ -145,7 +232,7 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
     (messageId: number, fillId: number) => {
       const form = target.current;
       const fill = history.current.find((m) => m.id === messageId)?.fills.find((f) => f.id === fillId);
-      if (!form || !fill || fill.undone) return false;
+      if (!form || !fill || fill.undone || !fill.before) return false;
       form.apply(fill.before);
       patch(messageId, (m) => ({ ...m, fills: m.fills.map((f) => (f.id === fillId ? { ...f, undone: true } : f)) }));
       return true;
@@ -153,5 +240,5 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
     [target, patch],
   );
 
-  return { messages, busy, send, stop, clear, undo };
+  return { messages, busy, chats, chatId, send, stop, clear, open, remove, undo };
 }

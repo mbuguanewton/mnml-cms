@@ -1028,6 +1028,16 @@ Replies are shown as Markdown by a small built-in renderer. To use your own (for
 
 For answers about the whole site, turn on [search](https://mnml-cms.vercel.app/search.md) too. Without it, the assistant can still list and read entries and search by keyword, but not by meaning.
 
+## Earlier chats
+
+**New chat** starts a fresh conversation. The ones before stay: a **History** button in the panel lists the earlier chats of the page the editor has open, newest first, and opens one on click. **Delete this chat** is in the same menu. An entry only sees its own chats, and the dashboard and list screens share one list.
+
+- Chats are kept in the editor's browser (`localStorage`), not on your server or in your database. They are not shared between editors or devices.
+- Only the words are kept: the questions, the answers and which fields were filled. The form's values are never stored.
+- The last 12 chats of each page are kept, within about 150,000 characters. The oldest go first.
+- A chat opened from the list can be continued. Its old fills have no **Undo**, because the form has moved on.
+- The chats stay in the browser after the editor signs out. On a shared computer, clear the site's data.
+
 ## Name and tone
 
 Give it a name and a voice. The name is what the button and the panel are called, and what the model calls itself. The tone is how it answers and how it writes into fields.

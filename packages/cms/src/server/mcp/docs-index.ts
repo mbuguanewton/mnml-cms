@@ -177,6 +177,7 @@ export const docsIndex: DocsPage[] = [
     "description": "The admin assistant: a chat panel that knows the open page, answers questions from your content and fills fields for the editor to review. You plug in the model with a small adapter (Claude, OpenAI, Gemini).",
     "headings": [
       "Turn it on",
+      "Earlier chats",
       "Name and tone",
       "The adapter",
       "What the model can do",

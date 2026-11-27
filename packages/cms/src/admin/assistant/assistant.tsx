@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
-import { ArrowUpIcon, PlusIcon, SparklesIcon, SquareIcon, Undo2Icon, XIcon } from 'lucide-react';
+import { ArrowUpIcon, HistoryIcon, PlusIcon, SparklesIcon, SquareIcon, Trash2Icon, Undo2Icon, XIcon } from 'lucide-react';
 import { Button } from '../ui/button.js';
+import { buttonVariants } from '../ui/button-variants.js';
+import { Menu } from '../ui/menu.js';
 import { useAdmin } from '../shell/context.js';
 import { useAssistant } from './assistant-context.js';
 import { Markdown } from './markdown.js';
@@ -14,14 +16,22 @@ const SITE_STARTERS = ['What does the site say about…?', 'Which entries are ab
 
 /** The FAB and the chat panel on the right. Mounted by the admin only when `ai` is set. */
 export function Assistant({ name = 'Assistant' }: { name?: string }) {
-  const { apiPath } = useAdmin();
   const a = useAssistant();
+  // Open or closed stays when the page changes (the entry form registers itself just after load).
   const [open, setOpen] = useState(false);
+  // Keyed by the page: another page is another conversation (and its own earlier chats).
+  return a ? <Panel key={a.page?.id ?? 'site'} a={a} pageId={a.page?.id ?? 'site'} name={name} open={open} setOpen={setOpen} /> : null;
+}
+
+type PanelProps = { a: NonNullable<ReturnType<typeof useAssistant>>; pageId: string; name: string; open: boolean; setOpen: (open: boolean) => void };
+
+function Panel({ a, pageId, name, open, setOpen }: PanelProps) {
+  const { apiPath } = useAdmin();
   const panelId = useId();
   const fab = useRef<HTMLButtonElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const log = useRef<HTMLDivElement>(null);
-  const chat = useAssistantChat(apiPath, a?.target ?? { current: null });
+  const chat = useAssistantChat(apiPath, a.target, pageId);
   const [draft, setDraft] = useState('');
 
   // Focus the box on open, and give focus back to the FAB on close.
@@ -52,8 +62,7 @@ export function Assistant({ name = 'Assistant' }: { name?: string }) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [chat.messages]);
 
-  if (!a) return null;
-  const starters = a.label ? ENTRY_STARTERS : SITE_STARTERS;
+  const starters = a.page?.label ? ENTRY_STARTERS : SITE_STARTERS;
 
   const submit = (text = draft) => {
     if (!text.trim() || chat.busy) return;
@@ -93,8 +102,27 @@ export function Assistant({ name = 'Assistant' }: { name?: string }) {
           <SparklesIcon aria-hidden className="size-4 text-mnml-text-mute" />
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-medium">{name}</h2>
-            <p className="truncate text-xs text-mnml-text-mute">{a.label ? `Looking at ${a.label}` : 'Looking at the whole site'}</p>
+            <p className="truncate text-xs text-mnml-text-mute">{a.page?.label ? `Looking at ${a.page?.label}` : 'Looking at the whole site'}</p>
           </div>
+          {/* The earlier chats of this page only. */}
+          {chat.chats.length > 0 && (
+            <Menu
+              label="Earlier chats on this page"
+              className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+              trigger={
+                <>
+                  <HistoryIcon aria-hidden />
+                  History
+                </>
+              }
+              items={[
+                ...chat.chats.map((c) => ({ id: c.id, label: c.title, checked: c.id === chat.chatId, onSelect: () => chat.open(c.id) })),
+                ...(chat.chats.some((c) => c.id === chat.chatId)
+                  ? [{ id: 'delete-chat', label: 'Delete this chat', icon: <Trash2Icon aria-hidden />, danger: true, onSelect: () => chat.remove(chat.chatId) }]
+                  : []),
+              ]}
+            />
+          )}
           <Button variant="ghost" size="icon-sm" aria-label={`Close ${name}`} onClick={() => setOpen(false)}>
             <XIcon aria-hidden />
           </Button>
@@ -105,7 +133,7 @@ export function Assistant({ name = 'Assistant' }: { name?: string }) {
             <div className="flex flex-col gap-3 text-mnml-text-soft">
               <p>
                 Ask about your content, or ask me to write it.{' '}
-                {a.label
+                {a.page?.label
                   ? 'What I write goes into the form as an unsaved edit, so you can review it. Nothing is published.'
                   : 'Open an entry to have me fill it in.'}
               </p>
@@ -196,9 +224,9 @@ function Message({ m, busy, onUndo }: { m: ChatMessage; busy: boolean; onUndo: (
           <div className="flex items-center gap-2">
             <p className="min-w-0 flex-1">
               {f.undone ? 'Put back' : 'Filled'}: <span className="font-medium">{f.keys.join(', ')}</span>
-              {!f.undone && <span className="text-mnml-text-mute"> (unsaved in the form)</span>}
+              {!f.undone && f.before && <span className="text-mnml-text-mute"> (unsaved in the form)</span>}
             </p>
-            {!f.undone && (
+            {!f.undone && f.before && (
               <Button variant="ghost" size="sm" onClick={() => onUndo(f.id)}>
                 <Undo2Icon aria-hidden />
                 Undo
