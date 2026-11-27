@@ -24,7 +24,7 @@ It needs no setup and no new table.
 
 Each event has the time, who did it, and the **fields that changed** (top-level field names, not the values). An autosave that changes nothing is not recorded.
 
-Media uploads and the Agent access page are not part of an entry's activity.
+Not part of an entry's activity: media uploads, the Agent access page, and a site's own `listActions` (your code runs them, so log them there).
 
 ## Who
 
@@ -53,7 +53,7 @@ An assistant event opens to the question, the model, **the tools it ran** (searc
 
 The assistant only fills the form. The editor's own save comes after it, as its own event, so a typical story reads: *Used the assistant: Filled summary* then *Saved*.
 
-This works without a [`store`](https://mnml-cms.vercel.app/assistant.md#keeping-a-record). A `store` is still the place for the full record of every question, including ones that ran nothing.
+This works without a [`store`](https://mnml-cms.vercel.app/assistant.md#keeping-a-record). The values are kept in your entries table, like the content itself, so treat the log as content. Values over 20,000 characters are left out. A `store` is still the place for the full record of every question, including ones that ran nothing.
 
 ## Where it is kept
 
@@ -61,5 +61,6 @@ As rows in your entries table, in a collection named `activity:<key>` (like `pen
 
 - The last **200** events of each entry are kept. The oldest go first.
 - Deleting an entry keeps its log. It is the record of what happened.
+- `db:export` and [sync](https://mnml-cms.vercel.app/moving-content.md) move content only, not the log. Each database keeps its own.
 - A failure to write the log is printed in the server log and never fails the save.
 - `GET <apiPath>/activity?key=posts&slug=hello` returns the events as JSON, for signed-in editors only.

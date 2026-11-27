@@ -130,7 +130,7 @@ By default they see the **published** content only: search (when [`search`](http
 By default the chats are kept in the editor's browser (`localStorage`):
 
 - They are not on your server or in your database, and not shared between editors or devices.
-- Each answer is kept as a **turn**: the question, the answer and which fields were filled. The form's values are never stored.
+- Each answer is kept as a **turn**: the question, the answer and which fields were filled. The form's values are never stored in the browser.
 - The last 12 chats of each page are kept, within about 150,000 characters. When there are more, the oldest chat goes, with all its turns.
 - **Delete this chat**, in the History menu, removes one yourself.
 - A reopened chat's old fills have no **Undo**, because the form has moved on.
@@ -138,6 +138,8 @@ By default the chats are kept in the editor's browser (`localStorage`):
 - The chats stay in the browser after the editor signs out. On a shared computer, clear the site's data.
 
 To keep them in your own database, and to keep a record of what the assistant did, give `assistant()` a [`store`](#keeping-a-record).
+
+Separately, when the assistant runs tools or fills fields on an entry, that entry's [Activity](https://mnml-cms.vercel.app/activity.md) gets an event. It is kept in your database, and it **does hold the values the assistant put in the form** (before and after). This happens without a `store`.
 
 ## Keeping a record
 
