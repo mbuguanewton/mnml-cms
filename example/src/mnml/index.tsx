@@ -1,15 +1,24 @@
 import 'server-only';
 import { DatabaseZapIcon, FileTextIcon, HouseIcon, SettingsIcon, UserIcon } from 'lucide-react';
 import { revalidatePath } from 'next/cache';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { jsonSchema, tool } from 'ai';
+import { assistant } from '@n3wtou/mnml-cms/ai';
 import { createCms, neonDatabase, vercelBlobMedia } from '@n3wtou/mnml-cms/next';
 import config from '../../mnml.config';
 import { CacheTool } from '../admin/cache-tool';
-import { modelFromEnv } from './ai';
 import { Editor } from './editor-client';
 import { postgresSearch } from './postgres-search';
 import { AdminUi } from './ui';
 
-const model = modelFromEnv();
+// The assistant's model. With a Vercel AI Gateway key it is just an id; without one, Gemini directly with its own
+// provider package. Neither key set: no assistant.
+const gemini = process.env.GEMINI_KEY ?? process.env.GEMINI_API_KEY;
+const model = process.env.AI_GATEWAY_API_KEY
+  ? 'google/gemini-2.5-flash'
+  : gemini
+    ? createGoogleGenerativeAI({ apiKey: gemini })('gemini-2.5-flash')
+    : undefined;
 
 export const cms = createCms(config, {
   database: neonDatabase(process.env.DATABASE_URL),
@@ -33,9 +42,26 @@ export const cms = createCms(config, {
   // Search over published content: cms.search(), the search_content MCP tool and GET /api/mnml/search (`route`, limited to
   // these collections). The index is yours: postgres-search.ts is Postgres full-text; pgvector-search.ts adds meaning.
   search: { index: postgresSearch(process.env.DATABASE_URL), route: ['posts', 'pages'] },
-  // The assistant: a chat panel in the admin that answers from the content and fills fields for review. It needs a
-  // model: src/mnml/ai.ts has adapters for Claude, OpenAI and Gemini, picked from whichever key is set.
-  ai: model ? { model, name: 'Scribe', tone: 'Friendly and concise. Plain words, no jargon.' } : undefined,
+  // The assistant: a chat panel in the admin that answers from the content and fills fields for review. `model` is a
+  // Gateway id or an AI SDK model; `tools` adds the site's own (read-only here: it counts what is published).
+  ai: model
+    ? assistant({
+        model,
+        name: 'Scribe',
+        tone: 'Friendly and concise. Plain words, no jargon.',
+        tools: {
+          site_counts: tool({
+            description: 'How many published posts and pages the site has.',
+            inputSchema: jsonSchema({ type: 'object', properties: {} }),
+            // The type is written out because `cms` is the value this call is part of.
+            execute: async (): Promise<{ posts: number; pages: number }> => ({
+              posts: (await cms.listSlugs('posts')).length,
+              pages: (await cms.listSlugs('pages')).length,
+            }),
+          }),
+        },
+      })
+    : undefined,
   // The MCP server at /api/mnml/mcp, for agents such as Claude Code.
   // adminTokens: editors also create and revoke tokens under Agent access in /admin.
   mcp: { adminTokens: true, tokens: [{ name: 'agent', token: process.env.MNML_AGENT_TOKEN, scopes: ['read', 'draft', 'publish'] }] },

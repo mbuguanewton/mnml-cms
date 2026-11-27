@@ -7,10 +7,12 @@ import { cachedReaders } from './content/cached-store.js';
 import { createHandlers } from './admin/handlers.js';
 import type { SearchHit, SearchQuery } from './search/types.js';
 import { createPreviewBanner } from './admin/preview-banner.js';
+import { createContentService } from './content/content.js';
+import { readTools } from './ai/tools.js';
 
 export type { BrandLogo, BrandOption } from './admin/brand.js';
 export type { AdminPageDef, AgentScope, AgentToken, Change, CmsOptions, ListAction, McpOptions } from './context.js';
-export type { AiEvent, AiMessage, AiModel, AiOptions, AiRequest, AiTool, AiToolCall } from './ai/types.js';
+export type { AssistantEngine } from './ai/types.js';
 export type { AuthAdapter, PasswordAuth } from './auth/auth.js';
 export type { CacheOption } from './content/cached-store.js';
 export type { ListOptions, ReadOptions } from './content/store.js';
@@ -54,6 +56,17 @@ export function createCms<C extends CmsConfig>(config: C, options: CmsOptions<C>
      * passage of each entry, best first. `cms.search.reindex()` rebuilds the index. Needs the `search` option.
      */
     search,
+    /**
+     * The CMS's read tools as AI SDK tools, for your own agent or RAG code: `streamText({ model, tools: cms.tools() })`.
+     * Search (when `search` is on), list entries, get an entry and get the schema; they read published content and
+     * drafts, and cannot write. `collections` limits what they can see. Needs the `ai` package, which you import
+     * yourself; this package does not load it here.
+     */
+    tools: (o: { collections?: string[] } = {}) => {
+      const unknown = (o.collections ?? []).filter((k) => !Object.hasOwn(config, k));
+      if (unknown.length) throw new Error(`cms.tools() names content that is not in the config: ${unknown.join(', ')}.`);
+      return readTools(ctx, createContentService(ctx), o.collections);
+    },
     /** Whether the current request has a valid admin session (for your own routes). */
     isAdmin: () => isAdmin(ctx),
     handlers: createHandlers(ctx),

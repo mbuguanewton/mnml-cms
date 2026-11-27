@@ -11,7 +11,7 @@ import type { CacheOption } from './content/cached-store.js';
 import { localMedia, type MediaStorage } from './media/media.js';
 import { buildSearch } from './search/search.js';
 import type { SearchOptions } from './search/types.js';
-import type { AiOptions } from './ai/types.js';
+import type { AssistantEngine } from './ai/types.js';
 
 /** A save or delete that reached the site. `by` is the agent token's name when the MCP server made it. */
 export type Change = { type: 'save' | 'delete'; key: string; slug: string; by?: string };
@@ -126,11 +126,12 @@ export type CmsOptions<C extends CmsConfig> = StorageOptions & {
    */
   search?: SearchOptions;
   /**
-   * The editing assistant: a chat panel in the admin that knows the open page, answers questions about the content
-   * and fills fields for the editor to review. `model` is your adapter over a provider's API (Anthropic, OpenAI,
-   * Gemini…): see the docs for examples. The assistant can read content but never saves, publishes or deletes.
+   * The editing assistant: a chat panel in the admin that knows the open page, answers questions about the content and
+   * fills fields for the editor to review. Make it with `assistant()` from `@n3wtou/mnml-cms/ai` (needs the `ai`
+   * package): `ai: assistant({ model: 'anthropic/claude-sonnet-5-5' })`. It can read content but never saves,
+   * publishes or deletes.
    */
-  ai?: AiOptions;
+  ai?: AssistantEngine;
   /** Called after each save or delete. Default: revalidatePath('/', 'layout'). */
   revalidate?: (change: Change) => void;
   /** Turns on the MCP server at <apiPath>/mcp, so agents (Claude Code, Cursor…) can manage content with a token. */
@@ -148,9 +149,7 @@ export function createContext<C extends CmsConfig>(config: C, options: CmsOption
   const routeKeys = Array.isArray(searchOptions?.route) ? searchOptions.route : [];
   for (const k of routeKeys) if (!Object.hasOwn(config, k)) throw new Error(`search.route lists "${k}", which is not in the config.`);
   const search = searchOptions ? buildSearch({ config, storage, index: searchOptions.index }) : null;
-  if (options.ai && typeof options.ai.model?.stream !== 'function') throw new Error('ai.model needs a stream() method. See the docs for example adapters.');
-  if ((options.ai?.name?.length ?? 0) > 40) throw new Error('ai.name is up to 40 characters.');
-  if ((options.ai?.tone?.length ?? 0) > 300) throw new Error('ai.tone is up to 300 characters.');
+  if (options.ai && typeof options.ai.run !== 'function') throw new Error('ai needs an assistant: ai: assistant({ model }) from @n3wtou/mnml-cms/ai.');
   const adminPath = options.adminPath ?? '/admin';
   return {
     config,
@@ -161,7 +160,7 @@ export function createContext<C extends CmsConfig>(config: C, options: CmsOption
     readers: createStore(config, storage, { fit: true }),
     /** The search index, or null when `search` is off. */
     search,
-    /** The assistant's model, or null when `ai` is off. */
+    /** The assistant, or null when `ai` is off. */
     ai: options.ai ?? null,
     /** `search.route`: off (false), on for everything (true), or the collections it may search. */
     searchRoute: searchOptions?.route ?? false,

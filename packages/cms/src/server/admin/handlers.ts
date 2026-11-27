@@ -24,7 +24,7 @@ import { loadRefOptions } from '../content/ref-options.js';
 import { PREVIEW_COOKIE } from '../content/store.js';
 import { createLimiter } from '../search/limit.js';
 import type { AssistantInput } from '../../api.js';
-import { assistantChat, MAX_CHARS, MAX_MESSAGES } from '../ai/chat.js';
+import { MAX_CHARS, MAX_MESSAGES } from '../ai/limits.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
 //   POST: login · logout · logout-all · save · autosave · discard · bulk · delete · preview · preview/exit · references · reference/schema · ai/chat (assistant, only with `ai`) · upload · media/list · media/delete · request · tokens/create · tokens/revoke · mcp
@@ -95,17 +95,22 @@ export function createHandlers(ctx: Context) {
       },
     };
     const encoder = new TextEncoder();
-    const events = assistantChat(ctx, content, safe, request.signal);
+    // Aborts the model request when the editor's browser goes away (Stop, New chat, a closed tab), whether the runtime
+    // aborts `request.signal` or only closes the response.
+    const abort = new AbortController();
+    request.signal.addEventListener('abort', () => abort.abort(), { once: true });
+    const events = ctx.ai.run({ ctx, content, input: safe, signal: abort.signal })[Symbol.asyncIterator]();
     let gone = false;
     const body = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
-          for await (const e of events) {
-            if (gone) break;
-            controller.enqueue(encoder.encode(`${JSON.stringify(e)}\n`));
+          for (;;) {
+            const next = await events.next();
+            if (next.done || gone) break;
+            controller.enqueue(encoder.encode(`${JSON.stringify(next.value)}\n`));
           }
         } catch (e) {
-          if (!gone && !request.signal.aborted) {
+          if (!gone && !abort.signal.aborted) {
             console.error('cms assistant failed:', e);
             controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'error', message: 'The model request failed. Check the server log.' })}\n`));
           }
@@ -115,7 +120,8 @@ export function createHandlers(ctx: Context) {
       },
       cancel() {
         gone = true;
-        void events.return(undefined);
+        abort.abort();
+        void events.return?.(undefined);
       },
     });
     return new Response(body, { headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' } });

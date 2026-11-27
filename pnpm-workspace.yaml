@@ -12,3 +12,6 @@ overrides:
   # Nextra 4.6.1's <Layout> schema requires `children` after removing it from the props; zod 4.1 let that through, 4.6 doesn't.
   'nextra>zod': 4.1.13
   'nextra-theme-docs>zod': 4.1.13
+permissions:
+  ai:
+    skills: false
