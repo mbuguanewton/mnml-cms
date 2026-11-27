@@ -1,5 +1,6 @@
 import type { ToolSet } from 'ai';
 import { z } from 'zod';
+import { richTextFieldsToMarkdown } from '../../rich-text/markdown.js';
 import type { ContentService } from '../content/content.js';
 import type { Context } from '../context.js';
 import { mcpTools, type Agent } from '../mcp/tools.js';
@@ -91,3 +92,64 @@ export const statusOf = (name: string) =>
       : name === 'list_entries' || name === 'get_entry'
         ? 'Reading entries…'
         : `Using ${name}…`;
+
+/**
+ * What `cms.tools()` gives by default: the published content only. Search (by meaning), the schema, and published
+ * list and get. No drafts, no unpublished edits: safe to put behind a public chatbot. `readTools` is the admin's set.
+ */
+export function publishedTools(ctx: Context, content: ContentService, keys = Object.keys(ctx.config)): ToolSet {
+  const base = readTools(ctx, content, keys);
+  const out: ToolSet = {};
+  for (const name of ['get_schema', 'search_content']) if (base[name]) out[name] = base[name];
+
+  const collections = keys.filter((k) => ctx.config[k].kind === 'collection');
+  const asText = (key: string, entry: unknown) => richTextFieldsToMarkdown(ctx.config[key].fields, entry).data;
+  // Published only, even when this editor happens to be in Draft Mode.
+  const published = { drafts: false } as const;
+  const failed = (parsed: { error: z.ZodError }) => ({
+    ok: false,
+    message: 'Invalid arguments.',
+    errors: Object.fromEntries(parsed.error.issues.map((i) => [i.path.join('.') || '$', i.message])),
+  });
+
+  if (collections.length) {
+    const input = z.object({
+      collection: z.enum(collections as [string, ...string[]]),
+      limit: z.number().int().min(1).max(50).default(20),
+      offset: z.number().int().min(0).default(0),
+    });
+    out.list_entries = {
+      description: 'Published entries of a collection: slug, last update and the content.',
+      inputSchema: input,
+      async execute(args: Record<string, unknown>) {
+        const parsed = input.safeParse(args);
+        if (!parsed.success) return failed(parsed);
+        const { collection, limit, offset } = parsed.data;
+        const rows = await ctx.readers.listEntries(collection as never, { ...published, limit, offset, orderBy: 'slug' });
+        return { ok: true, entries: rows.map((r) => ({ slug: r.slug, updatedAt: r.updatedAt, entry: asText(collection, r.entry) })) };
+      },
+    };
+  }
+  if (keys.length) {
+    const input = z.object({ collection: z.enum(keys as [string, ...string[]]), slug: z.string().optional().describe('Not needed for a singleton.') });
+    out.get_entry = {
+      description: 'One published entry (or singleton) with its content. Unpublished edits are not shown.',
+      inputSchema: input,
+      async execute(args: Record<string, unknown>) {
+        const parsed = input.safeParse(args);
+        if (!parsed.success) return failed(parsed);
+        const { collection, slug } = parsed.data;
+        const entry =
+          ctx.config[collection].kind === 'singleton'
+            ? await ctx.readers.getSingleton(collection as never, published)
+            : slug
+              ? await ctx.readers.getEntry(collection as never, slug, published)
+              : null;
+        return entry
+          ? { ok: true, slug, entry: asText(collection, entry) }
+          : { ok: false, message: `No published entry${slug ? ` "${slug}"` : ''} in ${collection}.` };
+      },
+    };
+  }
+  return out;
+}

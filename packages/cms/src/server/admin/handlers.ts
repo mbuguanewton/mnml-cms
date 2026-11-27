@@ -89,11 +89,13 @@ export function createHandlers(ctx: Context) {
       return json({ ok: false, message: 'Send up to 30 messages, ending with a question, and at most 60000 characters.' }, 400);
     const page = input.page && typeof input.page === 'object' ? input.page : {};
     const safe: AssistantInput = {
-      chatId: typeof input.chatId === 'string' && input.chatId.length > 0 && input.chatId.length <= 100 ? input.chatId : undefined,
+      // One id per request when the browser sent none, so the answer still belongs to a chat.
+      chatId: typeof input.chatId === 'string' && input.chatId.length > 0 && input.chatId.length <= 100 ? input.chatId : crypto.randomUUID(),
       messages: msgs.map((m) => ({ role: m.role, content: m.content })),
       page: {
         key: typeof page.key === 'string' && Object.hasOwn(ctx.config, page.key) ? page.key : undefined,
-        slug: typeof page.slug === 'string' ? page.slug : undefined,
+        // Goes into the prompt and the record: only what a slug can look like.
+        slug: typeof page.slug === 'string' && /^[\w-]{1,100}$/.test(page.slug) ? page.slug : undefined,
         values: page.values,
       },
     };

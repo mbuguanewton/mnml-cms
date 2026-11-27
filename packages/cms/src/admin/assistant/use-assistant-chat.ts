@@ -29,6 +29,8 @@ export type ChatMessage = {
 /** Most earlier messages, and characters, sent along with a question. The server refuses more than 30 messages or 60,000 characters. */
 const HISTORY = 20;
 const HISTORY_CHARS = 50_000;
+/** The longest question the panel sends: the server takes 60,000 characters in all, with the history before it. */
+const MAX_QUESTION = 30_000;
 
 /**
  * The newest messages that fit, starting with a question: a model API refuses a conversation that opens with an
@@ -111,9 +113,22 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
     () => '',
   );
   const [served, setServed] = useState<AssistantTurn[]>([]);
-  const loadServed = useCallback(() => {
-    if (history === 'server') void fetchTurns(apiPath, pageId).then((turns) => turns && setServed(turns));
-  }, [apiPath, pageId, history]);
+  /**
+   * The server records a turn after the response, so it may not be in the store yet: look again, a few times, until
+   * the turn (`chat`, `question`) is there.
+   */
+  const loadServed = useCallback(
+    async (turn?: { chat: string; question: string }) => {
+      if (history !== 'server') return;
+      for (const wait of [0, 700, 1500, 3000, 5000]) {
+        if (wait) await new Promise((r) => setTimeout(r, wait));
+        const turns = await fetchTurns(apiPath, pageId);
+        if (turns) setServed(turns);
+        if (!turn || turns?.some((t) => t.chatId === turn.chat && t.question === turn.question)) return;
+      }
+    },
+    [apiPath, pageId, history],
+  );
   useEffect(() => {
     if (history !== 'server') return;
     let current = true;
@@ -135,6 +150,20 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
     async (question: string) => {
       const text = question.trim();
       if (!text || abort.current) return;
+      if (text.length > MAX_QUESTION) {
+        const id = next.current++;
+        setMessages((all) => [
+          ...all,
+          {
+            id,
+            role: 'assistant',
+            text: '',
+            fills: [],
+            error: `That question is too long (${text.length.toLocaleString()} characters). Keep it under ${MAX_QUESTION.toLocaleString()}.`,
+          },
+        ]);
+        return;
+      }
       const t = target.current;
       const thisChat = chat.current;
       const asked = recent(
@@ -207,8 +236,7 @@ export function useAssistantChat(apiPath: string, target: { current: AssistantTa
               ...(fills.length && { fills }),
             });
           } else {
-            // The server records it after the response, so look a moment later.
-            setTimeout(loadServed, 1200);
+            void loadServed({ chat: thisChat, question: text });
           }
         }
       }

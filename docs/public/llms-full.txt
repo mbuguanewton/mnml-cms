@@ -1098,7 +1098,7 @@ tools: ({ page }) => (page.key === 'posts' ? { productPrice } : {}),
 
 ## The CMS's tools in your own code
 
-`cms.tools()` returns the assistant's read tools in the AI SDK's format, so you can give an agent or a RAG pipeline of your own access to the content:
+`cms.tools()` returns read tools in the AI SDK's format, so you can give an agent or a RAG pipeline of your own access to the content:
 
 ```ts
 import { streamText } from 'ai';
@@ -1110,7 +1110,9 @@ const result = streamText({
 });
 ```
 
-They search (when [`search`](https://mnml-cms.vercel.app/search.md) is on), list entries, read an entry and read the schema. They cannot write. `cms.tools({ collections: ['posts'] })` limits what they can see.
+By default they see the **published** content only: search (when [`search`](https://mnml-cms.vercel.app/search.md) is on), the schema, and published list and get. That is safe behind a public chatbot. They cannot write. `cms.tools({ collections: ['posts'] })` limits what they can see.
+
+`cms.tools({ drafts: true })` adds drafts and unpublished edits, which is what the admin's assistant sees. Use it only for signed-in editors, never in a public route.
 
 ## Earlier chats
 
@@ -1123,6 +1125,7 @@ By default the chats are kept in the editor's browser (`localStorage`):
 - The last 12 chats of each page are kept, within about 150,000 characters. When there are more, the oldest chat goes, with all its turns.
 - **Delete this chat**, in the History menu, removes one yourself.
 - A reopened chat's old fills have no **Undo**, because the form has moved on.
+- A chat belongs to the page it was had on. When a new entry is saved and gets its address, the panel starts fresh on the new page and the earlier chat stays in History under the old one.
 - The chats stay in the browser after the editor signs out. On a shared computer, clear the site's data.
 
 To keep them in your own database, and to keep a record of what the assistant did, give `assistant()` a [`store`](#keeping-a-record).

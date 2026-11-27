@@ -143,13 +143,20 @@ export function EntryForm({
   // The assistant reads this form and can fill it. `apply` returns what the fields held before, for its Undo. A filled
   // field is remounted (its key changes), because editors like the rich text one only read their value when they mount.
   const [filled, setFilled] = useState<Record<string, number>>({});
+  // The values as they stand after the fills so far, even before React has re-rendered: a second fill in the same
+  // answer must see the first one's values as its `before`.
+  const latest = useRef(data as Record<string, unknown>);
+  useEffect(() => {
+    latest.current = data as Record<string, unknown>;
+  });
   useAssistantTarget(
     {
       key: schemaKey,
       slug: existingSlug,
       values: data,
       apply: (values) => {
-        const before = Object.fromEntries(Object.keys(values).map((k) => [k, (data as Record<string, unknown>)[k]]));
+        const before = Object.fromEntries(Object.keys(values).map((k) => [k, latest.current[k]]));
+        latest.current = { ...latest.current, ...values };
         for (const [k, v] of Object.entries(values)) set(k, v);
         setFilled((f) => ({ ...f, ...Object.fromEntries(Object.keys(values).map((k) => [k, (f[k] ?? 0) + 1])) }));
         return before;

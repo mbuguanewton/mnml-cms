@@ -8,7 +8,7 @@ import { createHandlers } from './admin/handlers.js';
 import type { SearchHit, SearchQuery } from './search/types.js';
 import { createPreviewBanner } from './admin/preview-banner.js';
 import { createContentService } from './content/content.js';
-import { readTools } from './ai/tools.js';
+import { publishedTools, readTools } from './ai/tools.js';
 
 export type { BrandLogo, BrandOption } from './admin/brand.js';
 export type { AdminPageDef, AgentScope, AgentToken, Change, CmsOptions, ListAction, McpOptions } from './context.js';
@@ -58,14 +58,16 @@ export function createCms<C extends CmsConfig>(config: C, options: CmsOptions<C>
     search,
     /**
      * The CMS's read tools as AI SDK tools, for your own agent or RAG code: `streamText({ model, tools: cms.tools() })`.
-     * Search (when `search` is on), list entries, get an entry and get the schema; they read published content and
-     * drafts, and cannot write. `collections` limits what they can see. Needs the `ai` package, which you import
-     * yourself; this package does not load it here.
+     * By default they see the **published** content only (search by meaning when `search` is on, the schema, and
+     * published list and get), so they are safe behind a public chatbot. `drafts: true` adds drafts and unpublished
+     * edits (what the admin's assistant sees): only for signed-in editors. They cannot write. `collections` limits
+     * what they can see. Needs the `ai` package, which you import yourself; this package does not load it here.
      */
-    tools: (o: { collections?: string[] } = {}) => {
+    tools: (o: { collections?: string[]; drafts?: boolean } = {}) => {
       const unknown = (o.collections ?? []).filter((k) => !Object.hasOwn(config, k));
       if (unknown.length) throw new Error(`cms.tools() names content that is not in the config: ${unknown.join(', ')}.`);
-      return readTools(ctx, createContentService(ctx), o.collections);
+      const content = createContentService(ctx);
+      return o.drafts ? readTools(ctx, content, o.collections) : publishedTools(ctx, content, o.collections);
     },
     /** Whether the current request has a valid admin session (for your own routes). */
     isAdmin: () => isAdmin(ctx),
