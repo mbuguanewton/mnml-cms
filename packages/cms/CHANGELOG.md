@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.10.0
+
+### Minor Changes
+
+- 1c7a8e3: Activity for each entry and singleton: a log of who saved, published, unpublished, discarded or deleted it, and when. Open **Activity** in the entry's **⋮** menu.
+
+  - Recorded on every write through the admin, bulk actions and the MCP server. Each event has the time, who (the editor, an agent by token name, or the assistant) and the fields that changed. A run of autosaves is one event.
+  - When the assistant runs tools or fills fields on an entry, its event shows the question, the tools it ran with their input, and each field before and after. It works without an assistant `store`.
+  - `actor: (request) => ({ label, id? })` on `createCms()` names the editor. Default "Admin".
+  - Kept as rows in the entries table under `activity:<key>`: no new table, no `drizzle-kit push`. The last 200 events of each entry are kept, and a failure to log never fails a write.
+
+- e495dd9: An assistant in the admin: a chat panel that knows the open page, answers questions from your content and fills fields for the editor to review. Off by default; nothing changes for sites that don't turn it on.
+
+  - `ai: assistant({ model })` in `createCms()`, with `assistant` from `@n3wtou/mnml-cms/ai`, adds a button at the bottom right of every admin screen that opens the panel. It runs on the Vercel AI SDK: install `ai` (an optional peer dependency; sites that don't use the assistant never load it). `model` is an AI Gateway id such as `'anthropic/claude-sonnet-5-5'` (set `AI_GATEWAY_API_KEY`; automatic on Vercel), or any AI SDK model such as `google('gemini-2.5-flash')`. The package has no provider code.
+  - The panel's open state is in the URL (`?assistant=1`): a link or a reload opens it, and going to another page keeps it open with a fresh chat there.
+  - `assistant({ name, tone })`: `name` (default 'Assistant') renames the button and panel and what the model calls itself; `tone` is a sentence about how it should write.
+  - `assistant({ tools })`: your own tools, made with `tool()` from `ai`, as an object or a function of the open page. They run on your server for signed-in editors and can do what your code does, so keep them to reading. Names of the built-in tools are reserved.
+  - `cms.tools()` returns the CMS's read tools in the AI SDK's format for your own agent or RAG code: `streamText({ model, tools: cms.tools() })`. By default they see published content only (search, the schema, published list and get), so they are safe behind a public chatbot; `cms.tools({ drafts: true })` adds drafts and unpublished edits, for signed-in editors only. `cms.tools({ collections: ['posts'] })` limits what they see. They cannot write.
+  - On an entry the assistant sees the fields and the form's current values. It can ask for a summary, a new title, or to fill empty fields. Values land in the form as unsaved edits with an Undo button; each field is checked like a save first, and rich text can be Markdown. The assistant cannot save, publish or delete.
+  - Earlier chats: a History button lists the chats of the page the editor has open and reopens one; New chat keeps the old one. By default they are kept in the browser (`localStorage`), per page, as turns (words only, never the form's values); the last 12 chats are kept and the oldest goes whole. Delete removes one.
+  - `assistant({ store })` keeps a record of what the assistant did in your own database: one row per question with the answer, the tools it called, what it put in the form (fields, before and after values, what was dropped), model, usage and duration. You write the store (`record(turn, { request })`, and optionally `turns(page, { request })` so the History menu reads from your table, without Delete); the package has no database code. `groupTurns()` rebuilds chats from turns. `GET <apiPath>/ai/chats?page=` serves them to admins.
+  - Replies are shown as Markdown by a small built-in renderer (no new dependency, no raw HTML). It is a `Markdown` slot of the `ui` option, so a site can swap in its own renderer; `Markdown` is exported from `@n3wtou/mnml-cms/admin` too.
+  - It answers questions about the site with the same read tools as the MCP server, and `search_content` when `search` is on.
+  - `POST <apiPath>/ai/chat` streams the answer. Signed-in editors only, 20 questions a minute for each client, capped request size.
+
+- 9873b92: Search over published content, for agents and RAG. Off by default; nothing changes for sites that don't turn it on.
+
+  - `search: { index }` in `createCms()` adds `cms.search(query, { collections, limit })` and a `search_content` tool on the MCP server (limited to the collections a token can read). It works with any `storage`.
+  - The index is yours, like image storage: you pass a `SearchIndex` (`put`, `remove`, `query`, optional `prune`) for Postgres, pgvector, Mongo, Convex, Algolia and so on. The package has no index, no embedding code and no database-specific search code. The docs and `example/` have tested adapters to copy: Postgres full-text, and pgvector with OpenAI or Gemini embeddings. Helpers: `searchEntry()`, `fuseMatches()`.
+  - Each hit is the best passage of one entry: `{ key, slug, title, url, field, snippet, text, score }`. Drafts are never indexed.
+  - Publish, unpublish and delete keep the index up to date after the response is sent. A failure is logged and never fails a save.
+  - `cms.search.reindex()` rebuilds the index (an entry that fails is reported in `failed`, not fatal); `createSearch()` from `@n3wtou/mnml-cms/sync` does it from a script. Run it once for existing content.
+  - `search: { route: ['posts'] }` adds a rate-limited public `GET <apiPath>/search?q=` for those collections (`true`: all of them). Off by default.
+
 ## 1.9.0
 
 ### New features
