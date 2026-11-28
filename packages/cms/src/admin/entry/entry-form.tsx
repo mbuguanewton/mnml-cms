@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { EyeIcon, FileXIcon, Undo2Icon } from 'lucide-react';
+import { EyeIcon, FileXIcon, HistoryIcon, Undo2Icon } from 'lucide-react';
 import { isVisible, slugify, type Collection, type Fields, type Singleton } from '../../schema/define.js';
 import type { AutosaveResult, EntryInput, EntryStatus, SaveAction, SaveResult } from '../../api.js';
 import { ActionMenu, MenuItem } from '../shell/action-menu.js';
@@ -15,7 +15,9 @@ import { remapRowErrors } from './sortable.js';
 import { MismatchBanner, MismatchContext } from './mismatch-panel.js';
 import { fieldLabelAt, setIn, type Mismatch } from '../../schema/fit.js';
 import { EntryContext } from './entry-context.js';
+import { useAssistantTarget } from '../assistant/assistant-context.js';
 import { LivePreview } from './live-preview.js';
+import { ActivityDialog } from './activity-dialog.js';
 import { AdminHeader, type Crumb } from '../shell/header.js';
 import { StatusDot, dotLabels } from './status-dot.js';
 import { bodyClass, labelClass } from '../ui/styles.js';
@@ -139,6 +141,31 @@ export function EntryForm({
   const [baseline, setBaseline] = useState(snapshot);
   const dirty = snapshot() !== baseline;
 
+  // The assistant reads this form and can fill it. `apply` returns what the fields held before, for its Undo. A filled
+  // field is remounted (its key changes), because editors like the rich text one only read their value when they mount.
+  const [filled, setFilled] = useState<Record<string, number>>({});
+  // The values as they stand after the fills so far, even before React has re-rendered: a second fill in the same
+  // answer must see the first one's values as its `before`.
+  const latest = useRef(data as Record<string, unknown>);
+  useEffect(() => {
+    latest.current = data as Record<string, unknown>;
+  });
+  useAssistantTarget(
+    {
+      key: schemaKey,
+      slug: existingSlug,
+      values: data,
+      apply: (values) => {
+        const before = Object.fromEntries(Object.keys(values).map((k) => [k, latest.current[k]]));
+        latest.current = { ...latest.current, ...values };
+        for (const [k, v] of Object.entries(values)) set(k, v);
+        setFilled((f) => ({ ...f, ...Object.fromEntries(Object.keys(values).map((k) => [k, (f[k] ?? 0) + 1])) }));
+        return before;
+      },
+    },
+    existingSlug ? `${def.label}: ${existingSlug}` : def.label,
+  );
+
   // Collections autosave once they exist, and so do singletons that opt in with `drafts`. Publish makes the draft live.
   const draftable = isCollection || (def.kind === 'singleton' && !!def.drafts);
   const autosave = draftable && mode === 'update';
@@ -194,6 +221,7 @@ export function EntryForm({
   }, [unsaved]);
 
   const input = (): EntryInput => ({ key: schemaKey, slug: def.kind === 'collection' ? slug : undefined, mode, data });
+  const [activityOpen, setActivityOpen] = useState(false);
   const canPreview = def.preview !== undefined && def.preview !== false;
   const [previewHidden, setPreviewHidden] = useState(false);
   const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
@@ -353,7 +381,7 @@ export function EntryForm({
                     {pending ? 'Saving…' : 'Save'}
                   </Button>
                 )}
-                {((isCollection && published) || (autosave && published && changes) || actions) && (
+                {(mode === 'update' || (autosave && published && changes) || actions) && (
                   <ActionMenu>
                     {autosave && published && changes && (
                       <MenuItem disabled={pending} onClick={discard}>
@@ -365,11 +393,17 @@ export function EntryForm({
                         <FileXIcon /> Unpublish
                       </MenuItem>
                     )}
+                    {mode === 'update' && (
+                      <MenuItem onClick={() => setActivityOpen(true)}>
+                        <HistoryIcon /> Activity
+                      </MenuItem>
+                    )}
                     {actions}
                   </ActionMenu>
                 )}
               </AdminHeader>
               {banner}
+              {activityOpen && <ActivityDialog schemaKey={schemaKey} slug={existingSlug} onClose={() => setActivityOpen(false)} />}
               <MismatchBanner items={Object.values(unsettled)} version={mismatchVersion} />
               <div className="flex flex-1">
                 <div className={showPreview ? 'w-[min(36rem,45%)] shrink-0' : 'w-full'}>
@@ -414,7 +448,7 @@ export function EntryForm({
                     {Object.entries(fields)
                       .filter(([k]) => inTab(k))
                       .map(([k, f]) => (
-                        <div key={k} className="contents">
+                        <div key={`${k}:${filled[k] ?? 0}`} className="contents">
                           <FieldRenderer field={f} value={data[k]} onChange={(v) => set(k, v)} path={k} errors={errors} siblings={data} />
                           {def.kind === 'collection' && k === def.titleField && slugField}
                           {derived

@@ -7,9 +7,12 @@ import { cachedReaders } from './content/cached-store.js';
 import { createHandlers } from './admin/handlers.js';
 import type { SearchHit, SearchQuery } from './search/types.js';
 import { createPreviewBanner } from './admin/preview-banner.js';
+import { createContentService } from './content/content.js';
+import { publishedTools, readTools } from './ai/tools.js';
 
 export type { BrandLogo, BrandOption } from './admin/brand.js';
 export type { AdminPageDef, AgentScope, AgentToken, Change, CmsOptions, ListAction, McpOptions } from './context.js';
+export type { AssistantEngine, AssistantStore } from './ai/types.js';
 export type { AuthAdapter, PasswordAuth } from './auth/auth.js';
 export type { CacheOption } from './content/cached-store.js';
 export type { ListOptions, ReadOptions } from './content/store.js';
@@ -53,6 +56,19 @@ export function createCms<C extends CmsConfig>(config: C, options: CmsOptions<C>
      * passage of each entry, best first. `cms.search.reindex()` rebuilds the index. Needs the `search` option.
      */
     search,
+    /**
+     * The CMS's read tools as AI SDK tools, for your own agent or RAG code: `streamText({ model, tools: cms.tools() })`.
+     * By default they see the **published** content only (search by meaning when `search` is on, the schema, and
+     * published list and get), so they are safe behind a public chatbot. `drafts: true` adds drafts and unpublished
+     * edits (what the admin's assistant sees): only for signed-in editors. They cannot write. `collections` limits
+     * what they can see. Needs the `ai` package, which you import yourself; this package does not load it here.
+     */
+    tools: (o: { collections?: string[]; drafts?: boolean } = {}) => {
+      const unknown = (o.collections ?? []).filter((k) => !Object.hasOwn(config, k));
+      if (unknown.length) throw new Error(`cms.tools() names content that is not in the config: ${unknown.join(', ')}.`);
+      const content = createContentService(ctx);
+      return o.drafts ? readTools(ctx, content, o.collections) : publishedTools(ctx, content, o.collections);
+    },
     /** Whether the current request has a valid admin session (for your own routes). */
     isAdmin: () => isAdmin(ctx),
     handlers: createHandlers(ctx),

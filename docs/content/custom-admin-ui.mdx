@@ -6,7 +6,7 @@ description: "Use your own components (shadcn and others) in the admin with the 
 
 Swap the admin's controls for your own, e.g. your shadcn Select. Slots you leave out keep the built-in ones.
 
-Slots: `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `DatePicker`, `Tooltip`, `Menu`. Toasts stay built-in.
+Slots: `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `DatePicker`, `Tooltip`, `Menu`, `Markdown` (how the [assistant](/assistant)'s replies are shown). Toasts stay built-in.
 
 ## Set up
 
@@ -62,7 +62,44 @@ Props per slot: `UiSlotProps['Select']`, `UiSlotProps['Button']`, … (also `Sel
 - `DatePicker` `timeInCalendar`: the admin's datetime fields set it; one box with the time picked in the calendar. Your picker may ignore it. The admin's hour and minute lists are its own `Select`s, so your `Select` slot applies to them; portal its popover with `useAdminPortal()` so it sits above the calendar.
 - `Tooltip`: `content`, `side`, one focusable child.
 - `Menu`: `label`, `items` (`{ id, label, icon, checked, disabled, danger, keepOpen, onSelect }`; `keepOpen` leaves the menu open after the item runs, for on/off items), `trigger`, `className`.
+- `Markdown`: `text`, the assistant's reply as Markdown. It is rendered again as the reply streams in, so it can end mid-sentence or inside an open `**`. The built-in renderer builds React elements and links only `http(s)`, `mailto:` and site paths. If you swap in another renderer, keep raw HTML off and check link schemes: the text comes from a model.
 - Your slot can wrap the admin's own component (e.g. `Select` from `@n3wtou/mnml-cms/admin` plus a class). It gets the built-in, not itself.
+
+## Another Markdown renderer
+
+The assistant shows replies with a small built-in renderer (headings, lists, quotes, code, bold, italic, links). For tables or syntax highlighting, give the `Markdown` slot a library. This one uses `react-markdown`, which does not render raw HTML and drops unsafe link schemes:
+
+```tsx filename="src/mnml/ui.tsx"
+'use client';
+
+import ReactMarkdown from 'react-markdown';
+import { uiProvider, type UiSlotProps } from '@n3wtou/mnml-cms/admin';
+
+function AdminMarkdown({ text }: UiSlotProps['Markdown']) {
+  return (
+    <div className="flex flex-col gap-2 break-words">
+      <ReactMarkdown
+        components={{
+          a: ({ href, children }) => (
+            <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+              {children}
+            </a>
+          ),
+          // The admin's Tailwind reset removes list markers and spacing, so put them back.
+          ul: ({ children }) => <ul className="flex list-disc flex-col gap-1 pl-5">{children}</ul>,
+          ol: ({ children }) => <ol className="flex list-decimal flex-col gap-1 pl-5">{children}</ol>,
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+export const AdminUi = uiProvider({ Markdown: AdminMarkdown });
+```
+
+This is the example app's slot (`example/src/mnml/ui.tsx`), which also styles code.
 
 ## Colours: the token bridge
 

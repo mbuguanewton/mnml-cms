@@ -31,3 +31,84 @@ export type ReferenceSchemaResult =
       refOptions: Record<string, { slug: string; label: string }[]>;
     }
   | Invalid;
+
+/** The page the editor has open, sent with each assistant question. `values` are the form's current values. */
+export type AssistantPage = { key?: string; slug?: string; values?: unknown };
+export type AssistantInput = {
+  messages: { role: 'user' | 'assistant'; content: string }[];
+  page: AssistantPage;
+  /** The chat this question belongs to (made by the panel), so the answers of one chat can be put back together. */
+  chatId?: string;
+};
+/**
+ * What `<apiPath>/ai/chat` streams, one JSON object per line. `fill` carries values the editor's form should take
+ * (already checked like a save) and the fields that were left out, with the reason.
+ */
+export type AssistantEvent =
+  | { type: 'text'; text: string }
+  | { type: 'status'; text: string }
+  | { type: 'fill'; values: Record<string, unknown>; dropped: Record<string, string> }
+  | { type: 'error'; message: string };
+
+/** What the assistant did to the form in one answer. `before` and `after` are only in what the server records. */
+export type AssistantFill = {
+  fields: string[];
+  dropped: Record<string, string>;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+};
+
+/**
+ * One question and its answer: the unit of the assistant's record. The server records all of it for a site's `store`;
+ * the browser keeps a lighter one (no tools, usage, or before and after values) for the History menu.
+ */
+export type AssistantTurn = {
+  chatId: string;
+  /** `posts/hello`, `settings/` for a singleton, or `site` away from an entry. */
+  page: string;
+  /** ISO time the answer finished. */
+  at: string;
+  question: string;
+  answer: string;
+  /** 'stopped': the editor stopped it, or it ran out of steps. */
+  status: 'done' | 'stopped' | 'error';
+  fills?: AssistantFill[];
+  /** Every tool it called, with its input (cut when long). */
+  tools?: { name: string; input?: unknown }[];
+  model?: string;
+  usage?: { inputTokens?: number; outputTokens?: number };
+  durationMs?: number;
+};
+
+/** Who did something. `label` is what the Activity view shows; `id` is the site's own identifier, if it gave one. */
+export type ActivityActor = { type: 'admin' | 'agent' | 'assistant'; id?: string; label: string };
+
+export type ActivityAction = 'create' | 'update' | 'autosave' | 'draft' | 'publish' | 'unpublish' | 'discard' | 'delete' | 'request' | 'reject' | 'assistant';
+
+/** What the assistant did in one answer, kept on its activity event. */
+export type ActivityAssistant = {
+  chatId: string;
+  question: string;
+  status: AssistantTurn['status'];
+  model?: string;
+  tools: { name: string; input?: unknown }[];
+  fills: AssistantFill[];
+};
+
+/** One row of an entry's Activity view. */
+export type ActivityEvent = {
+  id: string;
+  key: string;
+  /** `singleton` for a singleton. */
+  slug: string;
+  action: ActivityAction;
+  by: ActivityActor;
+  /** For an assistant event, the editor who asked. */
+  for?: ActivityActor;
+  /** ISO time. */
+  at: string;
+  summary?: string;
+  /** Top-level fields that changed. */
+  fields?: string[];
+  assistant?: ActivityAssistant;
+};

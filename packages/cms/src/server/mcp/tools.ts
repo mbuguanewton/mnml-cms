@@ -326,7 +326,7 @@ export function mcpTools(ctx: Context, content: ContentService, agent: Agent): T
           if (!agent.scopes.has('publish')) return { ok: false, message: `"${key}" has no drafts, so saving it publishes it. That needs the publish scope.` };
           return content.save({ key, slug, mode: 'update', action: 'publish', data: m.data }, agent.name);
         }
-        return content.saveDraft({ key, slug, data: m.data });
+        return content.saveDraft({ key, slug, data: m.data }, agent.name);
       },
     },
 

@@ -171,6 +171,37 @@ export const docsIndex: DocsPage[] = [
     ]
   },
   {
+    "title": "Assistant",
+    "url": "https://mnml-cms.vercel.app/assistant",
+    "markdown": "https://mnml-cms.vercel.app/assistant.md",
+    "description": "The admin assistant: a chat panel that knows the open page, answers questions from your content and fills fields for the editor to review. Set up with one line through the Vercel AI Gateway or any AI SDK model, with your own tools.",
+    "headings": [
+      "Turn it on",
+      "Choosing a model",
+      "Name and tone",
+      "Your own tools",
+      "The CMS's tools in your own code",
+      "Earlier chats",
+      "Keeping a record",
+      "Example: Postgres",
+      "What the model can do",
+      "Limits and safety",
+      "Options"
+    ]
+  },
+  {
+    "title": "Activity",
+    "url": "https://mnml-cms.vercel.app/activity",
+    "markdown": "https://mnml-cms.vercel.app/activity.md",
+    "description": "Activity: a log on each entry and singleton of who saved, published or deleted it and when, with the assistant's tools and fills. Kept in your entries table, no setup.",
+    "headings": [
+      "What is recorded",
+      "Who",
+      "The assistant's events",
+      "Where it is kept"
+    ]
+  },
+  {
     "title": "Drafts and publishing",
     "url": "https://mnml-cms.vercel.app/drafts-and-publishing",
     "markdown": "https://mnml-cms.vercel.app/drafts-and-publishing.md",
@@ -289,6 +320,7 @@ export const docsIndex: DocsPage[] = [
     "headings": [
       "Set up",
       "What a slot gets",
+      "Another Markdown renderer",
       "Colours: the token bridge",
       "Popovers in dialogs"
     ]

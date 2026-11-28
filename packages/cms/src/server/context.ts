@@ -6,11 +6,13 @@ import type { Database } from './content/db.js';
 import { drizzleStorage, type EntryStorage } from './content/storage.js';
 import { sessionCodec } from './auth/session.js';
 import { createStore } from './content/store.js';
+import { createActivity } from './content/activity.js';
 import type { BrandOption } from './admin/brand.js';
 import type { CacheOption } from './content/cached-store.js';
 import { localMedia, type MediaStorage } from './media/media.js';
 import { buildSearch } from './search/search.js';
 import type { SearchOptions } from './search/types.js';
+import type { AssistantEngine } from './ai/types.js';
 
 /** A save or delete that reached the site. `by` is the agent token's name when the MCP server made it. */
 export type Change = { type: 'save' | 'delete'; key: string; slug: string; by?: string };
@@ -124,6 +126,18 @@ export type CmsOptions<C extends CmsConfig> = StorageOptions & {
    * Mongo, Convex, Algolia…) is yours: see the docs for examples. Works with any `storage`.
    */
   search?: SearchOptions;
+  /**
+   * The editing assistant: a chat panel in the admin that knows the open page, answers questions about the content and
+   * fills fields for the editor to review. Make it with `assistant()` from `@n3wtou/mnml-cms/ai` (needs the `ai`
+   * package): `ai: assistant({ model: 'anthropic/claude-sonnet-5-5' })`. It can read content but never saves,
+   * publishes or deletes.
+   */
+  ai?: AssistantEngine;
+  /**
+   * Names the editor in each entry's Activity view. Called for each write with the request, so read your own session
+   * there: `actor: async () => ({ id: user.id, label: user.name })`. Without it, edits show as "Admin".
+   */
+  actor?: (request: Request) => { label: string; id?: string } | null | undefined | Promise<{ label: string; id?: string } | null | undefined>;
   /** Called after each save or delete. Default: revalidatePath('/', 'layout'). */
   revalidate?: (change: Change) => void;
   /** Turns on the MCP server at <apiPath>/mcp, so agents (Claude Code, Cursor…) can manage content with a token. */
@@ -141,6 +155,7 @@ export function createContext<C extends CmsConfig>(config: C, options: CmsOption
   const routeKeys = Array.isArray(searchOptions?.route) ? searchOptions.route : [];
   for (const k of routeKeys) if (!Object.hasOwn(config, k)) throw new Error(`search.route lists "${k}", which is not in the config.`);
   const search = searchOptions ? buildSearch({ config, storage, index: searchOptions.index }) : null;
+  if (options.ai && typeof options.ai.run !== 'function') throw new Error('ai needs an assistant: ai: assistant({ model }) from @n3wtou/mnml-cms/ai.');
   const adminPath = options.adminPath ?? '/admin';
   return {
     config,
@@ -149,8 +164,12 @@ export function createContext<C extends CmsConfig>(config: C, options: CmsOption
     store: createStore(config, storage),
     // What the site's pages read: a stored value that doesn't fit its field reads as empty.
     readers: createStore(config, storage, { fit: true }),
+    /** Who did what to each entry, newest first. Kept in the entries table, under `activity:<key>`. */
+    activity: createActivity(storage),
     /** The search index, or null when `search` is off. */
     search,
+    /** The assistant, or null when `ai` is off. */
+    ai: options.ai ?? null,
     /** `search.route`: off (false), on for everything (true), or the collections it may search. */
     searchRoute: searchOptions?.route ?? false,
     authAdapter,

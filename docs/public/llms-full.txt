@@ -995,6 +995,312 @@ Turns on `GET <apiPath>/search?q=…&collections=posts&limit=10` (JSON `{ ok, re
 
 ---
 
+<!-- https://mnml-cms.vercel.app/assistant.md -->
+
+# Assistant
+
+A chat panel in the admin. A button at the bottom right opens it. Off by default.
+
+Whether the panel is open is in the address: `?assistant=1`. A link with it opens the panel, a reload keeps it open, and closing takes it off. When the editor goes to another page the panel stays open with a fresh chat for that page; the earlier chat is in History.
+
+The assistant knows the page the editor has open: the fields and their current values. Editors can:
+
+- **Ask about the content.** "Which posts mention refunds?" It searches the published content and answers from it.
+- **Ask it to write.** "Write a summary", "Suggest a better title", "Fill in the empty fields". What it writes goes into the form as an **unsaved edit**. The editor reads it, changes it or presses **Undo**, then saves or publishes as usual.
+
+The assistant can read content. It cannot save, publish, unpublish or delete anything. Only the editor does that.
+
+## Turn it on
+
+Install the [AI SDK](https://ai-sdk.dev) (`ai`). The package has no provider code of its own, and sites that don't use the assistant never load it.
+
+```sh
+npm i ai
+```
+
+Then pass an assistant to `createCms`. The easiest model is an [AI Gateway](https://vercel.com/ai-gateway) id: no provider package, one key.
+
+```ts filename="src/mnml/index.ts"
+import { assistant } from '@n3wtou/mnml-cms/ai';
+
+export const cms = createCms(config, {
+  database: neonDatabase(process.env.DATABASE_URL),
+  auth: { password: process.env.ADMIN_PASSWORD, secret: process.env.ADMIN_SESSION_SECRET },
+  ai: assistant({ model: 'anthropic/claude-sonnet-5-5' }),
+});
+```
+
+Set `AI_GATEWAY_API_KEY` in `.env.local`. On Vercel no key is needed: it signs in by itself. Model ids are `provider/model`, as listed in the [Gateway's model list](https://vercel.com/ai-gateway/models). The Gateway also gives you fallbacks, spend budgets and logs, so you don't build those.
+
+The key stays on the server. The browser only talks to `<apiPath>/ai/chat`.
+
+For answers about the whole site, turn on [search](https://mnml-cms.vercel.app/search.md) too. Without it, the assistant can still list and read entries and search by keyword, but not by meaning.
+
+Replies are shown as Markdown by a small built-in renderer. To use your own (for tables or code highlighting), give the `Markdown` slot of the [custom admin UI](https://mnml-cms.vercel.app/custom-admin-ui.md) a component.
+
+## Choosing a model
+
+`model` is a Gateway id string, or any AI SDK model. To go to a provider directly, install its package:
+
+```ts
+import { google } from '@ai-sdk/google'; // npm i @ai-sdk/google, key in GOOGLE_GENERATIVE_AI_API_KEY
+
+ai: assistant({ model: google('gemini-2.5-flash') }),
+```
+
+`@ai-sdk/anthropic`, `@ai-sdk/openai` and many more work the same way, and so does any OpenAI-compatible endpoint (a local model, for example). See the [AI SDK providers](https://ai-sdk.dev/providers).
+
+## Name and tone
+
+Give it a name and a voice. The name is what the button and the panel are called, and what the model calls itself. The tone is how it answers and how it writes into fields.
+
+```ts
+ai: assistant({
+  model: 'anthropic/claude-sonnet-5-5',
+  name: 'Scribe', // default 'Assistant'
+  tone: 'Friendly and concise. Plain words, no jargon.',
+}),
+```
+
+Write the tone in your own words: "Formal, British spelling", "Short sentences, no exclamation marks". It applies to the answers and to the text the assistant puts in fields.
+
+## Your own tools
+
+Give the assistant tools of your own, made with `tool()` from `ai`: a price from your shop API, stock from your warehouse, a style guide.
+
+```ts
+import { tool } from 'ai';
+import { z } from 'zod';
+
+ai: assistant({
+  model: 'anthropic/claude-sonnet-5-5',
+  tools: {
+    productPrice: tool({
+      description: 'Current price of a product from our shop API',
+      inputSchema: z.object({ sku: z.string() }),
+      execute: async ({ sku }) => (await fetch(`https://shop.example.com/api/${sku}`)).json(),
+    }),
+  },
+}),
+```
+
+The panel shows "Using productPrice…" while a tool runs. A tool that throws doesn't stop the answer: the model is told it failed.
+
+A function gets the open page, so a tool can exist only where it belongs:
+
+```ts
+tools: ({ page }) => (page.key === 'posts' ? { productPrice } : {}),
+```
+
+`page` is `{ key, slug }` of the entry the editor has open, or empty on other screens. A tool can use your `cms` too (`cms.getEntry`, `cms.search`); write the `execute` return type out when you do, because `cms` is the value being built.
+
+- Your tools run on your server for signed-in editors only, and can do whatever your code does, including writes. Keep them to reading. The assistant's own way to change content is the form, and the editor reviews that.
+- A tool can't have the name of a built-in one (`get_schema`, `list_entries`, `get_entry`, `search`, `search_content`, `fill_field`, `fill_entry`).
+- A tool can't see or change the form. Only `fill_field` and `fill_entry` do, and what they put in is checked first.
+
+## The CMS's tools in your own code
+
+`cms.tools()` returns read tools in the AI SDK's format, so you can give an agent or a RAG pipeline of your own access to the content:
+
+```ts
+import { streamText } from 'ai';
+
+const result = streamText({
+  model: 'anthropic/claude-sonnet-5-5',
+  tools: { ...cms.tools(), productPrice },
+  prompt: 'Which posts talk about refunds?',
+});
+```
+
+By default they see the **published** content only: search (when [`search`](https://mnml-cms.vercel.app/search.md) is on), the schema, and published list and get. That is safe behind a public chatbot. They cannot write. `cms.tools({ collections: ['posts'] })` limits what they can see.
+
+`cms.tools({ drafts: true })` adds drafts and unpublished edits, which is what the admin's assistant sees. Use it only for signed-in editors, never in a public route.
+
+## Earlier chats
+
+**New chat** starts a fresh conversation. The ones before stay: a **History** button in the panel lists the earlier chats of the page the editor has open, newest first, and opens one to read or carry on in. An entry only sees its own chats, and the dashboard and list screens share one list.
+
+By default the chats are kept in the editor's browser (`localStorage`):
+
+- They are not on your server or in your database, and not shared between editors or devices.
+- Each answer is kept as a **turn**: the question, the answer and which fields were filled. The form's values are never stored in the browser.
+- The last 12 chats of each page are kept, within about 150,000 characters. When there are more, the oldest chat goes, with all its turns.
+- **Delete this chat**, in the History menu, removes one yourself.
+- A reopened chat's old fills have no **Undo**, because the form has moved on.
+- A chat belongs to the page it was had on. When a new entry is saved and gets its address, the panel starts fresh on the new page and the earlier chat stays in History under the old one.
+- The chats stay in the browser after the editor signs out. On a shared computer, clear the site's data.
+
+To keep them in your own database, and to keep a record of what the assistant did, give `assistant()` a [`store`](#keeping-a-record).
+
+Separately, when the assistant runs tools or fills fields on an entry, that entry's [Activity](https://mnml-cms.vercel.app/activity.md) gets an event. It is kept in your database, and it **does hold the values the assistant put in the form** (before and after). This happens without a `store`.
+
+## Keeping a record
+
+To see what the assistant did over time (what it was asked, which tools it used, what it changed in the forms, what it cost), keep every turn in your own database. You write a small store for your database, like [search](https://mnml-cms.vercel.app/search.md)'s index. The package has no database code.
+
+```ts
+ai: assistant({
+  model: 'anthropic/claude-sonnet-5-5',
+  store: {
+    // Append one row per question. Runs after the answer is sent, so it never slows it.
+    async record(turn, { request }) {
+      await db.insert(assistantTurns).values({ ...turn, by: (await sessionOf(request))?.user.id });
+    },
+    // Optional: read the History menu from your table instead of the browser.
+    async turns(page) {
+      return db.select().from(assistantTurns).where(eq(assistantTurns.page, page)).orderBy(desc(assistantTurns.at)).limit(300);
+    },
+  },
+}),
+```
+
+A **turn** is one question and its answer:
+
+| Field | |
+| --- | --- |
+| `chatId`, `page`, `at` | The chat it belongs to, the page (`posts/hello`, `settings/` for a singleton, or `site`), and when the answer finished. |
+| `question`, `answer` | What was asked and said. |
+| `status` | `done`, `stopped` (the editor stopped it, or it ran out of steps) or `error`. |
+| `tools` | Every tool it called, with its input (cut when long): searches, reads, your own tools. |
+| `fills` | What it put in the form: `fields`, `before` and `after` values, and `dropped` (what was left out, and why). |
+| `model`, `usage`, `durationMs` | The model, tokens used, and how long it took. |
+
+- **Append only.** Never update or delete these rows: it is the record. That is why the History menu has no Delete when it reads from your table.
+- **Who asked.** `record` and `turns` get the editor's `Request`. The package doesn't know your login, but your code does: read your session there and fill a `by` column.
+- **Failures.** A failed `record` is logged and never shown. A failed `turns` shows an empty list.
+- **Privacy.** `before` and `after` can hold your content. They go only to your database. Keep what you need and set a retention for the table.
+- **`record` is required, `turns` is optional.** With `record` alone you keep the audit trail and the History menu stays in the browser.
+- Use parameterised queries: the `page` comes from the request. The package checks and caps what `turns` returns (300 turns, newest first).
+
+`groupTurns(turns)`, from `@n3wtou/mnml-cms/ai`, puts turns back into chats (newest first, each with its messages), if you want a history page of your own.
+
+### Example: Postgres
+
+`example/src/mnml/postgres-assistant-store.ts` in the repo is a store for Postgres (Neon's `sql` tag), with the table in `example/scripts/assistant.sql` and `pnpm db:assistant` to create it:
+
+```sql
+create table if not exists mnml_assistant_turns (
+  id bigint generated always as identity primary key,
+  chat_id text not null,
+  page text not null,
+  at timestamptz not null,
+  question text not null,
+  answer text not null,
+  status text not null,
+  model text,
+  tools jsonb,
+  fills jsonb,
+  usage jsonb,
+  duration_ms int,
+  by text
+);
+create index if not exists mnml_assistant_turns_page_idx on mnml_assistant_turns (page, at desc);
+create index if not exists mnml_assistant_turns_chat_idx on mnml_assistant_turns (chat_id);
+```
+
+## What the model can do
+
+| It can | Through |
+| --- | --- |
+| Read the schema, list entries, read an entry | the same read tools as the [MCP server](https://mnml-cms.vercel.app/agents.md) |
+| Search the published content by meaning | `search_content` (needs [`search`](https://mnml-cms.vercel.app/search.md)) |
+| Search by keyword, drafts included | `search` |
+| Put values in the open entry | `fill_field` and `fill_entry` |
+| Anything you add | your own [tools](#your-own-tools) |
+
+The assistant's own tools can't save, publish or delete. Tools you add can do what your code does, so keep them to reading.
+
+Before values reach the form, the server checks each field the way a save does. Rich text can be Markdown. A value that does not fit its field, or a field that does not exist, is left out, and the model is told which and why so it can try again. The panel lists what was left out.
+
+## Limits and safety
+
+- Only signed-in editors can use it: `POST <apiPath>/ai/chat` returns 401 otherwise, and 404 when `ai` is off. `GET <apiPath>/ai/chats?page=` (only with a `store` that has `turns`) is the same.
+- 20 questions a minute for each client, per server instance. This is a guard, not a budget: for a real spend cap use the AI Gateway's budgets, or your provider's.
+- A request carries at most 30 messages and 60,000 characters. The form's values sent to the model are cut at 40,000 characters.
+- Content is data, not instructions: the model is told never to follow instructions it finds in content. Even if it did, it can only fill the open form. The editor sees the result before anything is saved.
+- Filled values are **unsaved edits** in the form. A collection entry that already exists autosaves as a draft like any other edit, and the live version only changes when the editor publishes.
+- A model that fails does not leak its error to the browser. The detail goes to the server log.
+
+## Options
+
+The options of `assistant()`:
+
+| Option | |
+| --- | --- |
+| `model` | A Gateway id string or an AI SDK model. Required. |
+| `tools` | Your own tools, as an object or a function of the open page. |
+| `maxSteps` | Most model turns for one question. Default 6. |
+| `store` | Where the record of turns goes, in your database ([Keeping a record](#keeping-a-record)). Default: none, and the panel keeps its chats in the browser. |
+| `name` | What the panel and button are called, and what the model calls itself. Default `Assistant`. Up to 40 characters. |
+| `tone` | How it writes and answers, in your words. Up to 300 characters. |
+
+---
+
+<!-- https://mnml-cms.vercel.app/activity.md -->
+
+# Activity
+
+Each entry and singleton keeps a log of what happened to it. Open **Activity** in the entry's **⋮** menu: a tree of days, newest first, each with its events. Click an event to open it.
+
+It needs no setup and no new table.
+
+## What is recorded
+
+| Event | When |
+| --- | --- |
+| Created, Saved | The editor saves a new entry, or a singleton. |
+| Saved a draft | A draft is saved by hand, or by an agent. |
+| Autosaved | The form autosaves. A run of autosaves by one person within 10 minutes is **one** event, so typing doesn't fill the log, and an autosave that adds nothing new writes nothing. |
+| Published, Unpublished | The editor, a bulk action or an agent changes the status. |
+| Discarded changes, Deleted | The editor, or an editor approving an agent's request (the event says whose). |
+| Asked for approval, Rejected a request | An [agent](https://mnml-cms.vercel.app/agents.md) asks to delete or discard, and an editor answers. |
+| Used the assistant | The [assistant](https://mnml-cms.vercel.app/assistant.md) ran tools or filled fields on this entry. |
+
+Each event has the time, who did it, and the **fields that changed** (top-level field names, not the values). An autosave that changes nothing is not recorded.
+
+Not part of an entry's activity: media uploads, the Agent access page, and a site's own `listActions` (your code runs them, so log them there).
+
+## Who
+
+| `by` | Means |
+| --- | --- |
+| Admin (or the name you give) | An editor in the admin. |
+| An agent, with the token's name | A write made through the [MCP server](https://mnml-cms.vercel.app/agents.md). |
+| The assistant's name | The assistant. The editor who asked is shown as "Asked by". |
+
+The package has one shared admin password, so by default every editor is "Admin". To show real names, read your own session in `actor`:
+
+```ts
+createCms(config, {
+  actor: async (request) => {
+    const user = await getUser(request); // your auth
+    return user && { id: user.id, label: user.name };
+  },
+});
+```
+
+`actor` runs on each write. Return nothing, or throw, and the editor shows as "Admin"; the write still goes through.
+
+## The assistant's events
+
+An assistant event opens to the question, the model, **the tools it ran** (searches, reads, your own tools, with their input) and what it put in the form: each field's value before and after, and what was left out and why. Large values are cut out of the event.
+
+The assistant only fills the form. The editor's own save comes after it, as its own event, so a typical story reads: *Used the assistant: Filled summary* then *Saved*.
+
+This works without a [`store`](https://mnml-cms.vercel.app/assistant.md#keeping-a-record). The values are kept in your entries table, like the content itself, so treat the log as content. Values over 20,000 characters are left out. A `store` is still the place for the full record of every question, including ones that ran nothing.
+
+## Where it is kept
+
+As rows in your entries table, in a collection named `activity:<key>` (like `pending:<key>` for unpublished changes). That works with any [storage](https://mnml-cms.vercel.app/image-storage.md) and needs no `drizzle-kit push`.
+
+- The last **200** events of each entry are kept. The oldest go first.
+- Deleting an entry keeps its log. It is the record of what happened.
+- `db:export` and [sync](https://mnml-cms.vercel.app/moving-content.md) move content only, not the log. Each database keeps its own.
+- A failure to write the log is printed in the server log and never fails the save.
+- `GET <apiPath>/activity?key=posts&slug=hello` returns the events as JSON, for signed-in editors only.
+
+---
+
 <!-- https://mnml-cms.vercel.app/drafts-and-publishing.md -->
 
 # Drafts and publishing
@@ -1620,6 +1926,8 @@ Second argument of `createCms(config, options)`.
 | `search` | `{ index, route }`: search over published content, `cms.search()` and a `search_content` MCP tool. `index` is your own `SearchIndex` (Postgres, pgvector, Mongo, Convex…); `route` opens a public search route ([Search](https://mnml-cms.vercel.app/search.md)) |
 | `cache` | `true` or `{ revalidate }` (seconds, default 3600): keeps published reads between requests, dropped on each save or delete. Off by default, recommended ([Caching](https://mnml-cms.vercel.app/reading-content.md#caching)) |
 | `revalidate` | After each save or delete, with `{ type, key, slug, by? }`. `by`: the agent token's name. |
+| `ai` | `assistant({ model, tools?, name?, tone?, maxSteps?, store? })` from `@n3wtou/mnml-cms/ai`: the admin assistant, a chat panel that answers from your content and fills fields for the editor to review. `model` is an AI Gateway id (`'anthropic/claude-sonnet-5-5'`) or any AI SDK model; needs the `ai` package ([Assistant](https://mnml-cms.vercel.app/assistant.md)) |
+| `actor` | `(request) => { label, id? }`: names the signed-in editor in each entry's [Activity](https://mnml-cms.vercel.app/activity.md). Default: "Admin" |
 | `onChange` | After the response (via `after()`) on each save or delete, e.g. to update a search index. Same change as `revalidate`. |
 
 ## Brand and logo
@@ -1688,7 +1996,7 @@ const { toast } = useAdmin();
 
 Swap the admin's controls for your own, e.g. your shadcn Select. Slots you leave out keep the built-in ones.
 
-Slots: `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `DatePicker`, `Tooltip`, `Menu`. Toasts stay built-in.
+Slots: `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `DatePicker`, `Tooltip`, `Menu`, `Markdown` (how the [assistant](https://mnml-cms.vercel.app/assistant.md)'s replies are shown). Toasts stay built-in.
 
 ## Set up
 
@@ -1744,7 +2052,44 @@ Props per slot: `UiSlotProps['Select']`, `UiSlotProps['Button']`, … (also `Sel
 - `DatePicker` `timeInCalendar`: the admin's datetime fields set it; one box with the time picked in the calendar. Your picker may ignore it. The admin's hour and minute lists are its own `Select`s, so your `Select` slot applies to them; portal its popover with `useAdminPortal()` so it sits above the calendar.
 - `Tooltip`: `content`, `side`, one focusable child.
 - `Menu`: `label`, `items` (`{ id, label, icon, checked, disabled, danger, keepOpen, onSelect }`; `keepOpen` leaves the menu open after the item runs, for on/off items), `trigger`, `className`.
+- `Markdown`: `text`, the assistant's reply as Markdown. It is rendered again as the reply streams in, so it can end mid-sentence or inside an open `**`. The built-in renderer builds React elements and links only `http(s)`, `mailto:` and site paths. If you swap in another renderer, keep raw HTML off and check link schemes: the text comes from a model.
 - Your slot can wrap the admin's own component (e.g. `Select` from `@n3wtou/mnml-cms/admin` plus a class). It gets the built-in, not itself.
+
+## Another Markdown renderer
+
+The assistant shows replies with a small built-in renderer (headings, lists, quotes, code, bold, italic, links). For tables or syntax highlighting, give the `Markdown` slot a library. This one uses `react-markdown`, which does not render raw HTML and drops unsafe link schemes:
+
+```tsx filename="src/mnml/ui.tsx"
+'use client';
+
+import ReactMarkdown from 'react-markdown';
+import { uiProvider, type UiSlotProps } from '@n3wtou/mnml-cms/admin';
+
+function AdminMarkdown({ text }: UiSlotProps['Markdown']) {
+  return (
+    <div className="flex flex-col gap-2 break-words">
+      <ReactMarkdown
+        components={{
+          a: ({ href, children }) => (
+            <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+              {children}
+            </a>
+          ),
+          // The admin's Tailwind reset removes list markers and spacing, so put them back.
+          ul: ({ children }) => <ul className="flex list-disc flex-col gap-1 pl-5">{children}</ul>,
+          ol: ({ children }) => <ol className="flex list-decimal flex-col gap-1 pl-5">{children}</ol>,
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+export const AdminUi = uiProvider({ Markdown: AdminMarkdown });
+```
+
+This is the example app's slot (`example/src/mnml/ui.tsx`), which also styles code.
 
 ## Colours: the token bridge
 
@@ -2047,6 +2392,7 @@ Upgrade one major at a time. Run the type check after each, and click through `/
 | 1.7.0 | Collection list filters (`filters`) and sortable columns (`columns`), a Columns menu for editors (`columnChoices`); row selection with bulk Publish, Unpublish, Delete and your own actions (`listActions`); "Choose from uploads" picker and multiselect delete on the Media page; "Create new" for `reference` and `references` fields (side panel, `createNew: false` to turn off); new `image` field design (drop zone, toolbar over the preview, focal point in place); `brand: { name, logo }`; Revoke on config tokens in Agent access. | No API or database change. Editors' column choices are saved in a `mnml_cols_<collection>` cookie. The collection list now uses the full page width. The Drizzle schema path is `dist/server/content/db.js` (since 1.6.0). |
 | 1.8.0 | Drag to reorder rows in `array`, `blocks` and `references` fields (a grip replaces the up and down arrows; keyboard: ↑ ↓ Home End); new `cache` option to keep published reads between requests (`cache: true`, expired by each save or delete). | No API or database change. `cache` is off by default: turn it on with `createCms(config, { cache: true })`. Content written outside the CMS (`db:import`, `sync`, SQL) shows up after the cache's `revalidate` time (default 3600 seconds). |
 | 1.9.0 | Changing a field while entries hold content: the admin shows the old value beside the new field (**Use this**, **Remove**) and waits before saving ([Changing fields](https://mnml-cms.vercel.app/changing-fields.md)); entries that crashed the admin (`date`, `references`, `image` holding the wrong kind of value) open; the "Add section" list and the entry picker no longer push the page. | No API or database change. **Readers now return the field's empty value for a stored value that doesn't fit its field**, instead of passing it through; `next dev` logs a warning for each. Valid entries read as before. If your site relied on a wrongly typed stored value, fix the entry in the admin. |
+| 1.10.0 | Search for RAG and agents (`search` option, `cms.search()`, a `search_content` tool, over an index you plug in: [Search](https://mnml-cms.vercel.app/search.md)); the admin assistant, a chat panel that answers from your content and fills fields for review (`ai: assistant({ model })` from `@n3wtou/mnml-cms/ai`, Gateway or any AI SDK model, your own tools, `cms.tools()`: [Assistant](https://mnml-cms.vercel.app/assistant.md)); Activity on each entry and singleton, with the `actor` option ([Activity](https://mnml-cms.vercel.app/activity.md)). | No breaking changes, and no database change: activity is stored in the entries table under `activity:<key>`. Search, the assistant and `actor` are off or unnamed until you set them. To use the assistant, `npm i ai` (an optional peer dependency; sites without it never load it). |
 
 ## Upgrade steps
 
