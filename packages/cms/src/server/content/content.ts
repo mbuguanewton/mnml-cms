@@ -1,9 +1,10 @@
 import 'server-only';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { after } from 'next/server';
-import type { AutosaveInput, AutosaveResult, EntryInput, Invalid, SaveResult } from '../../api.js';
+import type { ActivityAction, ActivityActor, AutosaveInput, AutosaveResult, EntryInput, Invalid, SaveResult } from '../../api.js';
 import { objectSchema, slugSchema, withDefaults } from '../../schema/define.js';
 import type { Change, Context } from '../context.js';
+import { changedFields } from './activity.js';
 import { cacheTag } from './cached-store.js';
 import { revOf } from './rev.js';
 import { SINGLETON_SLUG } from './store.js';
@@ -39,6 +40,16 @@ function changed(ctx: Context, change: Change) {
   // `expire: 0` drops it at once; 'max' would serve the old version to the next visitor.
   if (ctx.options.cache) revalidateTag(cacheTag(change.key), { expire: 0 });
   (ctx.options.revalidate ?? (() => revalidatePath('/', 'layout')))(change);
+  // Publish, unpublish and delete keep the search index in step. A failure only costs freshness, never the save.
+  const search = ctx.search;
+  if (search)
+    after(async () => {
+      try {
+        await search.sync(change.key, change.slug);
+      } catch (e) {
+        console.error('cms search index failed:', e);
+      }
+    });
   const onChange = ctx.options.onChange;
   if (onChange)
     after(async () => {
@@ -64,8 +75,29 @@ export function previewTarget(ctx: Context, key: string, slug?: string): { slug:
 
 const unknownEntry: Invalid = { ok: false, message: 'Unknown entry.', errors: {} };
 
-export function createContentService(ctx: Context) {
+export function createContentService(ctx: Context, editor?: ActivityActor) {
   const { store } = ctx;
+  /** Who did it: the signed-in editor when the admin made the call, else the agent named by `by`, else the admin. */
+  const whoIs = (by?: string): ActivityActor => editor ?? (by ? { type: 'agent', label: by } : { type: 'admin', label: 'Admin' });
+  /** Adds a row to the entry's Activity view. A failure is logged and never fails the write. */
+  async function record(e: { key: string; slug: string; action: ActivityAction; by?: string; summary?: string; before?: unknown; after?: unknown }) {
+    try {
+      // Stored data may predate fields added since: compare it the way it reads, with the defaults filled in.
+      const before = e.before === undefined ? undefined : withDefaults(ctx.config[e.key].fields, e.before);
+      // A new entry has nothing to compare with: every field would be listed.
+      const fields = e.before !== undefined ? changedFields(before, e.after) : [];
+      await ctx.activity.log({
+        key: e.key,
+        slug: e.slug,
+        action: e.action,
+        by: whoIs(e.by),
+        ...(e.summary && { summary: e.summary }),
+        ...(fields.length && { fields }),
+      });
+    } catch (err) {
+      console.error('cms activity failed:', err);
+    }
+  }
   const defOf = (key: unknown) => (typeof key === 'string' && Object.hasOwn(ctx.config, key) ? ctx.config[key] : undefined);
 
   /** An agent's request to discard a draft has nothing left to act on once the draft is gone. */
@@ -116,6 +148,7 @@ export function createContentService(ctx: Context) {
       const live = !isCollection || action === 'publish';
       const pendingOnly = isCollection && action === 'draft' && !isNew && (await store.getStatus(v.key, v.slug)) === 'published';
       const status = live ? 'published' : 'draft';
+      const before = isNew ? undefined : ((await store.getPending(v.key, v.slug)) ?? (await store.getRow(v.key, v.slug))?.data);
 
       if (isNew) {
         if (!(await store.insert(v.key, v.slug, v.data, status))) {
@@ -133,6 +166,15 @@ export function createContentService(ctx: Context) {
       await store.removeDraft(v.key, v.slug);
       // Pending changes aren't on the site, so there is nothing to revalidate.
       if (!pendingOnly) changed(ctx, { type: 'save', key: v.key, slug: v.slug, ...(by && { by }) });
+      await record({
+        key: v.key,
+        slug: v.slug,
+        by,
+        before,
+        after: v.data,
+        action: isNew ? 'create' : action === 'unpublish' ? 'unpublish' : action === 'draft' ? 'draft' : isCollection ? 'publish' : 'update',
+        summary: isNew ? (live ? 'Published at once' : 'As a draft') : undefined,
+      });
       return {
         ok: true,
         created: isNew,
@@ -167,6 +209,7 @@ export function createContentService(ctx: Context) {
         return { ok: false, conflict: true, message: 'Changed somewhere else. Reload to see the latest version.', errors: {} };
       }
       const changes = await writeDraft(v);
+      if (changes) await record({ key: v.key, slug: v.slug, action: 'autosave', before: current, after: v.data });
       return { ok: true, rev: revOf(def, v.data), changes: live?.status === 'draft' ? false : changes };
     },
 
@@ -174,13 +217,18 @@ export function createContentService(ctx: Context) {
      * Saves data as a draft of an existing entry (or a singleton with `drafts: true`) without touching the live
      * version. Fails for a collection entry that doesn't exist and for a singleton without drafts.
      */
-    async saveDraft(input: Pick<EntryInput, 'key' | 'slug' | 'data'>): Promise<Invalid | { ok: true; message: string; changes: boolean; rev: string }> {
+    async saveDraft(
+      input: Pick<EntryInput, 'key' | 'slug' | 'data'>,
+      by?: string,
+    ): Promise<Invalid | { ok: true; message: string; changes: boolean; rev: string }> {
       const v = validate(ctx, input);
       if (!v.ok) return v;
       const def = ctx.config[v.key];
       if (def.kind === 'singleton' && !def.drafts) return { ok: false, message: 'This singleton has no drafts: saving it publishes it.', errors: {} };
       if (def.kind === 'collection' && !(await store.getRow(v.key, v.slug))) return { ok: false, message: 'This entry does not exist.', errors: {} };
+      const before = (await store.getPending(v.key, v.slug)) ?? (await store.getRow(v.key, v.slug))?.data;
       const changes = await writeDraft(v);
+      if (changes) await record({ key: v.key, slug: v.slug, by, action: 'draft', before, after: v.data });
       return {
         ok: true,
         changes,
@@ -214,13 +262,14 @@ export function createContentService(ctx: Context) {
     },
 
     /** Throws away an entry's unpublished changes, going back to the live version. */
-    async discard(key: unknown, slug: unknown): Promise<Done> {
+    async discard(key: unknown, slug: unknown, note?: string): Promise<Done> {
       const def = defOf(key);
       const at = def?.kind === 'singleton' ? SINGLETON_SLUG : slug;
       if (!def || typeof at !== 'string') return unknownEntry;
       await store.removePending(key as string, at);
       await store.removeDraft(key as string, at);
       await dropDiscardRequest(key as string, at);
+      await record({ key: key as string, slug: at, action: 'discard', summary: note });
       return { ok: true, message: 'Draft discarded. The live version is unchanged.' };
     },
 
@@ -242,6 +291,7 @@ export function createContentService(ctx: Context) {
         at: new Date().toISOString(),
         ...(action === 'discard' && { rev: revOf(def, pending) }),
       });
+      await record({ key, slug: at, by, action: 'request', summary: action === 'delete' ? 'Asked to delete this entry' : 'Asked to discard the draft' });
       return {
         ok: true,
         message: `Requested. An editor must approve the ${action === 'delete' ? 'delete' : 'discard'} in the admin. Nothing has changed yet.`,
@@ -257,8 +307,12 @@ export function createContentService(ctx: Context) {
       const request = await store.getRequest(k, at);
       if (!request) return { ok: false, message: 'There is no request for this entry.', errors: {} };
       await store.removeRequest(k, at);
-      if (!approve) return { ok: true, message: 'Request rejected. Nothing was changed.' };
-      if (request.action === 'delete') return { ...(await service.remove(k, at, request.by)), deleted: true };
+      const note = `Approved the request of ${request.by}`;
+      if (!approve) {
+        await record({ key: k, slug: at, action: 'reject', summary: `Rejected the request of ${request.by}` });
+        return { ok: true, message: 'Request rejected. Nothing was changed.' };
+      }
+      if (request.action === 'delete') return { ...(await service.remove(k, at, request.by, note)), deleted: true };
       const pending = await store.getPending(k, at);
       if (pending === undefined) return { ok: true, message: 'There were no unpublished changes left to discard.' };
       if (revOf(def, pending) !== request.rev)
@@ -267,11 +321,11 @@ export function createContentService(ctx: Context) {
           message: 'The draft changed after the request, so it was not discarded and the request was dropped. Ask the agent again if it still applies.',
           errors: {},
         };
-      return service.discard(k, at);
+      return service.discard(k, at, note);
     },
 
     /** Deletes a collection entry with its draft and pending changes. */
-    async remove(key: unknown, slug: unknown, by?: string): Promise<Done> {
+    async remove(key: unknown, slug: unknown, by?: string, note?: string): Promise<Done> {
       const def = defOf(key);
       if (def?.kind !== 'collection' || typeof slug !== 'string') return unknownEntry;
       await store.remove(key as string, slug);
@@ -279,6 +333,7 @@ export function createContentService(ctx: Context) {
       await store.removePending(key as string, slug);
       await store.removeRequest(key as string, slug);
       changed(ctx, { type: 'delete', key: key as string, slug, ...(by && { by }) });
+      await record({ key: key as string, slug, by, action: 'delete', summary: note });
       return { ok: true, message: 'Deleted.' };
     },
   };

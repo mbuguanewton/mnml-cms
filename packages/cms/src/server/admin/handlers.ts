@@ -1,6 +1,6 @@
 import 'server-only';
 import { cookies, draftMode } from 'next/headers';
-import type { AutosaveInput, AutosaveResult, EntryInput, PreviewResult, ReferenceSchemaResult, SaveResult } from '../../api.js';
+import type { ActivityActor, AutosaveInput, AutosaveResult, EntryInput, PreviewResult, ReferenceSchemaResult, SaveResult } from '../../api.js';
 import { initialValues, plainDef, previewPath, referenceTargets } from '../../schema/define.js';
 import {
   checkPassword,
@@ -22,10 +22,17 @@ import { SESSION_COOKIE, sessionCookieOptions } from '../auth/session.js';
 import { IMAGE_TYPES, MAX_IMAGE_BYTES } from '../media/media.js';
 import { loadRefOptions } from '../content/ref-options.js';
 import { PREVIEW_COOKIE } from '../content/store.js';
+import { SINGLETON_SLUG } from '../content/singleton.js';
+import { slugSchema } from '../../schema/define.js';
+import { createLimiter } from '../search/limit.js';
+import type { AssistantInput, AssistantTurn } from '../../api.js';
+import { parseTurns } from '../../assistant-turns.js';
+import { after } from 'next/server';
+import { MAX_CHARS, MAX_MESSAGES } from '../ai/limits.js';
 
 // One route handler for everything the admin does: mount it at <apiPath>/[...route].
-//   POST: login · logout · logout-all · save · autosave · discard · bulk · delete · preview · preview/exit · references · reference/schema · upload · media/list · media/delete · request · tokens/create · tokens/revoke · mcp
-//   GET:  media/<key> (uploaded images, public) · preview/open (admins only)
+//   POST: login · logout · logout-all · save · autosave · discard · bulk · delete · preview · preview/exit · references · reference/schema · ai/chat (assistant, only with `ai`) · upload · media/list · media/delete · request · tokens/create · tokens/revoke · mcp
+//   GET:  media/<key> (uploaded images, public) · preview/open (admins only) · search (public, only with `search: { route: true }`) · activity (admins only) · ai/chats (admins only, only with an assistant `store` that has `turns`)
 
 const MEDIA_KEY = /^[\w.\-/]+$/;
 /** The most files one `media/delete` call takes. */
@@ -48,8 +55,217 @@ function sameOrigin(request: Request) {
 export function createHandlers(ctx: Context) {
   const { store, adminPath } = ctx;
   const content = createContentService(ctx);
+  /** The content service for a request made by a signed-in editor, so their writes show their name in Activity. */
+  async function editorOf(request: Request): Promise<ActivityActor> {
+    try {
+      const a = await ctx.options.actor?.(request);
+      if (a && typeof a.label === 'string' && a.label.trim())
+        return { type: 'admin', label: a.label.trim().slice(0, 80), ...(typeof a.id === 'string' && a.id && { id: a.id.slice(0, 80) }) };
+    } catch (e) {
+      console.error('cms actor failed:', e);
+    }
+    return { type: 'admin', label: 'Admin' };
+  }
+  const asEditor = async (request: Request) => createContentService(ctx, await editorOf(request));
+
+  /** Puts what the assistant did on an open entry (tools it ran, fields it filled) into that entry's Activity view. */
+  async function logAssistant(t: AssistantTurn, input: AssistantInput, name: string, editor: ActivityActor) {
+    const { key, slug } = input.page;
+    const def = key ? ctx.config[key] : undefined;
+    const at = def?.kind === 'singleton' ? SINGLETON_SLUG : slug;
+    if (!key || !def || !at || (!t.tools?.length && !t.fills?.length)) return;
+    const fields = [...new Set((t.fills ?? []).flatMap((f) => f.fields))].slice(0, 20);
+    // The values can be large: keep them only when they are small.
+    const small = (v: unknown) => JSON.stringify(v ?? null).length <= 20_000;
+    try {
+      await ctx.activity.log({
+        key,
+        slug: at,
+        action: 'assistant',
+        by: { type: 'assistant', label: name },
+        for: editor,
+        summary: fields.length ? `Filled ${fields.join(', ')}` : `Ran ${t.tools?.length ?? 0} tools`,
+        ...(fields.length && { fields }),
+        assistant: {
+          chatId: t.chatId,
+          question: t.question.slice(0, 500),
+          status: t.status,
+          ...(t.model && { model: t.model }),
+          tools: t.tools ?? [],
+          fills: (t.fills ?? []).map((f) => (small(f.before) && small(f.after) ? f : { fields: f.fields, dropped: f.dropped })),
+        },
+      });
+    } catch (e) {
+      console.error('cms activity failed:', e);
+    }
+  }
+
+  // The Activity view of an entry: admins only.
+  async function activityRoute(request: Request) {
+    if (!(await isAdmin(ctx))) return unauthorized();
+    const p = new URL(request.url).searchParams;
+    const key = p.get('key') ?? '';
+    const def = Object.hasOwn(ctx.config, key) ? ctx.config[key] : undefined;
+    if (!def) return json({ ok: false, message: 'Unknown content.' }, 400);
+    const slug = def.kind === 'singleton' ? SINGLETON_SLUG : (p.get('slug') ?? '');
+    if (def.kind === 'collection' && !slugSchema.safeParse(slug).success) return json({ ok: false, message: 'Send the entry in ?slug=.' }, 400);
+    try {
+      return json({ ok: true, events: await ctx.activity.list(key, slug) });
+    } catch (e) {
+      console.error('cms activity failed:', e);
+      return json({ ok: false, message: 'Could not load the activity.' }, 500);
+    }
+  }
   const mcp = ctx.options.mcp ? createMcpHandler(ctx, content) : null;
   const tokens = ctx.options.mcp?.adminTokens ? agentTokens(ctx) : null;
+
+  // Public and it may spend embedding credits: 30 searches a minute per client, and 300 in all (a client that sends a
+  // different x-forwarded-for each time still hits the second limit). Both are per server instance.
+  const searchLimit = createLimiter({ max: 30, windowMs: 60_000 });
+  const searchLimitAll = createLimiter({ max: 300, windowMs: 60_000 });
+  // The assistant spends the site's model credits: 20 questions a minute per client, admins only. Per server instance.
+  const aiLimit = createLimiter({ max: 20, windowMs: 60_000 });
+  const MAX_BODY = 400_000;
+  async function aiChat(request: Request) {
+    if (!ctx.ai) return json({ error: 'Not found' }, 404);
+    if (!(await isAdmin(ctx))) return unauthorized();
+    const wait = aiLimit(clientIp(request));
+    if (wait > 0)
+      return Response.json(
+        { ok: false, message: `Too many questions. Try again in ${wait} seconds.` },
+        { status: 429, headers: { 'Retry-After': String(wait) } },
+      );
+    // Refuse a big body before reading it.
+    if (Number(request.headers.get('content-length')) > MAX_BODY) return json({ ok: false, message: 'That request is too large.' }, 413);
+    const raw = await request.text();
+    if (raw.length > MAX_BODY) return json({ ok: false, message: 'That request is too large.' }, 413);
+    let input: AssistantInput;
+    try {
+      input = JSON.parse(raw) as AssistantInput;
+    } catch {
+      return json({ ok: false, message: 'Send JSON.' }, 400);
+    }
+    const msgs = Array.isArray(input?.messages) ? input.messages : [];
+    const valid =
+      msgs.length > 0 && msgs.length <= MAX_MESSAGES && msgs.every((m) => (m?.role === 'user' || m?.role === 'assistant') && typeof m.content === 'string');
+    if (!valid || msgs[msgs.length - 1].role !== 'user' || msgs.reduce((n, m) => n + m.content.length, 0) > MAX_CHARS)
+      return json({ ok: false, message: 'Send up to 30 messages, ending with a question, and at most 60000 characters.' }, 400);
+    const page = input.page && typeof input.page === 'object' ? input.page : {};
+    const safe: AssistantInput = {
+      // One id per request when the browser sent none, so the answer still belongs to a chat.
+      chatId: typeof input.chatId === 'string' && input.chatId.length > 0 && input.chatId.length <= 100 ? input.chatId : crypto.randomUUID(),
+      messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+      page: {
+        key: typeof page.key === 'string' && Object.hasOwn(ctx.config, page.key) ? page.key : undefined,
+        // Goes into the prompt and the record: only what a slug can look like.
+        slug: typeof page.slug === 'string' && /^[\w-]{1,100}$/.test(page.slug) ? page.slug : undefined,
+        values: page.values,
+      },
+    };
+    const encoder = new TextEncoder();
+    // Aborts the model request when the editor's browser goes away (Stop, New chat, a closed tab), whether the runtime
+    // aborts `request.signal` or only closes the response.
+    const abort = new AbortController();
+    request.signal.addEventListener('abort', () => abort.abort(), { once: true });
+    // The record of the turn goes to the site's `store`, and what it did to an entry to that entry's Activity view,
+    // after the response is sent, so it never slows an answer.
+    const store = ctx.ai.store;
+    const assistantName = ctx.ai.name ?? 'Assistant';
+    let turnDone: (turn?: AssistantTurn) => void = () => {};
+    const turn = new Promise<AssistantTurn | undefined>((resolve) => (turnDone = resolve));
+    const editor = await editorOf(request);
+    after(async () => {
+      const t = await turn;
+      if (!t) return;
+      await logAssistant(t, safe, assistantName, editor);
+      if (!store) return;
+      try {
+        await store.record(t, { request });
+      } catch (e) {
+        console.error('cms assistant record failed:', e);
+      }
+    });
+    const events = ctx.ai.run({ ctx, content, input: safe, signal: abort.signal, onTurn: turnDone })[Symbol.asyncIterator]();
+    let gone = false;
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          for (;;) {
+            const next = await events.next();
+            if (next.done || gone) break;
+            controller.enqueue(encoder.encode(`${JSON.stringify(next.value)}\n`));
+          }
+        } catch (e) {
+          if (!gone && !abort.signal.aborted) {
+            console.error('cms assistant failed:', e);
+            controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'error', message: 'The model request failed. Check the server log.' })}\n`));
+          }
+        }
+        // Nothing to record when the engine never got to run (it throws before it can).
+        turnDone(undefined);
+        // The reader may have gone (Stop, New chat, a closed tab): the stream is already closed then.
+        if (!gone) controller.close();
+      },
+      cancel() {
+        gone = true;
+        abort.abort();
+        // The engine reports a stopped answer as it unwinds; `start` settles the promise if it never does.
+        void events.return?.(undefined);
+      },
+    });
+    return new Response(body, { headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' } });
+  }
+
+  // The earlier chats of a page, from the site's store (`turns`): admins only, and a lighter limit than a question.
+  const chatsLimit = createLimiter({ max: 60, windowMs: 60_000 });
+  async function aiChats(request: Request) {
+    const store = ctx.ai?.store;
+    if (!store?.turns) return json({ error: 'Not found' }, 404);
+    if (!(await isAdmin(ctx))) return unauthorized();
+    const wait = chatsLimit(clientIp(request));
+    if (wait > 0)
+      return Response.json(
+        { ok: false, message: `Too many requests. Try again in ${wait} seconds.` },
+        { status: 429, headers: { 'Retry-After': String(wait) } },
+      );
+    const page = new URL(request.url).searchParams.get('page') ?? '';
+    if (!page || page.length > 200) return json({ ok: false, message: 'Send the page in ?page=.' }, 400);
+    try {
+      // Checked and capped: whatever the site's store returns, the browser gets turns, a few hundred at most.
+      const turns = parseTurns(await store.turns(page, { request }))
+        .sort((a, b) => b.at.localeCompare(a.at))
+        .slice(0, 300);
+      return json({ ok: true, turns });
+    } catch (e) {
+      console.error('cms assistant turns failed:', e);
+      return json({ ok: false, message: 'Could not load the earlier chats.' }, 500);
+    }
+  }
+
+  async function searchRoute(request: Request) {
+    const wait = Math.max(searchLimit(clientIp(request)), searchLimitAll('all'));
+    if (wait > 0)
+      return Response.json(
+        { ok: false, message: `Too many searches. Try again in ${wait} seconds.` },
+        { status: 429, headers: { 'Retry-After': String(wait) } },
+      );
+    const params = new URL(request.url).searchParams;
+    const q = params.get('q')?.trim() ?? '';
+    if (!q || q.length > 200) return json({ ok: false, message: 'Send what to look for in ?q= (up to 200 characters).' }, 400);
+    let collections = params.get('collections')?.split(',').filter(Boolean);
+    // `search.route: ['posts']` limits what an anonymous visitor can search.
+    if (Array.isArray(ctx.searchRoute)) {
+      const allowed = ctx.searchRoute;
+      collections = collections ? collections.filter((k) => allowed.includes(k)) : allowed;
+    }
+    const limit = Math.min(Number(params.get('limit')) || 10, 20);
+    try {
+      return json({ ok: true, results: await ctx.search!.query(q, { collections, limit }) });
+    } catch (e) {
+      console.error('cms search failed:', e);
+      return json({ ok: false, message: 'Search failed.' }, 500);
+    }
+  }
 
   const routes: Record<string, (request: Request) => Promise<Response>> = {
     // The login form posts JSON. Without JavaScript (or before it loads) the browser posts the form itself,
@@ -91,10 +307,12 @@ export function createHandlers(ctx: Context) {
       return Response.redirect(new URL(ctx.loginUrl, request.url), 303);
     },
 
+    'ai/chat': aiChat,
+
     async save(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
       const input = (await request.json()) as EntryInput;
-      const { created, ...result } = await content.save(input);
+      const { created, ...result } = await (await asEditor(request)).save(input);
       if (result.ok && created) result.redirect = `${adminPath}/${input.key}/${input.slug}?created=1`;
       return json(result satisfies SaveResult);
     },
@@ -106,28 +324,32 @@ export function createHandlers(ctx: Context) {
      */
     async autosave(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
-      return json((await content.autosave((await request.json()) as AutosaveInput)) satisfies AutosaveResult);
+      return json((await (await asEditor(request)).autosave((await request.json()) as AutosaveInput)) satisfies AutosaveResult);
     },
 
     /** Throws away an entry's unpublished changes, going back to the live version. */
     async discard(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
       const { key, slug } = await request.json();
-      const result = await content.discard(key, slug);
+      const result = await (await asEditor(request)).discard(key, slug);
       return result.ok ? json({ ok: true }) : json(result, 400);
     },
 
     /** Runs publish, unpublish, delete or a site's own list action on several entries of a collection. */
     async bulk(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
-      const { status, ...result } = await runBulk(ctx, content, (await request.json().catch(() => ({}))) as { key: unknown; slugs: unknown; action: unknown });
+      const { status, ...result } = await runBulk(
+        ctx,
+        await asEditor(request),
+        (await request.json().catch(() => ({}))) as { key: unknown; slugs: unknown; action: unknown },
+      );
       return json(result, status);
     },
 
     async delete(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
       const { key, slug } = await request.json();
-      const result = await content.remove(key, slug);
+      const result = await (await asEditor(request)).remove(key, slug);
       return result.ok ? json({ ok: true, redirect: `${adminPath}/${key}` }) : json(result, 400);
     },
 
@@ -161,7 +383,7 @@ export function createHandlers(ctx: Context) {
     async request(request) {
       if (!(await isAdmin(ctx))) return unauthorized();
       const { key, slug, approve } = await request.json();
-      const r = await content.resolveRequest(key, slug, approve === true);
+      const r = await (await asEditor(request)).resolveRequest(key, slug, approve === true);
       return json({ ...r, ...(r.ok && r.deleted && { redirect: `${adminPath}/${key}` }) });
     },
 
@@ -303,6 +525,9 @@ export function createHandlers(ctx: Context) {
   async function GET(request: Request, { params }: { params: Promise<{ route?: string[] }> }) {
     const [first, ...rest] = (await params).route ?? [];
     if (first === 'preview' && rest.join('/') === 'open') return openPreview(request);
+    if (first === 'search' && rest.length === 0 && ctx.search && ctx.searchRoute) return searchRoute(request);
+    if (first === 'activity' && rest.length === 0) return activityRoute(request);
+    if (first === 'ai' && rest.join('/') === 'chats' && ctx.ai?.store?.turns) return aiChats(request);
     if (first === 'mcp' && mcp && rest.length === 0) return new Response('Use POST.', { status: 405, headers: { Allow: 'POST' } });
     const key = rest.join('/');
     if (first !== 'media' || !ctx.options.media || !MEDIA_KEY.test(key) || key.includes('..')) return new Response('Not found', { status: 404 });

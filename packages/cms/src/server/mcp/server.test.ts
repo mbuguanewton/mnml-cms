@@ -243,6 +243,19 @@ describe('MCP writes', () => {
     expect(onChange).toHaveBeenCalledWith({ type: 'save', key: 'posts', slug: 'new-post', by: 'writer' });
   });
 
+  it("puts an agent's changes in the entry's Activity under the token's name", async () => {
+    await call(TOKENS.writer, 'update_entry', { collection: 'posts', slug: 'live', data: { title: 'Edited' } });
+    await call(TOKENS.editor, 'publish', { collection: 'posts', slug: 'live' });
+    const events = rows
+      .filter((r) => r.collection === 'activity:posts')
+      .map((r) => r.data as { action: string; by: { type: string; label: string }; fields?: string[] });
+    expect(events.map((e) => [e.action, e.by.type, e.by.label])).toEqual([
+      ['draft', 'agent', 'writer'],
+      ['publish', 'agent', 'editor'],
+    ]);
+    expect(events[0].fields).toEqual(['title']);
+  });
+
   it('keeps the live version of a published entry until publish', async () => {
     const r = await call(TOKENS.writer, 'update_entry', { collection: 'posts', slug: 'live', data: { title: 'Edited' } });
     expect(r).toMatchObject({ ok: true, changes: true });

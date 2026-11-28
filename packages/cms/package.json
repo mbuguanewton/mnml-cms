@@ -1,6 +1,6 @@
 {
   "name": "@n3wtou/mnml-cms",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "A small schema-driven CMS for Next.js: config file, embedded admin, Postgres storage.",
   "keywords": [
     "cms",
@@ -31,6 +31,10 @@
     "./next": {
       "types": "./dist/server/index.d.ts",
       "default": "./dist/server/index.js"
+    },
+    "./ai": {
+      "types": "./dist/server/ai/index.d.ts",
+      "default": "./dist/server/ai/index.js"
     },
     "./proxy": {
       "types": "./dist/server/auth/proxy.d.ts",
@@ -111,17 +115,24 @@
     "drizzle-orm": ">=0.40.0",
     "next": ">=16.0.0",
     "react": ">=19.0.0",
-    "react-dom": ">=19.0.0"
+    "react-dom": ">=19.0.0",
+    "ai": ">=7"
   },
   "devDependencies": {
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19.3.0",
+    "ai": "^7.0.183",
     "drizzle-orm": "^0.45.4",
     "next": "16.3.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "typescript": "^5",
     "vite-plus": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "ai": {
+      "optional": true
+    }
   }
 }

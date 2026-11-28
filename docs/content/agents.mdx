@@ -84,7 +84,7 @@ mcp: { adminTokens: true },
 
 | Scope | Can | Tools |
 | --- | --- | --- |
-| `read` | Read schema and entries, drafts too | `get_schema`, `list_entries`, `get_entry`, `search`, `validate_entry`, `diff_entry`, `get_preview_url` |
+| `read` | Read schema and entries, drafts too | `get_schema`, `list_entries`, `get_entry`, `search`, `search_content`, `validate_entry`, `diff_entry`, `get_preview_url` |
 | `draft` | Create entries, save drafts, import images | `create_entry`, `update_entry`, `upload_media_from_url` |
 | `publish` | Go live, go offline, ask to discard | `publish`, `unpublish`, `discard_draft` |
 | `delete` | Ask to delete | `delete_entry` |
@@ -100,7 +100,8 @@ mcp: { adminTokens: true },
 | `get_schema` | All content the token can use. Each field as JSON Schema: type, required, options, limits. Call first. |
 | `list_entries` | A collection's entries: `status`, `createdAt`, `updatedAt`, `hasDraftChanges`. Filter, sort, page. |
 | `get_entry` | One entry, latest version, drafts included. Shows a waiting approval request. Rich text as JSON or Markdown. |
-| `search` | Find text in entries, rich text too. |
+| `search` | Find text in entries, rich text too. Latest versions, drafts included. |
+| `search_content` | Best passages from published content, by meaning and words. Only with [`search`](/search) on. |
 | `validate_entry` | Check data, save nothing. Returns errors per field. |
 | `diff_entry` | Fields where the draft differs from live. |
 | `get_preview_url` | Link to see the draft on your site. Editors only. |

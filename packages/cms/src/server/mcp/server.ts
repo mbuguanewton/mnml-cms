@@ -27,7 +27,7 @@ const digest = (s: string) => createHash('sha256').update(s).digest();
 
 const toolResult = (r: ToolResult) => ({ content: [{ type: 'text', text: JSON.stringify(r) }], isError: !r.ok });
 
-function inputSchema(tool: Tool) {
+export function inputSchema(tool: Tool) {
   const { $schema: _, ...schema } = z.toJSONSchema(tool.input, { io: 'input' }) as Record<string, unknown>;
   return schema;
 }
